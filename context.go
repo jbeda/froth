@@ -48,3 +48,29 @@ func (uc *UpdateCtx) Run(cmd tea.Cmd) {
 	}
 	uc.cmds = append(uc.cmds, cmd)
 }
+
+// ApplyCtx is a surface's handle on froth during Apply, the phase in which
+// structural change commits. Only this context can change the tree, so a
+// surface creating a child while rendering is a compile error rather than a
+// check.
+type ApplyCtx struct {
+	phaseToken
+	self Handle
+}
+
+// Self reports the handle of the surface this context belongs to.
+func (ac *ApplyCtx) Self() Handle {
+	ac.check()
+	return ac.self
+}
+
+// Create adds a child of this surface and returns its handle. It takes no
+// parent: a surface creates a child of itself, so "own yourself and your
+// immediate children" is structural rather than validated, and creating a
+// grandchild or a sibling is not expressible.
+//
+// The child is mounted before the frame it was created for is drawn.
+func (ac *ApplyCtx) Create(s Surface) Handle {
+	ac.check()
+	return ac.f.reg.add(ac.self, s)
+}

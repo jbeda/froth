@@ -9,6 +9,7 @@ type phase uint8
 const (
 	phaseIdle phase = iota
 	phaseDeliver
+	phaseApply
 	phaseRender
 )
 
@@ -16,6 +17,8 @@ func (p phase) String() string {
 	switch p {
 	case phaseDeliver:
 		return "Deliver"
+	case phaseApply:
+		return "Apply"
 	case phaseRender:
 		return "Render"
 	default:
@@ -50,6 +53,11 @@ type phaseToken struct {
 }
 
 func (t phaseToken) check() {
+	if t.f == nil {
+		panic("froth: this context was not handed out by froth; a surface is " +
+			"called with the context for the phase it is in, and one cannot be " +
+			"constructed")
+	}
 	if t.f.phase != t.phase || t.f.epoch != t.epoch {
 		panic("froth: " + t.phase.String() +
 			" context used outside the phase it was handed out in; contexts must not be retained")

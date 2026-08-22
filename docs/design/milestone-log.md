@@ -15,7 +15,12 @@ rather than quietly working around.
 
 - **Lip Gloss's compositor plus froth-assigned unique global Z ordinals renders nested
   surfaces correctly.** Read from source, never executed. Supports
-  [ADR 0007](../adr/0007-froth-owns-the-stacking-math.md). *Tested by M1.*
+  [ADR 0007](../adr/0007-froth-owns-the-stacking-math.md). *Tested by M1.* **Proved by
+  #3** — nesting three deep with siblings at each level composites in depth-first order,
+  and an earlier sibling's whole subtree stays below a later sibling. One correction:
+  ordinals start at 1, because `NewCompositor` wraps its layers in an implicit root
+  layer at Z 0 and a tie there is exactly the undefined order the ordinals exist to
+  avoid. Retire this line when M1 lands.
 - **The Deliver/Apply drain loop terminates under real cascades**, and the iteration cap
   is set somewhere useful — high enough not to trip on legitimate work, low enough to
   catch a cycle quickly. No value has been chosen. Supports
@@ -41,9 +46,35 @@ rather than quietly working around.
 
 ## M1 — Skeleton
 
-_Not started._ Sliced into #2 through #7, blockers-first: bootstrap and the compositor,
+_In progress._ Sliced into #2 through #7, blockers-first: bootstrap and the compositor,
 the registry and tree, then layout and the drain loop in parallel, then focus, then this
 entry. #3 is where ADR 0007 is proved or broken; #5 chooses the iteration cap.
+
+### Carried forward from #3, for the entry to absorb
+
+- **`Create` takes no options yet.** The sketch's `Create(Surface, ...Option) Handle`
+  shipped as `Create(Surface) Handle`; no option in the sketch's list has anything to act
+  on until layout, modality and focus exist. Adding the variadic later is source
+  compatible for every caller.
+- **The harness is `Froth.Composite(Handle) Frame`, on froth itself rather than in a
+  test-only package.** A subtree frame needs the whole tree rendered — rects resolve from
+  the root down and Z is global — so it is froth's own render path, and `View` is
+  `Composite` of the root. A separate package would have been a second path free to drift
+  from the first.
+- **Mounting drains a queue; it does not recurse over the tree.** An `ApplyCtx` stays
+  valid for the whole Apply pass, so a surface can be handed one by another surface and
+  create a child under a node the walk has already passed. A recursive mount rendered
+  that child without ever mounting it. Draining the queue of surfaces that have entered
+  the tree has no such hole, and it is the shape the Deliver/Apply drain wants anyway.
+- **Mounting has its own budget, not the drain loop's cap.** `mountBudget` in `froth.go`
+  stops a surface that mounts a child of its own type by panicking. #5 owns the real cap
+  and the diagnostic hook to report it through, and should fold this into them.
+- **A handle names its instance as well as its surface.** Per-registry ordinals starting
+  at 1 made two instances issue equal handles, so a handle passed to the wrong one named
+  an unrelated surface instead of being the defined drop ADR 0001 promises.
+- **Lip Gloss v2 counts border and padding inside `Width`/`Height`.** #2's example
+  subtracted two cells for the border and so drew every box two cells short. Fixed in the
+  example; worth knowing before writing chrome.
 
 <!--
 When it lands, replace with:

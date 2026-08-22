@@ -14,3 +14,14 @@ type Surface interface {
 	// this surface, and returns work through uc rather than as a value.
 	Update(uc *UpdateCtx, msg tea.Msg)
 }
+
+// A Mounter assembles its own children when it enters the tree. froth calls
+// Mount once, during the Apply in which the surface is created, after its
+// handle exists and before its first render — never per frame.
+//
+// It is one of three ways to get children, and the one for structure a surface
+// defines about itself: a confirm dialog always has OK and Cancel, and its
+// creator should not have to know that.
+type Mounter interface {
+	Mount(ac *ApplyCtx)
+}

@@ -9,7 +9,9 @@ public entry point and nothing else.
 
 Subtree compositing is a narrower view through the same seam rather than a second one:
 it returns the composited string for a subtree plus the resolved rect for each surface in
-it, so a test can drive one surface and assert on just its region and position. "Is the
+it, so a test can drive one surface and assert on just its region and position. It is
+`froth.Composite(Handle) Frame`, and `View` is `Composite` of the root — tests and
+production share one render path rather than two that can drift. "Is the
 button where I think it is" is the assertion that catches layout regressions, and it
 needs the rects as much as the string.
 
@@ -72,4 +74,4 @@ retaining a context across phases.
 
 ## No prior art
 
-There is no code yet. These tests establish the conventions rather than following them.
+M1 established these conventions rather than following them.
