@@ -1,68 +1,84 @@
 # froth
 
-Window and surface management for [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+Surface management for [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-**Status: nothing here yet.** This README records the design intent so work can start
-from a shared picture. Everything below is a decision or an open question, not a
-description of code that exists.
+**Status: designed, not built.** There is no code yet. The design is settled and
+written down: [`CONTEXT.md`](./CONTEXT.md) defines the vocabulary,
+[`docs/adr/`](./docs/adr/) records the decisions that were hard to reverse, and
+[`docs/research/`](./docs/research/) holds the primary-source findings those
+decisions rest on. This README is the overview; where it disagrees with those, they
+win.
 
 ## What it's for
 
 Bubble Tea gives you one model, one `Update`, one `View`. Composing anything
 non-trivial means hand-rolling a router in your root model — the community's
-standing answer to nested components. `froth` aims to make surfaces first-class:
+standing answer to nested components. froth makes surfaces first-class:
 
-- **Window / surface management** — surfaces that own their own state and rendering,
-  addressed independently rather than reached by walking a model tree.
-- **Componentization** — components that compose without every parent needing to know
-  how to forward messages to every descendant.
-- **Flexible layout, including tiling** — layout as a pluggable concern, not something
+- **Surfaces** that own their state and rendering, addressed independently rather
+  than reached by walking a model tree.
+- **Composition** without every parent knowing how to forward messages to every
+  descendant.
+- **Layout as a pluggable concern**, including tiling, rather than something
   hardcoded into each application's `View`.
-- **Modals** — supported, but as one case of surface management, not the headline.
-
-## Design decisions so far
+- **Modals**, as one case of surface management rather than the headline.
 
 Light inspiration from the Win32 messaging model — addressed messages, a message
-pump, per-window handlers. Light. This is not a Win32 port and not a retro-aesthetic
+pump, per-surface handlers. This is not a Win32 port and not a retro-aesthetic
 project; the interaction model is the interesting part, not the API surface or the
-look.
+look. Where Win32's design turned out to rest on constraints froth does not have, it
+was dropped: see [ADR 0006](./docs/adr/0006-one-parent-relation.md).
 
-**No reentrant message delivery. No nested message pumps.** This is the firm one, and
-several other decisions follow from it.
+## The shape of it
 
-**Modals are asynchronous.** Since there's no nested pump, a modal cannot block and
-return a result. Opening one pushes a surface with a continuation; closing it pops and
-delivers the result to that continuation. Callers get an ergonomic close to
-"call and handle the result" without recursion.
+A tree of surfaces, each addressed by a **handle** that stays valid to hold and to
+name as a destination. A surface's parent determines its coordinate origin,
+lifetime, stacking context, modality scope, and routing chain. Z-order applies
+within a parent and never across parents, so a modal that wants the whole screen
+parents itself to the root.
 
-**Synchronous send, for frame coherence.** A `SendMessage` analogue is wanted — not for
-control flow, but so a surface can query another within a single frame and avoid frame
-skew from round-tripping through the queue. Note this is a direct call into the target's
-handler, which is not the same thing as nested pumping.
+Every update runs three phases — **Deliver** a message to one surface, **Apply**
+structural change, **Render** — looping over the first two until the queue drains,
+so a modal can close and its opener handle the result in the same frame. Nothing is
+delivered re-entrantly, and there is no nested message pump. The one synchronous
+call into a surface is a read-only query.
 
-Guards worth having, given synchronous send:
+Controls are surfaces too, buttons included, which makes hit-testing and tab order
+walks of a tree that already exists.
 
-- Send only from the pump goroutine; everything else posts.
-- A per-surface reentrancy guard, so a send into a surface already on the call stack is
-  a defined error rather than a stack overflow.
-- Distinguish query messages (may be sent, must not mutate) from command messages
-  (must be posted), and enforce it at registration.
+## Deliberate non-goals
 
-**Message reordering** is under consideration — priority tiers rather than strict FIFO,
-so that paint and timer-ish messages can be coalesced and deprioritized. Undecided.
+- **Not an operating system.** This is for complex TUIs. Where a general mechanism
+  and a simple one both work, froth takes the simple one.
+- **No synchronous send.** Rejected with reasons in
+  [ADR 0004](./docs/adr/0004-no-synchronous-send.md), which also records what would
+  reopen it.
+- **No global name lookup for surfaces.** Handles are the identity; a string
+  namespace with no lifetime story becomes the way everything talks to everything.
 
-## Open questions
+## Not yet, but not foreclosed
 
-- **Where does surface state live?** Synchronous send is hard to reconcile with surfaces
-  held as values inside a parent's model — it likely pushes toward a flat registry of
-  surfaces addressed by handle, held outside any value tree. That is a departure from
-  idiomatic Elm-architecture Bubble Tea and is the load-bearing decision; everything
-  else follows from it.
-- **Reordering:** worth the complexity, or does strict FIFO plus explicit invalidation
-  get most of the benefit?
-- **Rendering:** does Bubble Tea v2 / Lipgloss v2 provide a compositing or layer
-  primitive that covers the rendering half? Unverified — check before building a
-  compositor. See [bubbletea#642](https://github.com/charmbracelet/bubbletea/issues/642).
+Multi-pass layout is unimplemented but the render contract already permits it.
+Mouse capture ships from the start; synthesized drag messages — dragging tabs and
+panels — do not, and are additive because routing already accounts for capture.
+Transparent and non-rectangular surfaces are deferred: Lip Gloss's layers are opaque
+rectangles, and going further means implementing `ultraviolet`'s drawable interface
+directly and taking a direct dependency on a module with no tagged releases.
+
+## Rendering
+
+froth does not implement a compositor. Lip Gloss v2 ships `Canvas`, `Layer` and
+`Compositor` — cell buffer, absolute positioning, clipping, hit-testing by layer ID
+— and froth drives them, assigning the global Z ordinals itself because Lip Gloss
+sorts Z globally and unstably
+([ADR 0007](./docs/adr/0007-froth-owns-the-stacking-math.md)).
+
+This was an open question until it was checked; the finding is in
+[`docs/research/bubbletea-v2-compositing.md`](./docs/research/bubbletea-v2-compositing.md).
+Note that [bubbletea#642](https://github.com/charmbracelet/bubbletea/issues/642) is
+stale as a reference — it was closed in January 2023 as a duplicate of
+[#79](https://github.com/charmbracelet/bubbletea/issues/79), and the capability
+landed in Lip Gloss v2.
 
 ## Prior art
 
@@ -73,13 +89,15 @@ The adjacent pieces:
   sequential focus management.
 - [bubblezone](https://github.com/lrstanley/bubblezone) — resolves mouse events to
   screen regions. The hit-testing half of the problem.
-- [bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) — composites two
-  models with positioning. Visual only, no dispatch.
+- [bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) — composites
+  two models with positioning. Visual only, no dispatch.
 - [vtui](https://github.com/unxed/vtui) — Go, Turbo Vision inspired. Modality via a
-  Z-ordered frame stack with a single unified dispatcher — the approach that ports to
-  Bubble Tea. Worth reading the `FrameManager` source.
-- [turbo-tui](https://github.com/four-bytes/turbo-tui) — same idea for Rust/Ratatui.
-  Uses a nested modal loop, which is the approach that does *not* port.
+  Z-ordered frame stack with a single unified dispatcher — the approach that ports.
+  Its modal results are delivered by a callback invoked synchronously inside the
+  input dispatch, which froth does not do; see
+  [`docs/research/vtui-framemanager.md`](./docs/research/vtui-framemanager.md).
+- [turbo-tui](https://github.com/four-bytes/turbo-tui) — same idea for
+  Rust/Ratatui. Uses a nested modal loop, the approach that does *not* port.
 
 Background on why nested models are painful today:
 [bubbletea#751](https://github.com/charmbracelet/bubbletea/discussions/751),
