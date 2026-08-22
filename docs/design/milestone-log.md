@@ -165,6 +165,54 @@ entry. #3 is where ADR 0007 is proved or broken; #5 chooses the iteration cap.
   is drawn — `d` posts a message straight back to the root, which is the cycle the cap
   catches. Real routing still arrives with focus (#6).
 
+### Carried forward from #6, for the entry to absorb
+
+- **Focus is one handle on the instance, and the chain is derived from it.** `chainTo`
+  walks parents to the root; the focus chain is `chainTo(focus)` and there is no
+  per-surface boolean to fall out of step with it. Reaching the root is also what
+  validates a focus target, which is deliberate: a handle froth cannot build a chain to
+  is one it could not route to either.
+- **`Focus` landed on both `ApplyCtx` and `UpdateCtx`, plus a `FocusSelf` on each.** The
+  sketch put `Focus(Handle)` on `ApplyCtx` alone. M1's demo needs the surface holding a
+  key to move focus, and `NeedsReconcile` — the sketch's route from Deliver into Apply —
+  is M3, so `UpdateCtx.Focus` records the move and `apply` commits it, which is the
+  sketch's own rule that structural calls on an `*UpdateCtx` commit at Apply. `FocusSelf`
+  is the self-relative form the ticket asked for: it names no target, so it cannot fail.
+- **Focus commits before mounting, at the top of Apply.** A surface that mounts a child
+  and focuses it there is later in time than a request made in the delivery before, so it
+  should stand — and it does, because the pending move is applied first and the immediate
+  one overwrites it.
+- **A pending focus move carries its own flag, not a zero handle.** "Nothing
+  pending" and "pending a move to nothing" are the same handle value, so a request to
+  focus the zero handle would have been swallowed by the check that skips Apply —
+  reported from `ApplyCtx` and silently dropped from `UpdateCtx`, which is exactly the
+  silent acceptance the ticket rules out.
+- **An invalid focus target is a diagnostic, not a panic** — `DiagInvalidFocus`, focus
+  unchanged. The handle is very often one the application stored earlier, and surviving
+  that is the whole of ADR 0001.
+- **Routing is one line: a `tea.KeyMsg` goes to the focused surface, everything else to
+  the root.** `tea.KeyMsg` is an interface in Bubble Tea v2 covering press and release,
+  so both route. M2's binding resolution sits in front of this rather than replacing it —
+  ADR 0008's third step is exactly what happens here.
+- **Delivery reads the deep end of the chain rather than the focus field**, so focus
+  falls back to the root if the focused surface is not in the tree. Unreachable until M3
+  can destroy one, but input going nowhere at all is the one outcome an application
+  cannot recover from, and the fallback costs a walk froth was doing anyway.
+- **`RenderCtx` gained `Self()` and `Focused()`.** #5 noted `RenderCtx` had no `Self`
+  because nothing needed it; a surface reading its own focus while drawing is what needed
+  it. `Focused()` answers for that surface alone — an ancestor on the chain reports
+  false. Ancestor indication is chrome, drawn by froth from handle metadata, which is M2.
+- **The example's quit key moved onto the panes.** A raw key reaches only the focused
+  surface, so there is nowhere else for it to live until bindings resolve along the chain
+  in M2. The example says so rather than hiding it.
+- **`CONTEXT.md`'s focus chain entry was corrected in this change.** It described the
+  chain as formed by each parent remembering which child is active, which is the
+  restoration state the spec puts underneath focus rather than the chain itself. The
+  chain is derived from the one handle; remembered active children are M2's, for focus
+  re-entering a subtree.
+- **The example's status line moved above the body**, so the diagnostic the `d` key
+  produces is still on screen in a short terminal. The clip takes the body first.
+
 <!--
 When it lands, replace with:
 

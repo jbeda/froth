@@ -26,6 +26,10 @@ type DiagnosticKind string
 // so the frame that follows is drawn from whatever state the cascade reached.
 const DiagIterationCap DiagnosticKind = "iteration cap"
 
+// DiagInvalidFocus is reported when focus is asked to move to a handle that is
+// not in the tree. Focus does not move, and the surface that held it keeps it.
+const DiagInvalidFocus DiagnosticKind = "invalid focus"
+
 // report records a diagnostic for the hook. It does not call the hook: a hook is
 // application code, and calling it mid-phase would hand it a froth that panics
 // on the first thing it looked at. flush delivers them once the phase is over.

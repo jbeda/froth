@@ -930,3 +930,300 @@ func TestTheDiagnosticHookCanCallBackIntoFroth(t *testing.T) {
 		t.Error("the hook could not render from inside itself")
 	}
 }
+
+// ---- Focus and raw key delivery ---------------------------------------------
+
+// focusMsg asks the root to move focus somewhere, and selfFocusMsg asks the
+// surface named to focus itself. They are ordinary messages rather than a test
+// hook: nothing in M1 moves focus except a surface asking froth to, so a test
+// moves focus by telling a surface to ask.
+type focusMsg struct{ to froth.Handle }
+
+type selfFocusMsg struct{ to froth.Handle }
+
+// focusRoot is the container the focus tests hang off: it splits its space
+// between its children and does what it is told about focus. It draws nothing,
+// so a frame is exactly what its children drew.
+type focusRoot struct {
+	parent
+	layout froth.Layout
+}
+
+func (r *focusRoot) Mount(ac *froth.ApplyCtx) {
+	r.parent.Mount(ac)
+	ac.SetLayout(r.layout)
+}
+
+func (r *focusRoot) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	switch msg := msg.(type) {
+	case focusMsg:
+		uc.Focus(msg.to)
+	case selfFocusMsg:
+		uc.Post(msg.to, selfFocusMsg{})
+	}
+}
+
+// focusable draws one letter, upper case while it holds focus, and moves focus
+// on to the surface it was told about when it sees a key. In M1 the surface
+// holding the key is the only thing that can move focus; tab navigation is
+// froth's own job from M2.
+type focusable struct {
+	letter string
+	toward *froth.Handle // where a key sends focus; nil to keep it
+
+	keys  []string
+	bumps int
+}
+
+func (x *focusable) Render(rc *froth.RenderCtx, r froth.Rect) string {
+	if rc.Focused() {
+		return strings.ToUpper(x.letter)
+	}
+	return x.letter
+}
+
+func (x *focusable) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		x.keys = append(x.keys, msg.String())
+		if x.toward != nil {
+			uc.Focus(*x.toward)
+		}
+	case selfFocusMsg:
+		uc.FocusSelf()
+	case bumpMsg:
+		x.bumps++
+	}
+}
+
+// twoPanes is the shape the milestone demo has: two surfaces side by side that
+// hand focus to each other. It settles the mounts before returning, so the
+// handles are real by the time a test names one.
+func twoPanes(t *testing.T) (f *froth.Froth, root *focusRoot, left, right *focusable) {
+	t.Helper()
+	left, right = &focusable{letter: "l"}, &focusable{letter: "r"}
+	root = &focusRoot{
+		parent: parent{body: "  ", kids: []froth.Surface{left, right}},
+		layout: &halves{},
+	}
+	f = newSized(t, root, 2, 1)
+	f.View()
+	left.toward, right.toward = &root.handles[1], &root.handles[0]
+	return f, root, left, right
+}
+
+func keyPress(code rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: code} }
+
+// Nothing has moved focus, so the root holds it: an application that never
+// mentions focus still receives its keys somewhere.
+func TestTheRootHoldsFocusUntilSomethingMovesIt(t *testing.T) {
+	root := &focusable{letter: "x"}
+	f := newSized(t, root, 1, 1)
+
+	f.Update(keyPress('a'))
+
+	if got, want := strings.Join(root.keys, ","), "a"; got != want {
+		t.Errorf("the root saw %q, want %q", got, want)
+	}
+	if got, want := f.View().Content, "X"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+func TestARawKeyReachesTheFocusedSurfaceAndNoOther(t *testing.T) {
+	f, root, left, right := twoPanes(t)
+
+	// The root still holds focus, so neither pane sees this one.
+	f.Update(keyPress('a'))
+	if len(left.keys) != 0 || len(right.keys) != 0 {
+		t.Fatalf("a key reached a pane before either held focus: left %v, right %v",
+			left.keys, right.keys)
+	}
+
+	f.Update(focusMsg{to: root.handles[0]})
+	f.Update(keyPress('b'))
+
+	if got, want := strings.Join(left.keys, ","), "b"; got != want {
+		t.Errorf("the focused surface saw %q, want %q", got, want)
+	}
+	if len(right.keys) != 0 {
+		t.Errorf("an unfocused surface saw %v, want nothing", right.keys)
+	}
+}
+
+func TestASurfaceReadsItsOwnFocusWhileRendering(t *testing.T) {
+	f, root, _, _ := twoPanes(t)
+
+	if got, want := f.View().Content, "lr"; got != want {
+		t.Errorf("with the root focused, View().Content = %q, want %q", got, want)
+	}
+
+	f.Update(focusMsg{to: root.handles[0]})
+
+	if got, want := f.View().Content, "Lr"; got != want {
+		t.Errorf("with the left pane focused, View().Content = %q, want %q", got, want)
+	}
+}
+
+// The acceptance demo through the seam: a key moves focus and the composited
+// output changes to match. The move commits within the update that carried the
+// key, because focus commits in Apply and nothing is drawn until the queue has
+// drained.
+func TestAKeyMovesFocusAndTheFrameFollows(t *testing.T) {
+	f, root, left, right := twoPanes(t)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('\t'))
+	if got, want := f.View().Content, "lR"; got != want {
+		t.Errorf("after one key, View().Content = %q, want %q", got, want)
+	}
+
+	f.Update(keyPress('\t'))
+	if got, want := f.View().Content, "Lr"; got != want {
+		t.Errorf("after two keys, View().Content = %q, want %q", got, want)
+	}
+
+	// Each key was handled by the pane that held focus when it arrived, not by
+	// the one focus landed on: the move happens after the delivery, not during.
+	if got, want := len(left.keys), 1; got != want {
+		t.Errorf("the left pane saw %d keys, want %d", got, want)
+	}
+	if got, want := len(right.keys), 1; got != want {
+		t.Errorf("the right pane saw %d keys, want %d", got, want)
+	}
+}
+
+// Only keys are routed by focus. Everything else still arrives at the root,
+// which is where an application's own messages belong until something claims
+// them — mouse messages are hit-tested against the rendered frame in M4.
+func TestANonKeyMessageStillGoesToTheRoot(t *testing.T) {
+	f, root, left, right := twoPanes(t)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(bumpMsg{})
+
+	if left.bumps != 0 || right.bumps != 0 {
+		t.Errorf("a non-key message reached a pane: left %d, right %d",
+			left.bumps, right.bumps)
+	}
+}
+
+func TestFocusingAHandleThatIsNotInTheTreeIsRejectedAndReported(t *testing.T) {
+	elsewhere := froth.New(context.Background(), &pane{title: "elsewhere"})
+
+	left, right := &focusable{letter: "l"}, &focusable{letter: "r"}
+	root := &focusRoot{
+		parent: parent{body: "  ", kids: []froth.Surface{left, right}},
+		layout: &halves{},
+	}
+	f, diags := newWatched(t, root, 2, 1)
+	f.View()
+	f.Update(focusMsg{to: root.handles[0]})
+
+	// A handle from another instance names nothing here, which is the same
+	// rejection as a handle whose surface has gone.
+	f.Update(focusMsg{to: elsewhere.Root()})
+
+	if len(*diags) != 1 {
+		t.Fatalf("froth reported %d diagnostics, want 1: %v", len(*diags), *diags)
+	}
+	if got, want := (*diags)[0].Kind, froth.DiagInvalidFocus; got != want {
+		t.Errorf("diagnostic kind = %q, want %q", got, want)
+	}
+	if got, want := f.View().Content, "Lr"; got != want {
+		t.Errorf("focus moved anyway: View().Content = %q, want %q", got, want)
+	}
+}
+
+// The zero handle names nothing, so it is rejected like any other target that
+// is not in the tree. It is worth its own test because "no pending move" and
+// "a pending move to nothing" would be the same value if froth recorded the
+// pending move as a handle alone, and the second would then be swallowed.
+func TestFocusingTheZeroHandleFromDeliverIsRejectedAndReported(t *testing.T) {
+	left, right := &focusable{letter: "l"}, &focusable{letter: "r"}
+	root := &focusRoot{
+		parent: parent{body: "  ", kids: []froth.Surface{left, right}},
+		layout: &halves{},
+	}
+	f, diags := newWatched(t, root, 2, 1)
+	f.View()
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(focusMsg{to: froth.Handle{}})
+
+	if len(*diags) != 1 || (*diags)[0].Kind != froth.DiagInvalidFocus {
+		t.Fatalf("froth reported %v, want one %q", *diags, froth.DiagInvalidFocus)
+	}
+	if got, want := f.View().Content, "Lr"; got != want {
+		t.Errorf("focus moved anyway: View().Content = %q, want %q", got, want)
+	}
+}
+
+// Apply rejects an invalid target the same way, though there it takes effect
+// immediately rather than being recorded.
+func TestFocusingAnInvalidHandleFromApplyIsRejectedAndReported(t *testing.T) {
+	elsewhere := froth.New(context.Background(), &pane{title: "elsewhere"})
+	f, diags := newWatched(t, &focuserOnMount{to: elsewhere.Root()}, 1, 1)
+	f.View()
+
+	if len(*diags) != 1 || (*diags)[0].Kind != froth.DiagInvalidFocus {
+		t.Fatalf("froth reported %v, want one %q", *diags, froth.DiagInvalidFocus)
+	}
+	if got, want := f.View().Content, "X"; got != want {
+		t.Errorf("View().Content = %q, want %q — the root should still hold focus", got, want)
+	}
+}
+
+// FocusSelf names no target, so it cannot fail: a surface handling a message is
+// in the tree by construction.
+func TestASurfaceCanFocusItself(t *testing.T) {
+	f, root, _, _ := twoPanes(t)
+
+	f.Update(selfFocusMsg{to: root.handles[1]})
+
+	if got, want := f.View().Content, "lR"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// A container mounting its children says which of them starts focused, and the
+// first frame already shows it — Mount runs before anything is drawn.
+func TestAContainerCanFocusAChildAsItMounts(t *testing.T) {
+	left, right := &focusable{letter: "l"}, &focusable{letter: "r"}
+	root := &focusingParent{
+		focusRoot: focusRoot{
+			parent: parent{body: "  ", kids: []froth.Surface{left, right}},
+			layout: &halves{},
+		},
+		which: 1,
+	}
+	f := newSized(t, root, 2, 1)
+
+	if got, want := f.View().Content, "lR"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// focuserOnMount focuses a handle from Apply, where the move commits at once.
+type focuserOnMount struct{ to froth.Handle }
+
+func (x *focuserOnMount) Render(rc *froth.RenderCtx, r froth.Rect) string {
+	if rc.Focused() {
+		return "X"
+	}
+	return "x"
+}
+func (x *focuserOnMount) Update(*froth.UpdateCtx, tea.Msg) {}
+func (x *focuserOnMount) Mount(ac *froth.ApplyCtx)         { ac.Focus(x.to) }
+
+// focusingParent mounts its children and focuses one of them, which is what a
+// container owning a starting selection does.
+type focusingParent struct {
+	focusRoot
+	which int
+}
+
+func (p *focusingParent) Mount(ac *froth.ApplyCtx) {
+	p.focusRoot.Mount(ac)
+	ac.Focus(p.handles[p.which])
+}

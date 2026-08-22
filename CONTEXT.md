@@ -29,8 +29,11 @@ only among its siblings; it never orders it against a surface under a different
 parent.
 
 **Focus chain**:
-The path from the root to the deepest active surface, formed by each parent
-remembering which child is active. Input enters at the deep end.
+The path from the root to the deepest active surface. Focus itself is one
+authoritative handle and the chain is derived from it by walking parents, so
+the two can never disagree. A parent remembering which child was last active is
+restoration state — where focus lands when it re-enters that subtree — not what
+the chain is made of. Input enters at the deep end.
 _Avoid_: focus stack, selection path
 
 **Active surface**:

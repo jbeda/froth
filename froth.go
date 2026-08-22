@@ -22,6 +22,15 @@ type Froth struct {
 	root Handle
 	size Size
 
+	// focus is the one authoritative focus handle: the surface raw keys are
+	// delivered to, and the deep end of the chain M2 resolves bindings along.
+	// pendingFocus is a move asked for during Deliver, committed in the Apply
+	// that follows it, and its own flag rather than a zero handle — a request
+	// to focus nothing is a request froth has to reject out loud.
+	focus        Handle
+	pendingFocus Handle
+	focusPending bool
+
 	onDiagnostic func(Diagnostic)
 	// queue holds the messages waiting to be delivered. Delivery drains it and
 	// may add to it, which is the whole point: a surface can post during Deliver
@@ -59,6 +68,9 @@ func New(ctx context.Context, root Surface, opts ...Option) *Froth {
 	}
 	f := &Froth{ctx: ctx, onDiagnostic: o.diagnostic}
 	f.root = f.reg.add(Handle{}, root)
+	// The root holds focus until something moves it, so an application that
+	// never mentions focus still receives its keys somewhere.
+	f.focus = f.root
 	return f
 }
 
@@ -84,9 +96,27 @@ func (f *Froth) Update(msg tea.Msg) tea.Cmd {
 		f.size = Size{W: ws.Width, H: ws.Height}
 		return f.settle()
 	}
-	// Until focus arrives the root is every message's destination.
-	f.queue = append(f.queue, envelope{to: f.root, msg: msg})
+	f.queue = append(f.queue, envelope{to: f.destination(msg), msg: msg})
 	return f.settle()
+}
+
+// destination is where a message arriving from Bubble Tea goes. A key goes to
+// the focused surface and to nothing else; everything else goes to the root.
+//
+// Raw delivery to the focused surface is the whole of M1's routing. Matching
+// declared bindings along the focus chain first, and handing the winner an
+// action rather than a key, is M2 — it sits in front of this step rather than
+// replacing it, because ADR 0008's third step is exactly what happens here.
+//
+// The root takes the rest because froth has nothing better to say yet: mouse
+// messages are hit-tested against the rendered frame in M4, and the remaining
+// Bubble Tea messages are the application's own business, reaching it through
+// the surface it handed froth.
+func (f *Froth) destination(msg tea.Msg) Handle {
+	if _, ok := msg.(tea.KeyMsg); ok {
+		return f.focused()
+	}
+	return f.root
 }
 
 // A budget bounds one settle pass. Delivering a message and mounting a surface
@@ -204,16 +234,20 @@ func (f *Froth) deliver(h Handle, msg tea.Msg) tea.Cmd {
 //
 // The order within it is fixed — intents first, then structural changes, so a
 // surface that raises an intent and closes itself is still alive when the intent
-// lands. Intents are M3, so there is one step here today and M3 adds one ahead
-// of it.
+// lands. Intents are M3, which adds its step ahead of these two.
+//
+// Focus commits before mounting, so a surface that mounts a child and focuses it
+// there wins over a request made in the delivery before — the later of the two,
+// and so the one that should stand.
 func (f *Froth) apply(b *budget) {
-	if len(f.reg.entered) == 0 {
+	if len(f.reg.entered) == 0 && !f.focusPending {
 		return
 	}
 
 	token := f.enter(phaseApply)
 	defer f.leave()
 
+	f.applyFocus()
 	f.mountEntered(b, token)
 }
 
@@ -361,7 +395,7 @@ func (f *Froth) place(screen Rect) []placement {
 
 func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placement) {
 	n := f.reg.get(h)
-	rc := &RenderCtx{phaseToken: token, rect: r}
+	rc := &RenderCtx{phaseToken: token, self: h, rect: r}
 	content := clip(n.surface.Render(rc, r), r.Size())
 	*out = append(*out, placement{h: h, rect: r, content: content, z: len(*out) + 1})
 

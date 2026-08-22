@@ -11,7 +11,27 @@ import (
 // drawing, and that is a compile error rather than a check.
 type RenderCtx struct {
 	phaseToken
+	self Handle
 	rect Rect
+}
+
+// Self reports the handle of the surface this context belongs to.
+func (rc *RenderCtx) Self() Handle {
+	rc.check()
+	return rc.self
+}
+
+// Focused reports whether this surface is the focused one — the deep end of the
+// focus chain, and where a raw key would be delivered.
+//
+// It is a read, not a claim: a surface renders differently when focused, and
+// that is what a focus indicator is made of. It answers for this surface alone,
+// so an ancestor of the focused surface reports false; the chrome froth draws
+// around a surface on the chain is M2's, from handle metadata rather than from
+// here.
+func (rc *RenderCtx) Focused() bool {
+	rc.check()
+	return rc.f.focus == rc.self
 }
 
 // Rect reports the region this surface is being rendered into.
@@ -49,6 +69,26 @@ func (uc *UpdateCtx) Self() Handle {
 func (uc *UpdateCtx) Post(to Handle, msg tea.Msg) {
 	uc.check()
 	uc.f.queue = append(uc.f.queue, envelope{to: to, msg: msg})
+}
+
+// Focus asks froth to move focus to a surface. Focus is structural, so it is
+// recorded here and commits in the Apply that follows this delivery — a key
+// that moves focus and the frame that shows the move are still one update.
+//
+// The target is validated when it commits: a handle that is not in the tree is
+// reported through the diagnostic hook and focus does not move. It is not a
+// panic, because a stored handle whose surface has gone is exactly what handles
+// are meant to survive.
+func (uc *UpdateCtx) Focus(to Handle) {
+	uc.check()
+	uc.f.pendingFocus, uc.f.focusPending = to, true
+}
+
+// FocusSelf asks froth to move focus to this surface. It names no target, so it
+// cannot fail: a surface handling a message is in the tree by construction.
+func (uc *UpdateCtx) FocusSelf() {
+	uc.check()
+	uc.f.pendingFocus, uc.f.focusPending = uc.self, true
 }
 
 // Ctx reports the context this surface's asynchronous work should use.
@@ -96,6 +136,24 @@ func (ac *ApplyCtx) Self() Handle {
 func (ac *ApplyCtx) Create(s Surface) Handle {
 	ac.check()
 	return ac.f.reg.add(ac.self, s)
+}
+
+// Focus moves focus to a surface, immediately — this is Apply, which is where
+// structural change commits, so there is nothing to defer it to.
+//
+// Unlike Create and SetLayout it names a target, because focus is not
+// self-relative: a container mounts its children and says which of them starts
+// focused. The handle is validated, and one that is not in the tree is reported
+// through the diagnostic hook rather than accepted.
+func (ac *ApplyCtx) Focus(to Handle) {
+	ac.check()
+	ac.f.setFocus(to)
+}
+
+// FocusSelf moves focus to this surface. It names no target, so it cannot fail.
+func (ac *ApplyCtx) FocusSelf() {
+	ac.check()
+	ac.f.setFocus(ac.self)
 }
 
 // SetLayout attaches a layout to this surface, which places its children from
