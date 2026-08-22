@@ -28,3 +28,31 @@ during Apply execute immediately. This is the subtlest thing in the design, and 
 phase is always known, so the error can say precisely why a call queued rather than
 executed. The drain loop needs an iteration cap so a message cycle fails loudly
 instead of hanging.
+
+## Amendment: the phase check is mostly static
+
+Writing client code against this design showed the context wants to be *several*
+types rather than one — `RenderCtx`, `UpdateCtx`, `ApplyCtx`, `MeasureCtx` — because
+each phase permits a different set of operations. A `RenderCtx` has no `Create`
+method, so structural change during render becomes a compile error rather than a
+runtime one.
+
+The runtime check stays for what types cannot catch, chiefly a surface stashing a
+context and using it in a later phase, but it stops being the primary mechanism.
+
+## Ordering within Apply
+
+Apply commits in a fixed order: **intents first, then structural changes.** A handler
+may both raise an intent and close itself in the same delivery, and if the destroy
+committed first, the intent's sender would name a destroyed surface — so a modal
+wired with `RepliesTo(sender)` would reply into a corpse.
+
+An intent is delivered by walking parent-ward from the raiser, to each ancestor
+implementing the intent-sink capability, until one claims it. Nearest ancestor wins.
+An intent nothing claims is reported through the diagnostic hook rather than silently
+dropped, because an unclaimed intent is nearly always a missing case.
+
+An ancestor may raise a further intent while handling one. That appends to the intent
+queue and is processed later in the same drain rather than recursing, so Apply never
+nests — the same reentrancy exclusion that applies to message delivery, under the same
+iteration cap.

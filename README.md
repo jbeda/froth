@@ -58,12 +58,24 @@ walks of a tree that already exists.
 
 ## Not yet, but not foreclosed
 
-Multi-pass layout is unimplemented but the render contract already permits it.
-Mouse capture ships from the start; synthesized drag messages — dragging tabs and
-panels — do not, and are additive because routing already accounts for capture.
-Transparent and non-rectangular surfaces are deferred: Lip Gloss's layers are opaque
-rectangles, and going further means implementing `ultraviolet`'s drawable interface
-directly and taking a direct dependency on a module with no tagged releases.
+- **Multi-pass layout** is unimplemented, but the render contract already permits it —
+  `Measure` may be called repeatedly, so flexbox-style layouts can land without
+  breaking surfaces written today.
+- **Drag.** Mouse capture ships from the start; synthesized drag messages — dragging
+  tabs and panels — do not. They are additive, because routing already accounts for
+  capture.
+- **A dialog helper library.** Stock confirm, prompt and pick dialogs, each with a
+  helper that opens it and returns its answer (`confirm.Ask(...)`). Sugar over the
+  modal-opening primitive rather than new mechanism.
+- **Chorded shortcuts** (`ctrl-k ctrl-s`) need pending state in the key resolver.
+- **User remapping** of key bindings is not built, but bindings carry stable action
+  identity so an override layer can be added without touching surfaces.
+- **Grouping surfaces** that exist only to carry a layout, with no rendering of their
+  own — the equivalent of a `div`. They would change what "immediate children" means,
+  which is what surface ownership is currently defined in terms of.
+- **Transparent and non-rectangular surfaces.** Lip Gloss's layers are opaque
+  rectangles; going further means implementing `ultraviolet`'s drawable interface
+  directly and taking a direct dependency on a module with no tagged releases.
 
 ## Rendering
 

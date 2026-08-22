@@ -49,9 +49,11 @@ tags them itself.
 
 **Environment**:
 Ambient values a surface reads from its ancestors rather than being handed at
-construction — theme, capabilities, cancellation. Held by froth against the
-tree and resolved at read time, so it is never a stale snapshot.
-_Avoid_: deps, context, config
+construction — theme, capabilities, locale. Bound to a surface and scoped to its
+subtree: resolution walks root-ward and takes the nearest binding, so a subtree
+can override what is above it. Resolved at read time, so it is never a stale
+snapshot.
+_Avoid_: deps, context, config, globals
 
 **Intent**:
 A request a surface returns to its ancestors, applied by froth after the
@@ -121,6 +123,21 @@ events with several interested surfaces or a lifetime longer than any of them.
 A scroll position expressed as an item plus an offset within it, rather than an
 absolute line. Lets a surface scroll unbounded content without ever measuring
 all of it.
+
+**Action**:
+What a shortcut resolves to: a stable identity a surface declares along with its
+default keys and help text. Surfaces handle actions rather than keys, so keys can
+be remapped without touching them.
+_Avoid_: command, shortcut, hotkey
+
+**Text sink**:
+A surface that consumes ordinary typing. While one is focused, bare printable keys
+are never matched as shortcuts; modified chords still are.
+
+**Leaf**:
+A surface with no children. Adapted third-party components are always leafs,
+because a component that cannot report what it consumed can have nothing beneath
+it and nothing above it that trusts its answer.
 
 **Post**:
 To enqueue a message for later delivery to a surface. All message delivery in
