@@ -1,0 +1,8 @@
+# Go
+*.exe
+*.test
+*.out
+/dist/
+
+# Agent working notes (per-machine)
+HANDOFF.md
