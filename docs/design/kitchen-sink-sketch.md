@@ -1,5 +1,10 @@
 # Kitchen sink: an API-first sketch
 
+> **Status: design-time artifact, written before any code existed.** Its job was to find
+> ergonomic problems while changing them was still free, and it did — see the findings.
+> Where this and the code disagree, **the code wins**; fix this document in the same
+> change. Delete it once the example application and godoc cover the same ground.
+
 Client code for a sample app, written as if froth existed. **None of this compiles.**
 Its job is to make the API's ergonomics visible while changing them is still free.
 
