@@ -35,19 +35,25 @@ concept: the app assembles itself in the root's `Mount`, using the same Apply ma
 as every later structural change.
 
 ```go
-func (a *appRoot) Mount(ac *froth.ApplyCtx, self froth.Handle) {
-    froth.SetEnv(ac, self, ThemeKey, a.deps.Theme)
+func (a *appRoot) Mount(ac *froth.ApplyCtx) {
+    ac.SetEnv(ThemeKey, a.deps.Theme)
 
-    side := ac.Create(self, newSessionList(), froth.Weight(1))
-    main := ac.Create(self, &mainPane{}, froth.Weight(3))
-    ac.SetLayout(self, layout.Row(layout.Gap(1)))
-
-    scroller := ac.Create(main, froth.NewScroller(), froth.Clip())
-    ac.Create(scroller, &transcript{})
+    side := ac.Create(newSessionList(), froth.Weight(1))
+    ac.Create(&mainPane{}, froth.Weight(3))
+    ac.SetLayout(layout.Row(layout.Gap(1)))
 
     ac.Focus(side)
 }
+
+func (m *mainPane) Mount(ac *froth.ApplyCtx) {
+    ac.Create(froth.NewScroller(), froth.Clip())   // which mounts the transcript
+}
 ```
+
+`Create` makes a child of *self* — there is no parent parameter, so a surface cannot
+reach past its own children, and each surface defines its own contents. The context
+knows which surface it belongs to, so `SetEnv`, `SetLayout` and `Focus` need no handle
+for the common case either.
 
 The whole Bubble Tea integration is three forwarding methods.
 
@@ -70,8 +76,8 @@ type Surface interface {
 Optional, discovered by type assertion, each earning its place from a decision:
 
 ```go
-type Mounter interface   { Mount(ac *ApplyCtx, self Handle) }        // self-assemble children
-type Reconciler interface{ Reconcile(ac *ApplyCtx, self Handle) }     // restructure on demand
+type Mounter interface   { Mount(ac *ApplyCtx) }                      // self-assemble children
+type Reconciler interface{ Reconcile(ac *ApplyCtx) }                  // restructure on demand
 type Unmounter interface { Unmount(ac *ApplyCtx) }                    // release non-froth resources
 type Measurer interface  { Measure(mc *MeasureCtx, offer Size) Size } // multi-pass layout
 type Binder interface    { Bindings() []Binding }                     // shortcuts + help
@@ -345,13 +351,12 @@ Keys carry their own type, so both ends are checked:
 ```go
 var ThemeKey = froth.NewKey[theme.Theme]("theme")
 
-froth.SetEnv(ac, root, ThemeKey, deps.Theme)   // only accepts a theme.Theme
-th := froth.Env(rc, ThemeKey)                  // returns a theme.Theme, no assertion
+ac.SetEnv(ThemeKey, deps.Theme)   // only accepts a theme.Theme; sets on self
+th := rc.Env(ThemeKey)            // returns a theme.Theme, no assertion
 ```
 
-Free functions rather than methods because **Go methods cannot have type parameters**
-— `ac.SetEnv(...)` could not be generic, so it would be back to `any`. The awkward
-shape buys real type safety at both the set and the read.
+These are generic methods on the concrete context types, which Go 1.27 allows. No
+handle is passed: the context knows which surface it belongs to.
 
 A key may carry a default, which removes the missing-value failure mode entirely:
 
@@ -367,14 +372,21 @@ that got designed in by accident.
 ### Reads are broad, writes are narrow
 
 ```go
-func Env[T any](r EnvReader, k *Key[T]) T                    // any context
-func SetEnv[T any](ac *ApplyCtx, h Handle, k *Key[T], v T)   // Apply only, owned handles
+func (rc *RenderCtx) Env[T any](k *Key[T]) T          // and on every other context
+func (ac *ApplyCtx) SetEnv[T any](k *Key[T], v T)     // sets on self
+func (ac *ApplyCtx) SetEnvOn[T any](h Handle, k *Key[T], v T)   // an immediate child
+func froth.Env[T any](r EnvReader, k *Key[T]) T       // for cross-context helpers
 ```
 
-A surface may set an Environment value on any handle it **owns** — itself or one of its
-immediate children — and never on an ancestor. Setting on yourself already covers your
-whole subtree, since resolution walks root-ward; setting on a child is only for
-deliberately giving that one child something different.
+The common form takes no handle at all, so setting on an ancestor is not expressible
+rather than merely forbidden. `SetEnvOn` exists for the deliberate case of giving one
+child something different, and it accepts only an immediate child. Setting on yourself
+already covers your whole subtree, since resolution walks root-ward.
+
+The package-level `froth.Env` remains for a helper called from more than one phase.
+**Interface methods still cannot have type parameters**, so `EnvReader` carries an
+untyped lookup and the free function layers typing over it — same guarantees, one
+awkward shape retained for one real case.
 That is also the honest form of "a surface can own an ambient value": it can, for the
 scope that is its own. The theme picker still cannot set root's theme, because root
 isn't its.
@@ -460,17 +472,17 @@ func (a *appRoot) Apply(ac *froth.ApplyCtx, in froth.Intent) bool {
     switch in := in.(type) {
     case SetThemeIntent:
         if a.saved == nil {                          // first preview: stash the original
-            t := froth.Env(ac, ThemeKey)
+            t := ac.Env(ThemeKey)
             a.saved = &t
         }
-        froth.SetEnv(ac, ac.Root(), ThemeKey, in.Theme)
+        ac.SetEnvOn(ac.Root(), ThemeKey, in.Theme)
         if in.Commit {
             a.saved = nil
         }
         return true
     case RevertThemeIntent:
         if a.saved != nil {
-            froth.SetEnv(ac, ac.Root(), ThemeKey, *a.saved)
+            ac.SetEnvOn(ac.Root(), ThemeKey, *a.saved)
             a.saved = nil
         }
         return true
@@ -546,7 +558,7 @@ func (t *tabStrip) Update(uc *froth.UpdateCtx, msg tea.Msg) {
     uc.NeedsReconcile()
 }
 
-func (t *tabStrip) Reconcile(ac *froth.ApplyCtx, self froth.Handle) {
+func (t *tabStrip) Reconcile(ac *froth.ApplyCtx) {
     // create what's missing, destroy what's gone, reorder — with real handles
 }
 ```
@@ -592,14 +604,14 @@ registration in some external registry — and most surfaces will never implemen
 ## Controls are surfaces
 
 ```go
-func (d *confirmDialog) Mount(ac *froth.ApplyCtx, self froth.Handle) {
-    ac.Create(self, froth.NewButton("OK", OKPressed{}))
-    ac.Create(self, froth.NewButton("Cancel", CancelPressed{}))
-    ac.SetLayout(self, layout.Row(layout.End, layout.Gap(2)))
+func (d *confirmDialog) Mount(ac *froth.ApplyCtx) {
+    ac.Create(froth.NewButton("OK", OKPressed{}))
+    ac.Create(froth.NewButton("Cancel", CancelPressed{}))
+    ac.SetLayout(layout.Row(layout.End, layout.Gap(2)))
 }
 
 func (d *confirmDialog) Render(rc *froth.RenderCtx, r froth.Rect) string {
-    return froth.Env(rc, ThemeKey).Prompt(d.label)
+    return rc.Env(ThemeKey).Prompt(d.label)
     // buttons are children; froth composites them over this body
 }
 ```
@@ -613,22 +625,26 @@ constructor, which has no `ApplyCtx` and no handle yet.
 
 ## A goroutine-driven pane
 
+A producer is a **step function** froth calls in a loop it owns, not a loop the surface
+writes:
+
 ```go
-func (l *logPane) Mount(ac *froth.ApplyCtx, self froth.Handle) {
-    froth.Produce(ac, self,
-        func(ctx context.Context, emit func(logLineMsg)) error {
-            for {
-                select {
-                case <-ctx.Done():
-                    return ctx.Err()
-                case line, ok := <-l.tailer.Lines():
-                    if !ok { return nil }
-                    emit(logLineMsg{Line: line})
-                }
-            }
-        },
-        froth.BatchedFunc(mergeLines),
-    )
+func (l *logPane) Mount(ac *froth.ApplyCtx) {
+    ac.Produce(l.nextLine, froth.BatchedFunc(mergeLines))
+}
+
+// nextLine blocks until the next line. froth owns the loop, the goroutine, and
+// cancellation — and a test can call this directly with no concurrency at all.
+func (l *logPane) nextLine(ctx context.Context) (logLineMsg, error) {
+    select {
+    case <-ctx.Done():
+        return logLineMsg{}, ctx.Err()
+    case line, ok := <-l.tailer.Lines():
+        if !ok {
+            return logLineMsg{}, froth.EndOfStream
+        }
+        return logLineMsg{Line: line}, nil
+    }
 }
 
 // mergeLines collapses everything pending for this surface into one message.
@@ -641,20 +657,27 @@ func mergeLines(pending []logLineMsg) logLinesMsg {
 }
 ```
 
-froth owns the goroutine: started at mount, cancelled at destroy, output tagged with
-the handle and dropped if the surface dies first. The surface never touches its own
-state from the goroutine — `emit` enqueues, and the message arrives in `Update` on the
-loop like anything else.
+froth starts the loop at mount, cancels it at destroy, tags each result with the handle,
+and drops results for a surface that has died. Returning `EndOfStream` stops the loop
+cleanly; any other error stops it and reports through the diagnostic hook.
+
+Inverting the loop this way is what makes producers testable. With a
+surface-written loop, a test can only interrupt it from outside; with a step function,
+the surface's contribution is an ordinary function a test calls with a pre-filled
+channel, and the only loop in the system is froth's.
+
+The surface still never touches its own state from the goroutine — the step function
+returns a message, and that message arrives in `Update` on the loop like anything else.
 
 ### Delivery discipline
 
 Three options, and the default is the boring one:
 
 ```go
-froth.Produce(ac, h, run)                       // every message delivered, in order
-froth.Produce(ac, h, run, froth.Batched[T]())   // pending collapse to froth.Batch[T]
-froth.Produce(ac, h, run, froth.BatchedFunc(f)) // pending collapse via your own merge
-froth.Produce(ac, h, run, froth.Coalesced[T]()) // only the newest pending survives
+ac.Produce(next)                       // every message delivered, in order
+ac.Produce(next, froth.Batched[T]())   // pending collapse to froth.Batch[T]
+ac.Produce(next, froth.BatchedFunc(f)) // pending collapse via your own merge
+ac.Produce(next, froth.Coalesced[T]()) // only the newest pending survives
 ```
 
 **Coalescing drops content and batching does not**, which is the distinction worth
@@ -697,8 +720,8 @@ lands elsewhere is hit-tested to whatever is under the cursor and the palette ne
 it. Capture is claimed when the palette is created:
 
 ```go
-func (p *palette) Mount(ac *froth.ApplyCtx, self froth.Handle) {
-    ac.Capture(self)                     // all mouse input, wherever it lands
+func (p *palette) Mount(ac *froth.ApplyCtx) {
+    ac.Capture()                         // all mouse input, wherever it lands
 }
 
 func (p *palette) Update(uc *froth.UpdateCtx, msg tea.Msg) {
@@ -758,13 +781,14 @@ runtime one. Every context can read the Environment and report the caller's own 
 
 | Context | Phase | Also offers |
 |---|---|---|
-| `*RenderCtx` | Render | `Cursor(Point)` — claim the terminal cursor; `Rect()` |
+| `*RenderCtx` | Render | `Cursor(Point)` — claim the terminal cursor · `Rect()` |
 | `*MeasureCtx` | Measure | nothing beyond the common set; deliberately the narrowest |
 | `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `NeedsReconcile()` · `Rect()` |
-| `*ApplyCtx` | Apply | `Root()` · `Create(parent Handle, s Surface, ...Option) Handle` · `Destroy(Handle)` · `Reparent(Handle, Handle)` · `SetLayout(Handle, Layout)` · `Focus(Handle)` · `Capture(Handle)` · `Sender()` — the handle that raised the intent being applied |
+| `*ApplyCtx` | Apply | `Create(Surface, ...Option) Handle` — a child of self · `Destroy(Handle)` · `Reparent(Handle, Handle)` · `SetLayout(Layout)` · `Focus(Handle)` · `Capture()` · `Produce(next, ...ProducerOpt)` · `Root()` · `Sender()` — the handle that raised the intent being applied |
 
-Structural calls made on an `*UpdateCtx` are recorded and commit at Apply; the same
-calls on an `*ApplyCtx` take effect immediately.
+Every context knows the surface it belongs to and exposes it as `Self()`, so the
+self-relative operations take no handle. Structural calls made on an `*UpdateCtx` are
+recorded and commit at Apply; the same calls on an `*ApplyCtx` take effect immediately.
 
 ### Core types
 
@@ -810,6 +834,11 @@ froth.NoTabStop()      // skip in keyboard navigation
 One rule governs `Create`, `Destroy`, `Reparent` and `SetEnv`:
 
 > **A surface owns itself and its immediate children.**
+
+Mostly this is structural rather than checked: `Create` makes a child of self and takes
+no parent, `SetEnv` sets on self and takes no handle. Only the operations that must name
+a target — `Destroy`, `Reparent`, `SetEnvOn` — validate that the target is an immediate
+child.
 
 Ownership is parenthood. It is deliberately *not* "whatever you created" — that would be
 a second relation running alongside the parent link, which is the parent-versus-owner
@@ -957,32 +986,36 @@ and nothing will stop it. So the guidance is to put values in the Environment ra
 than handles to mutable state; sharing something mutable through it opts out of the
 guarantee silently.
 
-A producer's run function is the third. It is written as a closure inside `Mount`, so
-it captures the surface — the log tailer example reaches `l.tailer` that way. Reading an
-immutable field is fine and is why the shape is allowed at all, but nothing stops it
-touching mutable state from the goroutine, which is the one thing producers must not do.
-The document says the goroutine never touches surface state; the API does not enforce
-it.
+A producer's step function is the third. It is usually a method on the surface, so it
+can reach every field — the log tailer reaches `l.tailer` that way. Reading an immutable
+field is fine and is why the shape is allowed at all, but nothing stops it touching
+mutable state from the goroutine, which is the one thing producers must not do. The
+document says the goroutine never touches surface state; the API does not enforce it.
 
 None of the three is fixable in Go. All should be stated plainly in the docs, because a
 guarantee people believe is total is worse than one they know the edges of.
 
-## 7. Environment keys should carry their type, and Go forces free functions
+## 7. Environment keys should carry their type, and contexts should carry the subject
 
-`Env(rc, ThemeKey)` returning `any` for the caller to assert would be the most frequent
-call in any surface's render, so it needs to be typed. Putting the type on the *key* —
-`Key[T]` — checks both ends: `SetEnv` accepts only a `theme.Theme`, and `Env` returns
-one with no assertion and no type parameter at the call site.
+`Env` returning `any` for the caller to assert would be the most frequent call in any
+surface's render, so it needs to be typed. Putting the type on the *key* — `Key[T]` —
+checks both ends: setting accepts only a `theme.Theme`, reading returns one with no
+assertion and no type parameter at the call site.
 
-The constraint that shapes the API: **Go methods cannot have type parameters.** So
-these can't be `ac.SetEnv(...)` / `rc.Env(...)`; they have to be free functions taking
-the context. The shape looks inconsistent with the rest of the API, and it is, for a
-reason worth writing down so nobody "fixes" it back into a method and loses the typing.
+This originally forced free functions, because Go methods could not have type
+parameters. **Go 1.27 lifted that**, so these are ordinary generic methods on the
+concrete context types and the API is uniform again.
 
-Defaults on keys remove the missing-value case for anything with a sensible one. What
-stays dynamic is presence for keys without defaults — a small deliberate hole, since
-closing it means threading values through constructors, which is the thing the
-Environment exists to avoid.
+The second half only became visible once they were methods: the context already knows
+which surface it belongs to. `uc.Close()` and `uc.Rect()` were always self-relative, so
+`SetEnv`, `Create`, `SetLayout` and `Capture` should be too. That deletes a parameter
+from the most common calls and makes the ownership rule structural — setting on an
+ancestor or creating a grandchild is not expressible rather than merely forbidden. The
+sketch's own bootstrap had been quietly creating a grandchild until this exposed it.
+
+One free function survives: `froth.Env[T](r EnvReader, k *Key[T])`, for a helper called
+from more than one phase. Interface methods still cannot have type parameters, so
+`EnvReader` carries an untyped lookup with typing layered over it.
 
 ## 8. bubbles can't report what it consumed — and fixing that reshaped input routing
 
