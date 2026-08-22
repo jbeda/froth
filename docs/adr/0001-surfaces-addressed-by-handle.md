@@ -21,3 +21,12 @@ decision.
 Delivery to a dead handle is a defined, counted drop rather than an error. Surfaces
 need no per-instance staleness guards — request epochs, owner checks — because
 identity is validated once, centrally.
+
+## Amendment: a handle names its issuing instance
+
+Built in M1. A handle is an instance ordinal paired with an ordinal for the froth
+instance that issued it, because per-registry ordinals alone made two instances issue
+equal handles: a handle passed to the wrong instance named an unrelated surface rather
+than being the defined drop above. The metadata the decision lists — parent, sibling
+order, and later chrome and the focus and tab flags — lives in the registry keyed by
+handle rather than inside the handle value, which stays opaque and comparable.

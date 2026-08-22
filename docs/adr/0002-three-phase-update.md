@@ -56,3 +56,15 @@ An ancestor may raise a further intent while handling one. That appends to the i
 queue and is processed later in the same drain rather than recursing, so Apply never
 nests — the same reentrancy exclusion that applies to message delivery, under the same
 iteration cap.
+
+## Amendment: the loop leads with Apply
+
+Built in M1. The alternation is the one described above, entered one step earlier: an
+update runs Apply, then Deliver, and repeats. The tree has to exist before anything can
+be delivered into it — the root's own mount is the first Apply any instance runs — and
+the Apply that a delivery asks for is then the one at the top of the next turn.
+
+The cap is one budget that deliveries and mounts spend alike, because a cascade that will
+not settle can be made of either and the two interleave. Tripping it reports through the
+diagnostic hook and abandons what was being drained; the value it is set to, and why, is
+in the milestone log.

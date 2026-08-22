@@ -72,6 +72,18 @@ than test cases. Do not write tests asserting that structural change during rend
 — it does not compile. The runtime check covers only what types cannot: a surface
 retaining a context across phases.
 
+## Two conventions the seam needs
+
+**Post a size before asserting on anything.** A froth instance draws nothing until a
+`tea.WindowSizeMsg` arrives, so a test constructs the instance and posts one — which is
+what Bubble Tea does on startup. One `newSized(t, root, w, h)` helper covers it.
+
+**A fixture surface records its own handle.** `Create` returns a handle only to the
+parent that called it, and froth has no lookup by name, so a fixture a test wants to
+assert about stashes `ac.Self()` in its `Mount` and the test reads it from there. That is
+[ADR 0001](./adr/0001-surfaces-addressed-by-handle.md) and the no-global-namespace
+non-goal working as intended, not friction to remove.
+
 ## No prior art
 
 M1 established these conventions rather than following them.

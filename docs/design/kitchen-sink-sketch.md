@@ -4,6 +4,12 @@
 > ergonomic problems while changing them was still free, and it did — see the findings.
 > Where this and the code disagree, **the code wins**; fix this document in the same
 > change. Delete it once the example application and godoc cover the same ground.
+>
+> Most of what is below is unbuilt. M1 shipped `Create` (without options yet), `Mount`,
+> `SetLayout`, `Focus`, `Post`, `Run`, `Ctx` and three of the four context types
+> (`MeasureCtx` waits for M7); everything concerning intents, modals, the Environment,
+> producers, reconcile, destroy, bindings and the bubbles adapter is still design.
+> [`milestone-log.md`](./milestone-log.md) records what shipped and where it diverged.
 
 Client code for a sample app, written as if froth existed. **None of this compiles.**
 Its job is to make the API's ergonomics visible while changing them is still free.
@@ -786,10 +792,10 @@ runtime one. Every context can read the Environment and report the caller's own 
 
 | Context | Phase | Also offers |
 |---|---|---|
-| `*RenderCtx` | Render | `Cursor(Point)` — claim the terminal cursor · `Rect()` |
+| `*RenderCtx` | Render | `Cursor(Point)` — claim the terminal cursor · `Rect()` · `Focused()` — whether this surface holds focus |
 | `*MeasureCtx` | Measure | nothing beyond the common set; deliberately the narrowest |
-| `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `NeedsReconcile()` · `Rect()` |
-| `*ApplyCtx` | Apply | `Create(Surface, ...Option) Handle` — a child of self · `Destroy(Handle)` · `Reparent(Handle, Handle)` · `SetLayout(Layout)` · `Focus(Handle)` · `Capture()` · `Produce(next, ...ProducerOpt)` · `Root()` · `Sender()` — the handle that raised the intent being applied |
+| `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Focus(Handle)` / `FocusSelf()` · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `NeedsReconcile()` · `Rect()` |
+| `*ApplyCtx` | Apply | `Create(Surface, ...Option) Handle` — a child of self · `Destroy(Handle)` · `Reparent(Handle, Handle)` · `SetLayout(Layout)` · `Focus(Handle)` / `FocusSelf()` · `Capture()` · `Produce(next, ...ProducerOpt)` · `Root()` · `Sender()` — the handle that raised the intent being applied |
 
 Every context knows the surface it belongs to and exposes it as `Self()`, so the
 self-relative operations take no handle. Structural calls made on an `*UpdateCtx` are
@@ -805,7 +811,7 @@ func Pt(x, y int) Point
 
 type Intent any                  // no method requirement; the type is the contract
 type Surface interface{ ... }    // see "What a surface is"
-type Layout  interface{ Arrange(space Rect, children []Child) []Rect }
+type Layout  interface{ Arrange(space Rect, children []Child) []Rect }  // screen rects in, screen rects out
 
 type Key[T any] struct{ ... }    // Environment key carrying its own value type
 func NewKey[T any](name string) *Key[T]

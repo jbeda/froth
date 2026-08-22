@@ -2,14 +2,22 @@
 
 Surface management for [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-**Status: under construction.** Milestone 1 has started: froth renders a root
-surface through Lip Gloss's compositor, and `examples/panes` runs. Everything else
-in this README is still design. The design is written down:
+**Status: under construction.** Milestone 1 has landed. froth builds a tree of
+surfaces addressed by handle, places them with a layout, composites them through Lip
+Gloss with its own Z ordinals, drains Deliver and Apply before drawing a frame, and
+delivers raw keys to the surface that holds focus. Everything after that — bindings,
+reconcile and destroy, modals and mouse, async, environment and chrome, tiling and
+scrolling, bubbles adapters — is still design.
+
+[`examples/panes`](./examples/panes) is the fastest way to understand the API: it is
+real, current code, and it grows with each milestone. The design is written down:
 [`CONTEXT.md`](./CONTEXT.md) defines the vocabulary,
-[`docs/adr/`](./docs/adr/) records the decisions that were hard to reverse, and
+[`docs/adr/`](./docs/adr/) records the decisions that were hard to reverse,
 [`docs/research/`](./docs/research/) holds the primary-source findings those
-decisions rest on. This README is the overview; where it disagrees with those, they
-win.
+decisions rest on, and
+[`docs/design/milestone-log.md`](./docs/design/milestone-log.md) records what building
+each milestone taught. This README is the overview; where it disagrees with those,
+they win.
 
 ## What it's for
 
@@ -88,7 +96,9 @@ sorts Z globally and unstably
 ([ADR 0007](./docs/adr/0007-froth-owns-the-stacking-math.md)).
 
 This was an open question until it was checked; the finding is in
-[`docs/research/bubbletea-v2-compositing.md`](./docs/research/bubbletea-v2-compositing.md).
+[`docs/research/bubbletea-v2-compositing.md`](./docs/research/bubbletea-v2-compositing.md),
+and M1 ran it: surfaces nested three deep with siblings at each level composite in the
+order the ordinals say they should.
 Note that [bubbletea#642](https://github.com/charmbracelet/bubbletea/issues/642) is
 stale as a reference — it was closed in January 2023 as a duplicate of
 [#79](https://github.com/charmbracelet/bubbletea/issues/79), and the capability
