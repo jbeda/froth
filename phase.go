@@ -1,0 +1,57 @@
+package froth
+
+// A phase is the part of an update froth is in, and therefore what a surface is
+// allowed to do. Each phase has its own context type, so most illegal
+// operations are compile errors; the runtime check exists for what types cannot
+// catch — a surface retaining a context and using it in a later phase.
+type phase uint8
+
+const (
+	phaseIdle phase = iota
+	phaseDeliver
+	phaseRender
+)
+
+func (p phase) String() string {
+	switch p {
+	case phaseDeliver:
+		return "Deliver"
+	case phaseRender:
+		return "Render"
+	default:
+		return "Idle"
+	}
+}
+
+// enter switches froth into a phase and returns the token every context handed
+// out during it carries. Nothing froth does re-enters, so being asked to start a
+// phase during one means a surface called back into its own froth instance —
+// which would invalidate the context that surface is still holding, and report
+// itself as a retained context several frames from where the mistake is.
+func (f *Froth) enter(p phase) phaseToken {
+	if f.phase != phaseIdle {
+		panic("froth: Update or View called re-entrantly, during " +
+			f.phase.String() + "; nothing may call back into froth from a surface")
+	}
+	f.phase = p
+	f.epoch++
+	return phaseToken{f: f, phase: p, epoch: f.epoch}
+}
+
+func (f *Froth) leave() { f.phase = phaseIdle }
+
+// A phaseToken is embedded in every context. It identifies the exact phase run
+// the context was handed out during, so a context outliving that run is
+// detected on use rather than acting on stale state.
+type phaseToken struct {
+	f     *Froth
+	phase phase
+	epoch uint64
+}
+
+func (t phaseToken) check() {
+	if t.f.phase != t.phase || t.f.epoch != t.epoch {
+		panic("froth: " + t.phase.String() +
+			" context used outside the phase it was handed out in; contexts must not be retained")
+	}
+}

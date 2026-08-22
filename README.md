@@ -2,8 +2,10 @@
 
 Surface management for [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-**Status: designed, not built.** There is no code yet. The design is settled and
-written down: [`CONTEXT.md`](./CONTEXT.md) defines the vocabulary,
+**Status: under construction.** Milestone 1 has started: froth renders a root
+surface through Lip Gloss's compositor, and `examples/panes` runs. Everything else
+in this README is still design. The design is written down:
+[`CONTEXT.md`](./CONTEXT.md) defines the vocabulary,
 [`docs/adr/`](./docs/adr/) records the decisions that were hard to reverse, and
 [`docs/research/`](./docs/research/) holds the primary-source findings those
 decisions rest on. This README is the overview; where it disagrees with those, they
