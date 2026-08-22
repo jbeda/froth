@@ -130,8 +130,9 @@ type Frame struct {
 }
 
 // Composite renders the tree and returns the frame for the subtree rooted at h.
-// A handle that names nothing returns the zero Frame, and so does any handle
-// before the first terminal size arrives, since nothing has been drawn yet.
+// A handle that names nothing returns the zero Frame; so does any handle before
+// the first terminal size arrives, since nothing has been drawn yet, and so
+// does one whose surface a layout gave a rect with no cells in it.
 //
 // The whole tree renders either way: rects resolve from the root down, and Z
 // ordinals are global, so a subtree cannot be drawn without placing everything
@@ -164,7 +165,16 @@ func (f *Froth) Composite(h Handle) Frame {
 		sub = sub[start:end]
 	}
 
+	// A subtree whose root has no cells drew nothing, so it answers the same
+	// zero Frame as a handle that names nothing. A layout can hand a child an
+	// empty rect — a row starves the children it cannot fit — and a buggy one
+	// can hand it a negative extent; either would size the canvas below, where
+	// a negative one is a makeslice panic from inside the compositor.
 	origin := sub[0].rect
+	if origin.Empty() {
+		return Frame{}
+	}
+
 	rects := make(map[Handle]Rect, len(sub))
 	layers := make([]*lipgloss.Layer, 0, len(sub))
 	for _, p := range sub {
@@ -190,14 +200,14 @@ type placement struct {
 	z       int
 }
 
-// place renders every surface and assigns each one a Z ordinal. Even with one
-// surface the frame goes through Lip Gloss's canvas and compositor rather than
-// being assembled as a string, so wide graphemes and Z ordering are the
-// compositor's job from the first frame onwards. Clipping is only partly:
-// Lip Gloss drops what falls outside the canvas, but a layer's own bounds come
-// from the size of the string it was given rather than from the rect the
-// surface was allotted, so clipping a surface to its rect is froth's job and
-// arrives with layout.
+// place renders every surface, clips it to its rect, and assigns each one a Z
+// ordinal. Even with one surface the frame goes through Lip Gloss's canvas and
+// compositor rather than being assembled as a string, so wide graphemes and Z
+// ordering are the compositor's job from the first frame onwards. Clipping is
+// only partly the compositor's: Lip Gloss drops what falls outside the canvas,
+// but a layer's own bounds come from the size of the string it was given rather
+// than from the rect the surface was allotted, so clipping a surface to its
+// rect is froth's job.
 //
 // Ordinals are unique, global and assigned depth-first, because Lip Gloss
 // accumulates position through the layer tree but sorts Z across the whole tree
@@ -218,11 +228,44 @@ func (f *Froth) place(screen Rect) []placement {
 func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placement) {
 	n := f.reg.get(h)
 	rc := &RenderCtx{phaseToken: token, rect: r}
-	*out = append(*out, placement{h: h, rect: r, content: n.surface.Render(rc, r), z: len(*out) + 1})
+	content := clip(n.surface.Render(rc, r), r.Size())
+	*out = append(*out, placement{h: h, rect: r, content: content, z: len(*out) + 1})
 
-	// Children take the parent's whole rect until a layout has a say, which is
-	// the point: it stacks siblings on top of each other.
-	for _, c := range n.children {
-		f.placeSubtree(token, c, r, out)
+	// A container with no layout stacks its children at its own whole rect,
+	// which is what a surface that never calls SetLayout gets, and which needs
+	// no rect slice to say.
+	if n.layout == nil {
+		for _, c := range n.children {
+			f.placeSubtree(token, c, r, out)
+		}
+		return
 	}
+
+	rects := f.arrange(n, r)
+	for i, c := range n.children {
+		f.placeSubtree(token, c, rects[i], out)
+	}
+}
+
+// arrange asks a container's layout where its children go. It is only called
+// for a container that has one; placeSubtree handles the layout-less case,
+// where every child takes the container's whole rect.
+//
+// A layout returning the wrong number of rects is a bug in the layout: a child
+// with no rect has nowhere to render, and a rect with no child is an answer
+// about a surface that does not exist. Neither has a sane interpretation, so
+// froth says so rather than guessing.
+func (f *Froth) arrange(n *node, r Rect) []Rect {
+	children := make([]Child, len(n.children))
+	for i, c := range n.children {
+		children[i] = Child{Handle: c}
+	}
+
+	rects := n.layout.Arrange(r, children)
+	if len(rects) != len(children) {
+		panic("froth: a layout returned " + strconv.Itoa(len(rects)) +
+			" rects for " + strconv.Itoa(len(children)) +
+			" children; a layout must return exactly one rect per child, in order")
+	}
+	return rects
 }

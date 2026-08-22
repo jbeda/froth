@@ -28,12 +28,14 @@ func (h Handle) String() string {
 }
 
 // A node is froth's record of one surface: the surface itself, the parent it
-// hangs off, and its children in sibling order. Sibling order is creation
-// order, and it is what depth-first Z assignment turns into stacking order.
+// hangs off, its children in sibling order, and the layout that places them.
+// Sibling order is creation order, and it is what depth-first Z assignment
+// turns into stacking order.
 type node struct {
 	surface  Surface
 	parent   Handle
 	children []Handle
+	layout   Layout
 }
 
 // registries counts froth instances, so each one's handles are distinguishable

@@ -475,3 +475,220 @@ func TestAConstructedContextPanicsWithADiagnostic(t *testing.T) {
 		t.Errorf("panic was %v, want one naming the constructed context", got)
 	}
 }
+
+// ---- Layout ---------------------------------------------------------------
+
+// halves is a layout that splits its space down the middle. It is written here
+// rather than taken from froth/layout so the froth tests exercise the interface
+// a user implements, not one stock implementation of it.
+type halves struct{ got []froth.Child }
+
+func (h *halves) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
+	h.got = children
+	out := make([]froth.Rect, len(children))
+	w := space.W / 2
+	for i := range out {
+		out[i] = froth.Rect{X: space.X + i*w, Y: space.Y, W: w, H: space.H}
+	}
+	return out
+}
+
+// laidOut is a container that attaches a layout to itself when it mounts, which
+// is the self-relative form: it owns the children, so it says how they sit.
+type laidOut struct {
+	parent
+	layout froth.Layout
+}
+
+func (l *laidOut) Mount(ac *froth.ApplyCtx) {
+	l.parent.Mount(ac)
+	ac.SetLayout(l.layout)
+}
+
+func TestLayoutPlacesChildrenSideBySide(t *testing.T) {
+	a, b := &block{ch: "a", w: 2, h: 1}, &block{ch: "b", w: 2, h: 1}
+	root := &laidOut{
+		parent: parent{body: "....\n....", kids: []froth.Surface{a, b}},
+		layout: &halves{},
+	}
+	f := newSized(t, root, 4, 2)
+
+	if got, want := f.View().Content, "aabb\n...."; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+	if got, want := a.rect, (froth.Rect{X: 0, Y: 0, W: 2, H: 2}); got != want {
+		t.Errorf("first child rect = %+v, want %+v", got, want)
+	}
+	if got, want := b.rect, (froth.Rect{X: 2, Y: 0, W: 2, H: 2}); got != want {
+		t.Errorf("second child rect = %+v, want %+v", got, want)
+	}
+}
+
+// A layout is handed the container's rect, not the screen's: a laid-out
+// container nested inside another arranges within what it was given.
+func TestANestedLayoutArrangesWithinItsContainersRect(t *testing.T) {
+	deep := &block{ch: "d", w: 1, h: 1}
+	inner := &laidOut{
+		parent: parent{body: "", kids: []froth.Surface{deep}},
+		layout: &halves{},
+	}
+	root := &laidOut{
+		parent: parent{body: "........", kids: []froth.Surface{&block{ch: ".", w: 1, h: 1}, inner}},
+		layout: &halves{},
+	}
+	f := newSized(t, root, 8, 1)
+
+	f.View()
+	if got, want := deep.rect, (froth.Rect{X: 4, Y: 0, W: 2, H: 1}); got != want {
+		t.Errorf("grandchild rect = %+v, want %+v", got, want)
+	}
+}
+
+// The layout sees handles, in sibling order. It never sees a surface, which is
+// what lets it be tested as a pure function.
+func TestALayoutSeesItsChildrenAsHandlesInSiblingOrder(t *testing.T) {
+	a, b := &block{ch: "a", w: 1, h: 1}, &block{ch: "b", w: 1, h: 1}
+	lay := &halves{}
+	root := &laidOut{
+		parent: parent{body: "..", kids: []froth.Surface{a, b}},
+		layout: lay,
+	}
+	f := newSized(t, root, 4, 1)
+	f.View()
+
+	want := []froth.Child{{Handle: a.self}, {Handle: b.self}}
+	if len(lay.got) != len(want) {
+		t.Fatalf("layout saw %d children, want %d", len(lay.got), len(want))
+	}
+	for i := range want {
+		if lay.got[i] != want[i] {
+			t.Errorf("child %d = %+v, want %+v", i, lay.got[i], want[i])
+		}
+	}
+}
+
+// Without a layout the children stack at the container's whole rect, which is
+// what M0 shipped and what a container that never calls SetLayout still gets.
+func TestChildrenStackAtTheContainersRectWithoutALayout(t *testing.T) {
+	a, b := &block{ch: "a", w: 4, h: 1}, &block{ch: "b", w: 2, h: 1}
+	root := &parent{body: "....", kids: []froth.Surface{a, b}}
+	f := newSized(t, root, 4, 1)
+
+	if got, want := f.View().Content, "bbaa"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// shorted returns fewer rects than it was handed children, which no layout may
+// do: a child with no rect has nowhere to render.
+type shorted struct{}
+
+func (shorted) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
+	return nil
+}
+
+func TestALayoutReturningTheWrongNumberOfRectsPanics(t *testing.T) {
+	root := &laidOut{
+		parent: parent{body: "..", kids: []froth.Surface{&block{ch: "a", w: 1, h: 1}}},
+		layout: shorted{},
+	}
+	f := newSized(t, root, 4, 1)
+
+	var got any
+	func() {
+		defer func() { got = recover() }()
+		f.View()
+	}()
+
+	if got == nil {
+		t.Fatal("a layout returning too few rects did not panic")
+	}
+}
+
+// ---- Clipping -------------------------------------------------------------
+
+func TestASurfaceIsClippedToItsRect(t *testing.T) {
+	root := &laidOut{
+		parent: parent{body: "........\n........", kids: []froth.Surface{
+			&block{ch: "a", w: 8, h: 2},
+			&block{ch: "b", w: 8, h: 2},
+		}},
+		// The later sibling sits on the left, so its overflow runs into the
+		// earlier one — which it would otherwise win, being above it.
+		layout: at{{X: 4, Y: 0, W: 4, H: 2}, {X: 0, Y: 0, W: 4, H: 2}},
+	}
+	f := newSized(t, root, 8, 2)
+
+	// Both children render eight columns wide into four-column rects. Neither
+	// may bleed over its sibling.
+	if got, want := f.View().Content, "bbbbaaaa\nbbbbaaaa"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// at is a layout that places children at rects the test fixes, which is the
+// shortest way to hand one surface an awkward rect.
+type at []froth.Rect
+
+func (a at) Arrange(space froth.Rect, children []froth.Child) []froth.Rect { return a }
+
+func TestASurfaceIsClippedVertically(t *testing.T) {
+	root := &laidOut{
+		parent: parent{body: "", kids: []froth.Surface{&fixed{content: "11\n22\n33"}}},
+		layout: at{{X: 0, Y: 0, W: 2, H: 2}},
+	}
+	f := newSized(t, root, 2, 3)
+
+	// The third row is the child's, and it was not given room for it.
+	if got, want := f.View().Content, "11\n22\n"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// Clipping counts columns, not bytes: a wide grapheme that straddles the edge
+// is dropped rather than half-drawn.
+func TestClippingCountsColumnsNotBytes(t *testing.T) {
+	root := &laidOut{
+		parent: parent{body: "      ", kids: []froth.Surface{
+			&fixed{content: "xxxxxx"},
+			&fixed{content: "日本語"},
+		}},
+		layout: at{{X: 0, Y: 0, W: 6, H: 1}, {X: 3, Y: 0, W: 3, H: 1}},
+	}
+	f := newSized(t, root, 6, 1)
+
+	// 日本 is four columns and the rect is three, so the second grapheme is
+	// dropped whole rather than half-drawn over the sibling underneath.
+	if got, want := f.View().Content, "xxx日x"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// A layout can hand a child a rect with no cells — a row starves the children
+// it cannot fit — and a layout with an arithmetic bug can hand it a negative
+// extent. Compositing that subtree drew nothing, so it answers the zero Frame
+// rather than sizing a canvas from the rect, which for a negative one used to
+// panic inside the compositor.
+func TestCompositingASubtreeWithNoCellsReturnsTheZeroFrame(t *testing.T) {
+	for name, r := range map[string]froth.Rect{
+		"empty":    {X: 0, Y: 0, W: 0, H: 1},
+		"negative": {X: 0, Y: 0, W: -2, H: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			kid := &block{ch: "a", w: 2, h: 1}
+			root := &laidOut{
+				parent: parent{body: "..", kids: []froth.Surface{kid}},
+				layout: at{r},
+			}
+			f := newSized(t, root, 2, 1)
+
+			if got := f.Composite(kid.self); got.Content != "" || got.Rects != nil {
+				t.Errorf("Composite of a subtree with no cells = %+v, want the zero Frame", got)
+			}
+			// The rest of the frame is unaffected: the root still draws.
+			if got, want := f.View().Content, ".."; got != want {
+				t.Errorf("View().Content = %q, want %q", got, want)
+			}
+		})
+	}
+}

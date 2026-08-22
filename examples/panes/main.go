@@ -1,9 +1,10 @@
 // Command panes is froth's running example. It grows with each milestone; today
-// it is a root surface that assembles two child panes when it enters the tree.
+// it is a root surface that assembles two child panes and attaches a row layout
+// to place them side by side.
 //
-// The children are both placed at the root's whole rect, because no layout
-// exists yet — so they stack rather than sit side by side, which is what makes
-// the ordering visible. Pane two was created second and draws over pane one.
+// The root draws a field of dots behind them, which is visible in the one-cell
+// gap the layout leaves between the panes — the panes cover the rest of it,
+// because each fills the rect the layout gave it.
 package main
 
 import (
@@ -15,27 +16,68 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/jbeda/froth"
+	"github.com/jbeda/froth/layout"
 )
 
-// root is the surface the application hands froth. It draws the backdrop and
-// creates the panes it is made of.
-type root struct {
-	keys []string
-}
+// root is the surface the application hands froth. It creates the panes it is
+// made of and says how they sit, both in Mount: a surface owns its children, so
+// their layout is its business and nobody else's.
+//
+// Only the root sees messages, so the panes are static: a keystroke reaches
+// whichever surface is active, and focus arrives later in this milestone.
+type root struct{}
 
 func (rt *root) Mount(ac *froth.ApplyCtx) {
-	ac.Create(&pane{title: "pane one", body: "created first — drawn below", w: 46, h: 9})
-	ac.Create(&pane{title: "pane two", body: "created second — drawn above", w: 32, h: 5})
+	ac.Create(&pane{
+		title: "left",
+		body: "Each pane is given a rect by the layout and fills it, so " +
+			"resizing the terminal resizes both.\n\n" +
+			"Neither pane knows the other exists, and neither computes a " +
+			"position: the layout is the only thing that places them.",
+	})
+	ac.Create(&pane{
+		title: "right",
+		body: "froth — M1: two panes placed by a layout.\n\n" +
+			"A row layout divides the root's rect between the panes and leaves " +
+			"a one-cell gap, which is where the dots behind them show " +
+			"through.\n\n" +
+			"A pane is clipped to its rect, so this paragraph stops at the " +
+			"pane's edge however long it gets and never bleeds over its " +
+			"sibling.\n\n" +
+			"q or ctrl+c quits.",
+	})
+	ac.SetLayout(layout.Row(layout.Gap(1)))
 }
 
 func (rt *root) Render(rc *froth.RenderCtx, r froth.Rect) string {
-	body := "froth — M1: a root with two child panes\n\n" +
-		"Both children sit at the root's whole rect until a layout has a say.\n" +
-		"Press keys to see them arrive. q or ctrl+c quits."
-	if len(rt.keys) > 0 {
-		body += "\n\n" + strings.Join(rt.keys, " ")
+	row := strings.Repeat("·", r.W)
+	rows := make([]string, r.H)
+	for i := range rows {
+		rows[i] = row
 	}
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Render(strings.Join(rows, "\n"))
+}
 
+func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	if key, ok := msg.(tea.KeyPressMsg); ok {
+		switch key.String() {
+		case "q", "ctrl+c":
+			uc.Run(tea.Quit)
+		}
+	}
+}
+
+// pane is a child surface: two methods, and its state on a pointer receiver. It
+// fills whatever rect it is given, which is the layout's answer rather than a
+// size of its own.
+type pane struct {
+	title string
+	body  string
+}
+
+func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
 	// Lip Gloss counts the border and padding inside Width and Height, so a box
 	// styled to the rect fills it exactly.
 	return lipgloss.NewStyle().
@@ -43,43 +85,6 @@ func (rt *root) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Padding(0, 1).
 		Width(r.W).
 		Height(r.H).
-		AlignVertical(lipgloss.Bottom).
-		Render(body)
-}
-
-func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
-	key, ok := msg.(tea.KeyPressMsg)
-	if !ok {
-		return
-	}
-	switch key.String() {
-	case "q", "ctrl+c":
-		uc.Run(tea.Quit)
-	default:
-		rt.keys = append(rt.keys, key.String())
-		if len(rt.keys) > 12 {
-			rt.keys = rt.keys[len(rt.keys)-12:]
-		}
-	}
-}
-
-// pane is a child surface: two methods, and its state on a pointer receiver. It
-// draws at a fixed size for now, so both panes stay visible where they overlap.
-type pane struct {
-	title string
-	body  string
-	w, h  int
-}
-
-func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		Padding(0, 1).
-		Width(min(p.w, r.W)).
-		Height(min(p.h, r.H)).
-		// Bottom-aligned so the pane underneath still says what it is where it
-		// is not covered.
-		AlignVertical(lipgloss.Bottom).
 		Render(p.title + "\n\n" + p.body)
 }
 

@@ -74,3 +74,14 @@ func (ac *ApplyCtx) Create(s Surface) Handle {
 	ac.check()
 	return ac.f.reg.add(ac.self, s)
 }
+
+// SetLayout attaches a layout to this surface, which places its children from
+// then on. Like Create it names no target: a surface owns its own children, so
+// saying how they sit is self-relative, and a surface cannot rearrange somebody
+// else's.
+//
+// A surface with no layout stacks its children at its own whole rect.
+func (ac *ApplyCtx) SetLayout(l Layout) {
+	ac.check()
+	ac.f.reg.get(ac.self).layout = l
+}

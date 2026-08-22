@@ -76,6 +76,37 @@ entry. #3 is where ADR 0007 is proved or broken; #5 chooses the iteration cap.
   subtracted two cells for the border and so drew every box two cells short. Fixed in the
   example; worth knowing before writing chrome.
 
+### Carried forward from #4, for the entry to absorb
+
+- **`Layout` shipped as the sketch drew it**, `Arrange(space Rect, children []Child) []Rect`,
+  attached self-relatively by `ApplyCtx.SetLayout`. `Child` carries only a handle today. It
+  is a struct rather than a bare handle so weight and measured size can be added as fields
+  later: froth constructs every `Child`, so a layout only reads them and a new field breaks
+  nobody.
+- **A layout is handed screen rects, not container-relative ones.** Placement resolves from
+  the root down, so `space` is already absolute and a layout returns absolute rects. The
+  frame-relative offset the compositor wants is `Composite`'s business, not a layout's.
+- **A layout returning the wrong number of rects panics.** A child with no rect has nowhere
+  to render and a rect with no child answers about a surface that does not exist; neither
+  has a sane reading. Worth revisiting only if a layout ever legitimately wants to hide a
+  child, which would be a rect of zero size rather than a missing one.
+- **Clipping happens on the string, before it becomes a layer**, with `ansi.Truncate` per
+  line and a line count cut — so `github.com/charmbracelet/x/ansi` is now a direct
+  dependency. It has to be froth's: a Lip Gloss layer takes its bounds from the string it
+  was handed, so an oversized string simply makes an oversized layer.
+- **`Composite` of a subtree with no cells returns the zero `Frame`**, alongside the two
+  cases already documented — a dead handle and a frame before the first size. A layout can
+  hand a child an empty rect (a row starves the children it cannot fit) and a buggy one a
+  negative extent; the subtree's rect sizes the canvas, and a negative one is a `makeslice`
+  panic from inside Lip Gloss rather than a diagnostic.
+- **Lip Gloss's `Height` pads but does not truncate.** A box styled to its rect still
+  overflows when its content is taller, which is what makes clipping load-bearing rather
+  than a nicety — the example loses its bottom border in a short terminal, and that is the
+  clip working.
+- **The example lost its key echo.** Only the root sees messages, and the root is now
+  covered by the children the layout placed, so there is nowhere for it to draw one. The
+  panes go back to being interactive when routing arrives with focus (#6).
+
 <!--
 When it lands, replace with:
 
