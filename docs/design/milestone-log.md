@@ -41,7 +41,9 @@ rather than quietly working around.
 
 ## M1 — Skeleton
 
-_Not started._
+_Not started._ Sliced into #2 through #7, blockers-first: bootstrap and the compositor,
+the registry and tree, then layout and the drain loop in parallel, then focus, then this
+entry. #3 is where ADR 0007 is proved or broken; #5 chooses the iteration cap.
 
 <!--
 When it lands, replace with:
