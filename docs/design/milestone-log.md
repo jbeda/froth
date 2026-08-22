@@ -23,8 +23,12 @@ rather than quietly working around.
   avoid. Retire this line when M1 lands.
 - **The Deliver/Apply drain loop terminates under real cascades**, and the iteration cap
   is set somewhere useful — high enough not to trip on legitimate work, low enough to
-  catch a cycle quickly. No value has been chosen. Supports
-  [ADR 0002](../adr/0002-three-phase-update.md). *Tested by M1, refined through M3.*
+  catch a cycle quickly. Supports [ADR 0002](../adr/0002-three-phase-update.md).
+  *Tested by M1, refined through M3.* **Proved by #5** — a chain of posts settles inside
+  one update and a deliberate cycle trips the cap in well under a millisecond. The cap is
+  10000; whether that is the right number for real work is still open, because nothing
+  yet builds a tree big enough to press on it. Retire this line when M3 has run
+  reconcile cascades through it.
 - **The headless seam is pleasant to write tests against.** If asserting on subtree
   output is awkward, every later milestone inherits it. *Tested by M1.*
 - **Immediate-mode rendering is fast enough at TUI scale.** Every surface renders every
@@ -106,6 +110,60 @@ entry. #3 is where ADR 0007 is proved or broken; #5 chooses the iteration cap.
 - **The example lost its key echo.** Only the root sees messages, and the root is now
   covered by the children the layout placed, so there is nowhere for it to draw one. The
   panes go back to being interactive when routing arrives with focus (#6).
+
+### Carried forward from #5, for the entry to absorb
+
+- **The iteration cap is 10000, and deliveries and mounts spend the same budget.** The
+  cap exists to turn a hang into a report, not to police enthusiasm, so it is set well
+  above anything legitimate rather than close to it. Tripping late costs microseconds —
+  an iteration is a map lookup and one surface's handler, and a real cycle spends the
+  whole budget in well under a millisecond — while tripping early breaks an application
+  that was merely large: controls are surfaces, so a screen assembling a few thousand of
+  them in one mount pass is ordinary. One budget rather than two because a cascade that
+  will not settle can be made of either and the two interleave: a delivery creates a
+  surface whose mount posts a message. `mountBudget` is gone, folded into this as #3
+  asked.
+- **The drain loop leads with Apply rather than Deliver.** The tree has to exist before
+  anything can be delivered into it — the root's own mount is the first Apply any
+  instance runs — and the Apply a delivery asks for is the one at the top of the next
+  turn. It is the same alternation the design describes, entered one step earlier.
+- **Apply's fixed order — intents first, then structural changes — is a comment, not
+  code, until M3.** There is one step in the phase today. M3 adds a step ahead of it
+  rather than reordering the loop.
+- **Diagnostics are recorded during a phase and handed to the hook after it.** A hook is
+  application code, and calling it mid-phase would hand it a froth instance that panics
+  on the first thing it looked at. The example's hook renders the tree from inside
+  itself, which is the case that forced this.
+- **The cap reports once per settle pass and abandons what it was draining** — the
+  message queue if delivery tripped it, the pending mounts if mounting did. It does not
+  abandon both: a delivery cascade cut short can leave surfaces waiting to mount, and
+  they mount on the next pass with a fresh budget, which `Composite` runs before it draws
+  so nothing renders unmounted. A mount cascade cut short does drop its surfaces
+  permanently, and they render unmounted — degraded, but not silent, because the
+  diagnostic already fired.
+- **`apply` has two levels: the phase, and the one step in it.** The step is
+  `mountEntered`; M3's intents become a second step ahead of it rather than an edit to
+  the drain loop. The fixed order is a comment on `apply` until there are two things to
+  order.
+- **`Post(Handle, tea.Msg)` and `Self()` landed on `UpdateCtx`.** `Self` is what a
+  surface posts to when it wants to continue in a later delivery, and it is the sketch's
+  stated contract for every context; `RenderCtx` still lacks it, because nothing has
+  needed it yet. A post to a dead handle is a silent drop today — the spec's *counted*
+  drop, reported through the hook, is M5's along with the command envelopes it counts.
+- **Nothing can create a surface during Deliver yet**, so the Apply between two
+  deliveries has nothing to do and cannot be tested. `Reconcile` (M3) is what first puts
+  something in it.
+- **A retained context still panics rather than reporting through the hook.** The hook is
+  for what froth detects but cannot decide about; a surface using a context in the wrong
+  phase is that surface's own bug, caught at the call site where the stack still names
+  it. The diagnostic hook would report it a phase later, from nowhere useful.
+- **Nothing renders during `Update`.** `View` and `Composite` are the only render path,
+  and `Composite` still applies pending structure first, so a test that composites
+  without ever calling `Update` gets a mounted tree.
+- **The example got its key echo back**, which #4 lost. The root posts to the left pane,
+  which posts to the right one, and all three have handled the keystroke before the frame
+  is drawn — `d` posts a message straight back to the root, which is the cycle the cap
+  catches. Real routing still arrives with focus (#6).
 
 <!--
 When it lands, replace with:

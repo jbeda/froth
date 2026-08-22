@@ -22,21 +22,42 @@ type Froth struct {
 	root Handle
 	size Size
 
+	onDiagnostic func(Diagnostic)
+	// queue holds the messages waiting to be delivered. Delivery drains it and
+	// may add to it, which is the whole point: a surface can post during Deliver
+	// and have it handled before anything is drawn.
+	queue []envelope
+	diags []Diagnostic
+
 	phase phase
 	epoch uint64
 }
 
+// An envelope is a message and the surface it is addressed to. Bubble Tea's own
+// messages arrive with no destination, so froth supplies one; a posted message
+// carries the one its sender named.
+type envelope struct {
+	to  Handle
+	msg tea.Msg
+}
+
 // New builds a froth instance around a root surface. ctx is the root of the
 // per-surface context tree: work a surface starts is cancelled when the surface
-// is destroyed, and all of it when ctx is.
-func New(ctx context.Context, root Surface) *Froth {
+// is destroyed, and all of it when ctx is. Options configure the instance for
+// its lifetime — today OnDiagnostic, which is the one hook froth reports
+// through.
+func New(ctx context.Context, root Surface, opts ...Option) *Froth {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if root == nil {
 		panic("froth: New called with a nil root surface")
 	}
-	f := &Froth{ctx: ctx}
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+	f := &Froth{ctx: ctx, onDiagnostic: o.diagnostic}
 	f.root = f.reg.add(Handle{}, root)
 	return f
 }
@@ -48,18 +69,112 @@ func (f *Froth) Root() Handle { return f.root }
 // from the application model's Init.
 func (f *Froth) Init() tea.Cmd { return nil }
 
-// Update delivers one message and returns the work the surfaces that saw it
-// asked for. Forward it from the application model's Update.
+// Update takes one message and settles: it delivers, applies, and repeats until
+// nothing is left to deliver, then returns the work the surfaces that saw the
+// message asked for. Forward it from the application model's Update.
+//
+// Nothing is rendered here. A cascade of posted messages therefore resolves
+// entirely before the frame is drawn, so no half-settled state ever reaches the
+// screen and there is no skew between what a surface knows and what it drew.
 //
 // The terminal size is froth's own business: a resize updates the rect surfaces
 // render into and is never delivered to a surface as a message.
 func (f *Froth) Update(msg tea.Msg) tea.Cmd {
-	f.ready()
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		f.size = Size{W: ws.Width, H: ws.Height}
+		return f.settle()
+	}
+	// Until focus arrives the root is every message's destination.
+	f.queue = append(f.queue, envelope{to: f.root, msg: msg})
+	return f.settle()
+}
+
+// A budget bounds one settle pass. Delivering a message and mounting a surface
+// each spend from the same one, because a cascade that will not settle can be
+// made of either and the two interleave: a delivery can create a surface whose
+// mount posts a message.
+type budget struct {
+	left    int
+	tripped bool
+}
+
+// iterationCap is how much one settle pass may spend before froth decides the
+// cascade is never going to settle.
+//
+// The cap exists to turn a hang into a report, not to police enthusiasm, so it
+// is set well above anything legitimate rather than close to it. Tripping late
+// costs microseconds — an iteration is a map lookup and one surface's handler —
+// while tripping early breaks an application that was merely large: controls are
+// surfaces, so a screen assembling a few thousand of them in one mount pass is
+// ordinary rather than pathological. A real cycle spends the whole budget in
+// well under a millisecond, which is invisible next to a frame.
+const iterationCap = 10000
+
+// spend takes one unit, reporting whether there was one to take.
+func (b *budget) spend() bool {
+	if b.left <= 0 {
+		return false
+	}
+	b.left--
+	return true
+}
+
+// trip reports an exhausted budget, once per settle pass. A cascade that runs
+// out during Apply would otherwise report again the moment the drain loop
+// noticed the queue it abandoned.
+func (f *Froth) trip(b *budget, detail string) {
+	if b.tripped {
+		return
+	}
+	b.tripped = true
+	f.report(Diagnostic{Kind: DiagIterationCap, Detail: detail})
+}
+
+// settle runs Deliver and Apply alternately until the message queue drains.
+//
+// Apply leads because the tree has to exist before anything can be delivered
+// into it — the root's own mount is the first Apply any instance runs — and
+// because the Apply a delivery asks for is the one at the top of the next turn
+// of the loop. Deliver hands one message to one surface, which may change only
+// itself, and Apply commits the structural change that delivery asked for.
+//
+// Within Apply the order is fixed: intents first, then structural changes, so a
+// surface that raises an intent and closes itself is still alive when the intent
+// lands. Intents are M3; the order is established here so M3 adds a step rather
+// than reordering the loop.
+//
+// Delivering a message and mounting a surface both spend from one budget, and
+// running out of it means a cascade that is not going to settle. froth abandons
+// what it was draining, reports it, and lets the program carry on rather than
+// hanging. See iterationCap for why the budget is the size it is.
+func (f *Froth) settle() tea.Cmd {
+	b := budget{left: iterationCap}
+	var cmds []tea.Cmd
+
+	for {
+		f.apply(&b)
+		if len(f.queue) == 0 {
+			break
+		}
+		if !b.spend() {
+			f.trip(&b, "the message queue did not drain within "+
+				strconv.Itoa(iterationCap)+" deliveries and mounts; a surface "+
+				"is almost certainly posting a message that comes back to it")
+			f.queue = nil
+			break
+		}
+		e := f.queue[0]
+		f.queue = f.queue[1:]
+		if cmd := f.deliver(e.to, e.msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+
+	f.flush()
+	if len(cmds) == 0 {
 		return nil
 	}
-	return f.deliver(f.root, msg)
+	return tea.Batch(cmds...)
 }
 
 // View composites the surface tree into a frame. Forward it from the
@@ -77,23 +192,21 @@ func (f *Froth) deliver(h Handle, msg tea.Msg) tea.Cmd {
 		return nil
 	}
 
-	uc := &UpdateCtx{phaseToken: f.enter(phaseDeliver), ctx: f.ctx}
+	uc := &UpdateCtx{phaseToken: f.enter(phaseDeliver), ctx: f.ctx, self: h}
 	defer f.leave()
 
 	n.surface.Update(uc, msg)
 	return tea.Batch(uc.cmds...)
 }
 
-// ready mounts everything that has entered the tree and not been mounted yet —
-// the root to begin with, and then whatever the tree assembles for itself —
-// before froth renders or delivers anything.
+// apply runs the Apply phase: everything structural that has been asked for
+// since the last one.
 //
-// It drains a queue rather than recursing over the tree, so a surface created
-// late in the pass is mounted in that same pass whoever created it. Recursion
-// would have missed one: an ApplyCtx stays valid for the whole pass, so a
-// surface can hand its own context to a sibling, and the child that appears
-// under a node already walked past would have rendered without ever mounting.
-func (f *Froth) ready() {
+// The order within it is fixed — intents first, then structural changes, so a
+// surface that raises an intent and closes itself is still alive when the intent
+// lands. Intents are M3, so there is one step here today and M3 adds one ahead
+// of it.
+func (f *Froth) apply(b *budget) {
 	if len(f.reg.entered) == 0 {
 		return
 	}
@@ -101,10 +214,27 @@ func (f *Froth) ready() {
 	token := f.enter(phaseApply)
 	defer f.leave()
 
-	for budget := mountBudget; len(f.reg.entered) > 0; budget-- {
-		if budget <= 0 {
-			panic("froth: mounting created more than " + strconv.Itoa(mountBudget) +
-				" surfaces; a surface is almost certainly mounting a child of its own type")
+	f.mountEntered(b, token)
+}
+
+// mountEntered mounts the surfaces which have entered the tree and not been
+// mounted yet — the root to begin with, and then whatever the tree assembles for
+// itself — before froth renders or delivers anything.
+//
+// It drains a queue rather than recursing over the tree, so a surface created
+// late in the pass is mounted in that same pass whoever created it. Recursion
+// would have missed one: an ApplyCtx stays valid for the whole of the Apply that
+// issued it, so a surface can hand its own context to a sibling, and the child
+// that appears under a node already walked past would have rendered without ever
+// mounting.
+func (f *Froth) mountEntered(b *budget, token phaseToken) {
+	for len(f.reg.entered) > 0 {
+		if !b.spend() {
+			f.trip(b, "mounting did not settle within "+strconv.Itoa(iterationCap)+
+				" deliveries and mounts; a surface is almost certainly mounting "+
+				"a child of its own type")
+			f.reg.entered = nil
+			return
 		}
 
 		h := f.reg.entered[0]
@@ -115,10 +245,14 @@ func (f *Froth) ready() {
 	}
 }
 
-// mountBudget bounds one mount pass. A surface that mounts a child of its own
-// type never settles; the drain loop gains a shared cap and a diagnostic to
-// report it through, and this stands in until then.
-const mountBudget = 10000
+// applyPending settles the structure before a frame is drawn, for the frames
+// that do not follow an Update: the first one, and every Composite a test takes
+// of its own accord.
+func (f *Froth) applyPending() {
+	b := budget{left: iterationCap}
+	f.apply(&b)
+	f.flush()
+}
 
 // A Frame is what a subtree drew: the composited output for the subtree alone,
 // and the rect each surface in it resolved to. The rects are screen
@@ -139,7 +273,7 @@ type Frame struct {
 // around it. This is froth's own render path — View is Composite of the root —
 // rather than a second one that could drift from it.
 func (f *Froth) Composite(h Handle) Frame {
-	f.ready()
+	f.applyPending()
 
 	screen := Rect{W: f.size.W, H: f.size.H}
 	if f.reg.get(h) == nil || screen.Empty() {

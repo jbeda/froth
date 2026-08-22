@@ -143,3 +143,9 @@ it and nothing above it that trusts its answer.
 To enqueue a message for later delivery to a surface. All message delivery in
 froth is posted; nothing is delivered re-entrantly.
 _Avoid_: send, dispatch, emit
+
+**Diagnostic**:
+Something froth detected and should not decide about — a message cycle, an
+intent nobody claimed, a surface that panicked. All of them go to one hook
+registered at construction, because none of them is froth's to escalate.
+_Avoid_: error, warning

@@ -25,7 +25,30 @@ func (rc *RenderCtx) Rect() Rect {
 type UpdateCtx struct {
 	phaseToken
 	ctx  context.Context
+	self Handle
 	cmds []tea.Cmd
+}
+
+// Self reports the handle of the surface this context belongs to, which is what
+// a surface posts to when it wants to continue in a later delivery rather than
+// finish in this one.
+func (uc *UpdateCtx) Self() Handle {
+	uc.check()
+	return uc.self
+}
+
+// Post addresses a message to a surface. It is queued rather than delivered: the
+// current delivery finishes, and the message is handled later in the same
+// update, before anything is rendered. Nothing in froth is delivered
+// re-entrantly, so a surface is never inside two of its own handlers.
+//
+// A handle that names nothing — a surface that has been destroyed, or one from
+// another froth instance — is a defined drop rather than an error. That is what
+// makes a handle safe to store: the sender needs no way to ask whether the
+// destination is still alive.
+func (uc *UpdateCtx) Post(to Handle, msg tea.Msg) {
+	uc.check()
+	uc.f.queue = append(uc.f.queue, envelope{to: to, msg: msg})
 }
 
 // Ctx reports the context this surface's asynchronous work should use.
