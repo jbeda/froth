@@ -396,6 +396,33 @@ Rejected: keying on `String()` alone, which cannot tell `?` from a named key wit
 re-deriving the classification the fields already carry; and treating shift as a chord,
 which would make a capital letter unavailable to a text field.
 
+**Space is the one key spelled unlike what it does, and it is the only one.** Ultraviolet's
+`Key.String()` returns `Text` unless it is empty or exactly `" "`, so every other character
+spells as itself — `shift+1` is `"!"`, `shift+a` is `"A"`, a non-breaking space is itself.
+Space alone falls through to the keystroke form, because `" "` would be invisible in a
+config file and in a help bar. The consequence to know: **`"space"` and `"shift+space"` are
+the only bindings that read like names but behave like typing, so neither fires while a
+text sink has focus.** For `"space"` that is plainly right. For `"shift+space"` the `shift+`
+prefix suggests a chord, and it is not one — shift+space types a space. Sweeping every named
+key constant confirms `Space` is the only one `isTyping` accepts: the arrows, function,
+keypad, media and lock keys all carry Private Use Area codes, which `unicode.IsPrint`
+rejects.
+
+**Two conventions exist, and this follows the terminal one.** tmux has no `S-a`: shift on a
+letter *is* the capital, and `S-` is reserved for keys with a single form (`S-Left`). VS Code
+is the opposite — always `shift+a`, case never meaningful. The split is not arbitrary: VS
+Code sits on a toolkit reporting physical keys plus modifier state, while a terminal delivers
+a *character* and often cannot say whether shift was held. froth lands on tmux's rule exactly
+— `"A"` for shift+letter, `"shift+up"` for a key with one form — because it is under the same
+constraint, not because it copied it.
+
+**`shift+enter` is expressible and is not typing**, so the newline-versus-submit case an
+input box wants needs nothing new: enter prints nothing, so `Keys: []string{"shift+enter"}`
+resolves normally even inside a sink. Whether it ever *arrives* is the terminal's business —
+the same byte has meant both since 1978, and telling them apart needs the Kitty keyboard
+protocol. Bubble Tea requests basic key disambiguation unconditionally, so this works on
+terminals that speak it and cannot be made to work on those that do not.
+
 **The check is on the focused surface, not the chain.** `resolve` reads
 `f.reg.get(f.focused()).meta.textSink` before the per-surface loop, so a sink that is an
 *ancestor* of the focused surface suppresses nothing — the flag is about where input
