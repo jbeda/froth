@@ -40,6 +40,33 @@ When these disagree:
 Where reality has diverged from a document, fix the document in the same change — and
 record it in the milestone log if the divergence was a decision rather than a typo.
 
+## Code comments
+
+Comments document **the current state** and **how to use the thing**. Nothing else.
+
+Two failures matter more than any style question, and both are common enough to name:
+
+- **No implementation log.** A comment is not a changelog, a ticket reference, or a note
+  about what a past version did. Never write milestone numbers, issue numbers, "shipped
+  in", "was rejected", "arrives later", "inert until", or "M4 will". A reader wants to
+  know what the code does now — not the order in which it came to be. Build-time history
+  belongs in `docs/design/milestone-log.md`, and rejected alternatives belong in an ADR.
+  Those artifacts exist precisely so comments do not have to carry this.
+- **Don't restate the code.** If the comment and the line say the same thing, delete the
+  comment. `// apply folds options into a meta` above `func (m *meta) apply(opts
+  []CreateOption)` earns nothing.
+
+What is worth writing: a non-obvious invariant, a constraint a caller must respect, a
+sharp edge that looks like a bug and is not, or a design choice a reader would otherwise
+try to "fix". Prefer one dense sentence to a paragraph. If a rationale runs longer than a
+few lines it is an ADR, and the comment should be a pointer to it.
+
+Package and exported-identifier doc comments say what the thing is and how to use it,
+sized to what a caller needs.
+
+Length is the tell: a 40-line comment over a 3-line function is wrong regardless of how
+good the prose is. Err toward too little.
+
 ## Agent skills
 
 ### Issue tracker
