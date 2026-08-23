@@ -42,14 +42,22 @@ type Frame struct {
 // around it. This is froth's own render path — View is Composite of the root —
 // rather than a second one that could drift from it.
 //
-// Compositing is not read-only, and a caller has to know it. Structure that is
-// waiting to be applied is applied first — a surface created since the last
-// update mounts here, and Mount runs application code — and the diagnostics that
-// produces go to the hook before Composite returns. A frame drawn from an
-// unmounted tree would be a frame of surfaces that never got to assemble
-// themselves, so the alternative is worse; but it does mean that compositing a
-// tree can run a surface's Mount and call the hook, which matters most to a test
-// that composites without ever calling Update.
+// Compositing is not read-only, and a caller has to know it: structure still
+// waiting to be applied is applied first, so Composite can run Mount — which is
+// application code, and which assembles a subtree of its own — and hand the
+// diagnostics that produces to the hook before it returns. A frame drawn from an
+// unmounted tree would show surfaces that never got to assemble themselves, so
+// the alternative is worse.
+//
+// Two things are ever waiting. The root's own mount is, until the first Update
+// runs — so an instance that is composited before it is updated mounts its whole
+// tree here, which is what a test that never calls Update relies on. And a
+// cascade the iteration cap cut short during delivery leaves whatever had
+// entered the tree unmounted, because settle abandons the queue and stops rather
+// than applying again; the next Apply mounts them, and this is one.
+//
+// Nothing else can be pending, because nothing outside Apply can create a
+// surface: Create takes an ApplyCtx, and a retained one panics.
 func (f *Froth) Composite(h Handle) Frame {
 	f.applyPending()
 
