@@ -10,16 +10,14 @@ package froth
 // with no rect has nowhere to render, so froth treats a short answer as a bug
 // rather than guessing.
 //
-// Arrange may be called more than once for one frame once measurement exists,
-// so it must not accumulate state across calls.
+// Arrange may be called more than once for one frame, so it must not
+// accumulate state across calls.
 type Layout interface {
 	Arrange(space Rect, children []Child) []Rect
 }
 
-// A Child is one of the children a layout is arranging. Today it carries the
-// handle alone; the metadata a layout weighs — a child's weight, its measured
-// size — is added here as later milestones introduce it, which is why a layout
-// is handed a struct rather than a bare handle.
+// A Child is one of the children a layout is arranging. It is a struct rather
+// than a bare handle so that the metadata a layout weighs can hang off it.
 type Child struct {
 	Handle Handle
 }

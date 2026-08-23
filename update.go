@@ -2,7 +2,7 @@
 //
 // Everything here is the alternation ADR 0002 describes — Apply, then Deliver,
 // repeating until nothing is left to deliver — and the budget that stops it
-// running forever. Rendering is render.go; this file never draws.
+// running forever. This file never draws; rendering is render.go.
 
 package froth
 
@@ -21,17 +21,9 @@ type envelope struct {
 }
 
 // destination is where a message arriving from Bubble Tea goes. A key goes to
-// the focused surface and to nothing else; everything else goes to the root.
-//
-// Raw delivery to the focused surface is the whole of M1's routing. Matching
-// declared bindings along the focus chain first, and handing the winner an
-// action rather than a key, is M2 — it sits in front of this step rather than
-// replacing it, because ADR 0008's third step is exactly what happens here.
-//
-// The root takes the rest because froth has nothing better to say yet: mouse
-// messages are hit-tested against the rendered frame in M4, and the remaining
-// Bubble Tea messages are the application's own business, reaching it through
-// the surface it handed froth.
+// the focused surface and to nothing else; everything else goes to the root,
+// which is the surface the application handed froth and so the one its own
+// messages belong at.
 func (f *Froth) destination(msg tea.Msg) Handle {
 	if _, ok := msg.(tea.KeyMsg); ok {
 		return f.focused()
@@ -87,11 +79,6 @@ func (f *Froth) trip(b *budget, detail string) {
 // because the Apply a delivery asks for is the one at the top of the next turn
 // of the loop. Deliver hands one message to one surface, which may change only
 // itself, and Apply commits the structural change that delivery asked for.
-//
-// Within Apply the order is fixed: intents first, then structural changes, so a
-// surface that raises an intent and closes itself is still alive when the intent
-// lands. Intents are M3; the order is established here so M3 adds a step rather
-// than reordering the loop.
 //
 // Delivering a message and mounting a surface both spend from one budget, and
 // running out of it means a cascade that is not going to settle. froth abandons
@@ -149,10 +136,6 @@ func (f *Froth) deliver(h Handle, msg tea.Msg) tea.Cmd {
 // apply runs the Apply phase: everything structural that has been asked for
 // since the last one.
 //
-// The order within it is fixed — intents first, then structural changes, so a
-// surface that raises an intent and closes itself is still alive when the intent
-// lands. Intents are M3, which adds its step ahead of these two.
-//
 // Focus commits before mounting, so a surface that mounts a child and focuses it
 // there wins over a request made in the delivery before — the later of the two,
 // and so the one that should stand.
@@ -193,9 +176,8 @@ func (f *Froth) mountEntered(b *budget, token phaseToken) {
 			return
 		}
 
-		// A surface that entered the tree and left it again before it was
-		// mounted has nothing to mount. Unreachable until M3 can destroy one,
-		// and cheaper to allow for than to discover as a nil dereference then.
+		// A surface that left the tree before it was mounted has nothing to
+		// mount.
 		n := f.reg.get(h)
 		if n == nil {
 			continue
@@ -206,9 +188,8 @@ func (f *Froth) mountEntered(b *budget, token phaseToken) {
 	}
 }
 
-// applyPending settles the structure before a frame is drawn, for the frames
-// that do not follow an Update: the first one, and every Composite a test takes
-// of its own accord.
+// applyPending settles the structure before a frame that does not follow an
+// Update: the first one, and any Composite taken on its own.
 func (f *Froth) applyPending() {
 	b := budget{left: iterationCap}
 	f.apply(&b)

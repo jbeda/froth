@@ -5,9 +5,8 @@ package froth
 // nearly always a bug, and none of them is froth's to escalate — hence one hook
 // rather than a policy.
 //
-// Kind is what code switches on; Detail is prose for whoever reads it. Fields
-// are added as later milestones add kinds, and froth constructs every
-// Diagnostic, so a new field breaks nobody.
+// Kind is what code switches on; Detail is prose for whoever reads it. froth
+// constructs every Diagnostic, so adding a field breaks no caller.
 type Diagnostic struct {
 	Kind   DiagnosticKind
 	Detail string
@@ -16,9 +15,7 @@ type Diagnostic struct {
 // String renders a diagnostic as one line, which is what most hooks want.
 func (d Diagnostic) String() string { return "froth: " + string(d.Kind) + ": " + d.Detail }
 
-// A DiagnosticKind names what froth detected. The set grows with the milestones:
-// M3 adds quarantined panics and unclaimed intents, M5 dead-handle drops and
-// producer type mismatches.
+// A DiagnosticKind names what froth detected.
 type DiagnosticKind string
 
 // DiagIterationCap is reported when a Deliver/Apply cascade does not settle
@@ -36,11 +33,8 @@ const DiagInvalidFocus DiagnosticKind = "invalid focus"
 func (f *Froth) report(d Diagnostic) { f.diags = append(f.diags, d) }
 
 // flushRounds bounds how many times one flush pass may hand the hook a fresh
-// batch. A hook is application code and may drive froth, so a hook that provokes
-// the very diagnostic it is handling would otherwise never return. Everything
-// else that cascades in froth is bounded; this is that bound, and it is small
-// because a hook that has been called a hundred times about its own behaviour
-// has been told.
+// batch. A hook is application code and may drive froth, so a hook that
+// provokes the very diagnostic it is handling would otherwise never return.
 const flushRounds = 100
 
 // flush hands the recorded diagnostics to the hook, with no phase in progress.

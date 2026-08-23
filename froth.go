@@ -4,10 +4,9 @@
 // the surfaces that should see them.
 //
 // A froth instance is not safe for concurrent use. Bubble Tea drives a program
-// from one goroutine, and everything froth does happens on it: there is no lock
-// anywhere, and none is wanted. Work a surface starts elsewhere comes back
-// through a message rather than by touching froth from the goroutine that did
-// it — which is what commands do today, and what producers will do in M5.
+// from one goroutine and everything froth does happens on it, so there is no
+// lock anywhere. Work a surface starts elsewhere must come back through a
+// message rather than by touching froth from the goroutine that did it.
 package froth
 
 import (
@@ -21,19 +20,19 @@ import (
 // application model by value — which Bubble Tea does on every update — copies a
 // pointer rather than the tree.
 type Froth struct {
-	// ctx is the root of the per-surface context tree rather than a request
-	// scope, which is why it is held on the struct: it outlives every call
-	// froth makes and every surface hangs its own cancellation off it.
+	// ctx is the context every surface's asynchronous work runs under. It
+	// outlives every call froth makes, which is why it is held here rather
+	// than passed as a request scope.
 	ctx  context.Context
 	reg  registry
 	root Handle
 	size Size
 
 	// focus is the one authoritative focus handle: the surface raw keys are
-	// delivered to, and the deep end of the chain M2 resolves bindings along.
-	// pendingFocus is a move asked for during Deliver, committed in the Apply
-	// that follows it, and its own flag rather than a zero handle — a request
-	// to focus nothing is a request froth has to reject out loud.
+	// delivered to. pendingFocus is a move asked for during Deliver and
+	// committed in the Apply that follows; it carries its own flag rather than
+	// using a zero handle, because a request to focus nothing has to be
+	// rejected out loud rather than read as no request at all.
 	focus        Handle
 	pendingFocus Handle
 	focusPending bool
@@ -53,15 +52,13 @@ type Froth struct {
 	epoch uint64
 }
 
-// New builds a froth instance around a root surface. ctx is the root of the
-// per-surface context tree: work a surface starts is cancelled when the surface
-// is destroyed, and all of it when ctx is. Options configure the instance for
-// its lifetime — today OnDiagnostic, which is the one hook froth reports
-// through.
+// New builds a froth instance around a root surface. ctx is the context every
+// surface's asynchronous work runs under; cancelling it cancels all of it.
+// Options configure the instance for its lifetime.
 //
 // New panics if root is nil: an instance with nothing to render and nowhere to
 // deliver has no defined behaviour to fall back on. A nil ctx is taken as
-// context.Background, since a caller with no context to give means that one.
+// context.Background.
 func New(ctx context.Context, root Surface, opts ...Option) *Froth {
 	if ctx == nil {
 		ctx = context.Background()

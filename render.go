@@ -34,30 +34,18 @@ type Frame struct {
 
 // Composite renders the tree and returns the frame for the subtree rooted at h.
 // A handle that names nothing returns the zero Frame; so does any handle before
-// the first terminal size arrives, since nothing has been drawn yet, and so
-// does one whose surface a layout gave a rect with no cells in it.
+// the first terminal size arrives, and so does one whose surface a layout gave a
+// rect with no cells in it.
 //
-// The whole tree renders either way: rects resolve from the root down, and Z
+// The whole tree renders either way: rects resolve from the root down and Z
 // ordinals are global, so a subtree cannot be drawn without placing everything
-// around it. This is froth's own render path — View is Composite of the root —
-// rather than a second one that could drift from it.
+// around it.
 //
 // Compositing is not read-only, and a caller has to know it: structure still
 // waiting to be applied is applied first, so Composite can run Mount — which is
-// application code, and which assembles a subtree of its own — and hand the
-// diagnostics that produces to the hook before it returns. A frame drawn from an
-// unmounted tree would show surfaces that never got to assemble themselves, so
-// the alternative is worse.
-//
-// Two things are ever waiting. The root's own mount is, until the first Update
-// runs — so an instance that is composited before it is updated mounts its whole
-// tree here, which is what a test that never calls Update relies on. And a
-// cascade the iteration cap cut short during delivery leaves whatever had
-// entered the tree unmounted, because settle abandons the queue and stops rather
-// than applying again; the next Apply mounts them, and this is one.
-//
-// Nothing else can be pending, because nothing outside Apply can create a
-// surface: Create takes an ApplyCtx, and a retained one panics.
+// application code assembling a subtree of its own — and hand the diagnostics
+// that produces to the hook before it returns. An instance composited before it
+// is ever updated mounts its whole tree here.
 func (f *Froth) Composite(h Handle) Frame {
 	f.applyPending()
 
@@ -121,13 +109,9 @@ type placement struct {
 }
 
 // place renders every surface, clips it to its rect, and assigns each one a Z
-// ordinal. Even with one surface the frame goes through Lip Gloss's canvas and
+// ordinal. Even a single surface goes through Lip Gloss's canvas and
 // compositor rather than being assembled as a string, so wide graphemes and Z
-// ordering are the compositor's job from the first frame onwards. Clipping is
-// only partly the compositor's: Lip Gloss drops what falls outside the canvas,
-// but a layer's own bounds come from the size of the string it was given rather
-// than from the rect the surface was allotted, so clipping a surface to its
-// rect is froth's job.
+// ordering are the compositor's job from the first frame onwards.
 //
 // Ordinals are unique, global and assigned depth-first, because Lip Gloss
 // accumulates position through the layer tree but sorts Z across the whole tree
@@ -147,8 +131,7 @@ func (f *Froth) place(screen Rect) []placement {
 
 func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placement) {
 	// A handle that names nothing draws nothing, and its children are not
-	// reachable through it either. Unreachable until M3 can destroy a surface;
-	// the alternative there is a nil dereference in the render path.
+	// reachable through it either.
 	n := f.reg.get(h)
 	if n == nil {
 		return

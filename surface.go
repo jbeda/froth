@@ -19,9 +19,8 @@ type Surface interface {
 // Mount once, during the Apply in which the surface is created, after its
 // handle exists and before its first render — never per frame.
 //
-// It is one of three ways to get children, and the one for structure a surface
-// defines about itself: a confirm dialog always has OK and Cancel, and its
-// creator should not have to know that.
+// Mount is for structure a surface defines about itself: a confirm dialog
+// always has OK and Cancel, and its creator should not have to know that.
 type Mounter interface {
 	Mount(ac *ApplyCtx)
 }
