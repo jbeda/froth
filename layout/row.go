@@ -31,7 +31,7 @@ func Row(opts ...Option) froth.Layout {
 	for _, opt := range opts {
 		opt(&o)
 	}
-	return row{gap: o.gap}
+	return row(o)
 }
 
 type row struct{ gap int }

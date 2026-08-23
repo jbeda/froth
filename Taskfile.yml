@@ -73,10 +73,11 @@ tasks:
       - go mod tidy
 
   check:
-    desc: Everything that must pass before a commit — formatting, vet, tests
+    desc: Everything that must pass before a commit — formatting, vet, lint, tests
     cmds:
       - task: fmt:check
       - task: vet
+      - task: lint
       - task: test
 
   fmt:check:

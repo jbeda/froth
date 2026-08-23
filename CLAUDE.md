@@ -45,12 +45,17 @@ record it in the milestone log if the divergence was a decision rather than a ty
 `Taskfile.yml` holds them; `task` with no argument lists them. Use these rather than
 inventing a command line, so everyone runs the same thing.
 
-`task check` is the gate before a commit: formatting, `go vet`, tests. `task build`
-compiles the example applications into `bin/` — froth itself is a library and produces no
-binary. `task test -- -run TestFoo` passes arguments through to `go test`.
+`task check` is the gate before a commit: formatting, `go vet`, `golangci-lint`, tests.
+`task build` compiles the example applications into `bin/` — froth itself is a library and
+produces no binary. `task test -- -run TestFoo` passes arguments through to `go test`.
 
-`task lint` needs `golangci-lint` built with a toolchain at least as new as the `go`
-directive in `go.mod`, or it refuses to start.
+Lint settings are in `.golangci.yml`. `golangci-lint` refuses to start unless it was built
+with a toolchain at least as new as the `go` directive in `go.mod`, and `go install` builds
+it against *its own* `go.mod`, which lags. Force the toolchain when installing it:
+
+```
+GOTOOLCHAIN=go1.27.0 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+```
 
 ## Code comments
 

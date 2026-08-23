@@ -1,0 +1,51 @@
+version: "2"
+
+# froth is a library, so the bias here is toward things that would bite a
+# caller — unchecked errors, broken error wrapping, dead exported surface —
+# and away from style opinions the code already settles by convention.
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - errorlint # %w and errors.Is/As used correctly
+    - gocritic # general diagnostics: bugs, performance, style
+    - revive # naming and doc-comment conventions
+    - misspell # typos, including in comments
+    - unconvert # redundant type conversions
+    - unparam # a parameter or result nothing uses
+    - predeclared # shadowing len, cap, new, min, max
+    - usestdlibvars # http.MethodGet over "GET", and friends
+    - wastedassign # a value assigned and never read
+    - durationcheck # multiplying two durations
+    - nilerr # returning nil when err is non-nil
+    - copyloopvar # a loop variable copied for no reason
+
+  settings:
+    revive:
+      rules:
+        - name: exported
+          # Exported identifiers need a doc comment starting with the name.
+          # Methods on unexported types are left alone: their contract is
+          # documented on the interface they implement, and repeating it on
+          # each implementation is the restatement CLAUDE.md forbids.
+    gocritic:
+      enabled-tags: [diagnostic, performance, style]
+      disabled-checks:
+        # froth's comments are prose and wrap at 80 columns; this wants a
+        # leading space on every line of a block comment.
+        - commentFormatting
+        # if/else reads better than a switch for two branches in this code.
+        - ifElseChain
+
+  exclusions:
+    generated: lax
+    rules:
+      # Tests build fixtures and assert on them; unused parameters and
+      # long-form constructions are the point, not a smell.
+      - path: _test\.go$
+        linters: [unparam, gocritic]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
