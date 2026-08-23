@@ -84,3 +84,30 @@ do to one of froth's.
 
 **A serviced action is delivered nowhere.** The surface that declared the binding asked
 froth to move focus, not to be told that it did.
+
+## Amendment: the case against bubbling is about raw keys, not about actions
+
+The rejected option above — deliver to the focused surface, then bubble root-ward when
+unhandled — was rejected because it *requires every surface to report truthfully whether
+it consumed a key*, and adapted third-party components cannot: bubbles' `Update` returns
+no such signal.
+
+That argument does not reach actions. A surface receiving an `ActionMsg` declared the
+binding that produced it, so it is froth-native by construction — there is no adapted
+component in the path that would have to report anything. **Action bubbling is unbuilt,
+not foreclosed.**
+
+What it would take is a way to decline during Deliver — recorded like `Focus` and `Raise`,
+acted on after the handler returns — with resolution resuming from the next surface up the
+chain and froth's own bindings as the final rung. It costs a resumable walk and a defined
+outcome for an action nobody claims.
+
+Most of it is already reachable without any of that: declare an action of your own on the
+key and call `uc.FocusNext()` in the branch where you do not want to override. So
+declining buys ergonomics and the froth-owned-action case rather than new power.
+
+**Deferred to M5**, to be designed alongside intents. The two are one question: an intent
+already walks parent-ward and reports through a claim, and an action that can be declined
+is the same walk anchored at the focused surface instead of at the raiser. Deciding them
+apart would land froth with two chain-of-responsibility mechanisms that differ for no
+reason.
