@@ -2,6 +2,7 @@ package froth
 
 import (
 	"context"
+	"slices"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -25,10 +26,23 @@ func (rc *RenderCtx) Self() Handle {
 // focus chain, and where a raw key would be delivered.
 //
 // It answers for this surface alone, so an ancestor of the focused surface
-// reports false.
+// reports false; FocusWithin is the question that includes ancestors.
 func (rc *RenderCtx) Focused() bool {
 	rc.check()
 	return rc.f.focus == rc.self
+}
+
+// FocusWithin reports whether focus is at or below this surface: true for the
+// focused surface itself and for every ancestor of it, false for everything
+// else. A container draws itself active with this while a child holds the
+// keyboard, the way CSS :focus-within lets an ancestor style itself.
+//
+// It is a superset of Focused rather than a rival to it, derived from the same
+// one handle: a surface being rendered is in the tree by definition, so the
+// focused surface always finds itself on the chain.
+func (rc *RenderCtx) FocusWithin() bool {
+	rc.check()
+	return slices.Contains(rc.f.focusChain(), rc.self)
 }
 
 // Rect reports the region this surface is being rendered into.

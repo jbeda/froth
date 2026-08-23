@@ -852,3 +852,66 @@ func TestRestorationFallingBackOntoANestedScopeEntersIt(t *testing.T) {
 		t.Errorf("re-entering the outer scope: View().Content = %q, want %q", got, want)
 	}
 }
+
+// withinBox is a container that shows whether focus is anywhere at or below it,
+// which is the question Focused cannot answer. It draws one character in the
+// top row of its space and leaves the row underneath to its child.
+type withinBox struct {
+	parent
+}
+
+func (b *withinBox) Mount(ac *froth.ApplyCtx) {
+	b.parent.Mount(ac)
+	ac.SetLayout(underneath{})
+}
+
+func (b *withinBox) Render(rc *froth.RenderCtx, r froth.Rect) string {
+	if rc.FocusWithin() {
+		return "+"
+	}
+	return "-"
+}
+
+// underneath gives each child the row below the surface that owns them.
+type underneath struct{}
+
+func (underneath) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
+	out := make([]froth.Rect, len(children))
+	for i := range out {
+		out[i] = froth.Rect{X: space.X, Y: space.Y + 1, W: space.W, H: 1}
+	}
+	return out
+}
+
+// A container asking about focus below it is the whole of #16's demo: the box
+// on the left changes while its child holds the keyboard, the box on the right
+// does not, and the child's own letter shows where focus actually is.
+func TestAContainerSeesFocusBelowItAndASiblingDoesNot(t *testing.T) {
+	leftKid, rightKid := &focusable{letter: "l"}, &focusable{letter: "r"}
+	leftBox := &withinBox{parent: parent{kids: []froth.Surface{leftKid}}}
+	rightBox := &withinBox{parent: parent{kids: []froth.Surface{rightKid}}}
+	root := &focusRoot{
+		parent: parent{kids: []froth.Surface{leftBox, rightBox}},
+		layout: &halves{},
+	}
+	f := newSized(t, root, 2, 2)
+	f.View()
+
+	if got, want := f.View().Content, "--\nlr"; got != want {
+		t.Errorf("with the root focused, View().Content = %q, want %q", got, want)
+	}
+
+	f.Update(focusMsg{to: leftBox.handles[0]})
+
+	if got, want := f.View().Content, "+-\nLr"; got != want {
+		t.Errorf("with the left child focused, View().Content = %q, want %q", got, want)
+	}
+
+	// The focused surface itself reports true, so FocusWithin is a superset of
+	// Focused rather than an ancestors-only question.
+	f.Update(focusMsg{to: root.handles[0]})
+
+	if got, want := f.View().Content, "+-\nlr"; got != want {
+		t.Errorf("with the left box itself focused, View().Content = %q, want %q", got, want)
+	}
+}

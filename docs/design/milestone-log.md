@@ -594,3 +594,26 @@ in `CLAUDE.md`; the conversion is uniform, including `Handle.String`, which is t
 the compositor gets and so the only per-frame caller. Measured at ~50ns per call over the
 concatenation, against a whole tree rendered every frame; if the immediate-mode rendering
 assumption above ever comes under real measurement, this is not the line to look at first.
+
+### #16 — `RenderCtx.FocusWithin()`
+
+**A container can now ask whether focus is at or below it.** `Focused()` answers for one
+surface and nothing else, so a container holding the focused surface reported false and
+drew itself dormant while the thing inside it took every keystroke. The example's scope
+pane was the case that surfaced it; a tab group, a list, and froth's own chrome all want
+the same question.
+
+**One focus, and a derived query — not a second focus.** The alternative was letting a
+focus scope's surface *take* focus when something inside it is active. That would mean
+the control does not have focus, contradicting **Active surface** and sending input
+somewhere other than where the tree says it goes. Every toolkit that solves this keeps one
+focus and gives ancestors a query: CSS `:focus-within`, Win32's `WM_NCACTIVATE` against a
+child that keeps keyboard focus, macOS key window versus first responder.
+
+`FocusWithin` is `slices.Contains(focusChain(), self)` — the chain already existed, so
+nothing new is stored and nothing can disagree with the one focus handle. It is a superset
+of `Focused` rather than a rival: a surface being rendered is in the tree, so the focused
+surface always finds itself on the chain.
+
+**Whether froth has a default opinion about which containers draw active is still open.**
+This is the tool, not the policy. The example applies it to its scope pane's border.

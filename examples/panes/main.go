@@ -17,6 +17,9 @@
 // same key inside reaches the scope first — it is deeper on the chain than the
 // root — and moves focus back out. Come back later and focus lands on the
 // control it was on, because a surface remembers which child was last active.
+// Its border lights while focus is inside it: the scope is not the focused
+// surface, and asking whether it is would say no, so it asks the other
+// question — whether focus is at or below it.
 //
 // One keystroke shows what the update loop buys: the focused pane posts what it
 // saw to its sibling, and both have handled it before anything is drawn.
