@@ -721,3 +721,67 @@ structural rather than defensive.
 **Reachability is best-effort and that is now written down** — in ADR 0013, and as
 candidate checks on #21: a warning for a focusable surface with no area, and a mode that
 asserts every stop is directionally reachable over an application's own layout.
+
+### #22 — `examples/dir-nav`, a board for judging directional movement
+
+A second example, and the first that exists to be *used* rather than read: a screen shaped
+like an application — toolbar, sidebar, detail, two panels and a focus scope, filter bar —
+laid out so nothing lines up across columns, plus keys that slide the dividers around under
+a fixed focus. It ships no library code and changes nothing about the rule it is for.
+
+**Scoped down from a stress rig to a board.** The first design was an adversarial grid: a
+zero-area tab stop, deliberately symmetric ties, a cell reachable only by tab. That was
+rejected in the design conversation. The question is whether directional movement *feels*
+right, which is a judgement made against an intention, and an intention needs a screen you
+recognise. Pathologies belong to #21, which already owns the zero-area warning; planting one
+on a board about how navigation feels teaches the wrong lesson. Reachability holes were
+dropped for the same reason — hunting for one is fuzzing, not UX.
+
+**Nothing tells an application where focus went.** A directional move is serviced by froth
+and delivered nowhere; `RenderCtx` answers `Focused` and `FocusWithin` about the asking
+surface and nothing else. So the board learns where focus is the only way available: every
+surface records itself as it draws, into shared state, and the banner — created last, so it
+renders last in the depth-first walk — reports what they wrote. The same shared record is
+what tells the root which divider the size keys should move. This is a tool's need rather
+than an application's, and it is collected on #24 (`froth/inspect`) instead of being worked
+around twice.
+
+**Both arrow-key answers are in the board, switchable.** `m` swaps froth's `shift+arrow`
+defaults for bare arrows by declaring the four actions on the root, which replaces froth's
+keys outright — there is no second override table. The argument against bare arrows is on
+screen rather than in prose: in that mode the filter bar can never have a cursor, and `m`
+cannot swap back while the field holds focus, because `m` is a character there too. The keys
+that move dividers are `-`/`=` and `[`/`]`, all unshifted, chosen so nothing depends on how a
+terminal reports a shifted punctuation key.
+
+**Two frictions in the layout API, both M7's to answer, both now filed.** `Child` carries a
+`Handle` and nothing else, so a layout that places children by role has to know them by
+position — `shell` reads its six children by index and documents the order (#25). And a
+surface can learn its rect only during `Render`, so the root cannot clamp a divider against
+the screen without the layout stashing the space it last divided into the shared state
+(#26) — a layout mutating application state during Render, which works and should not be
+copied.
+
+**What the board is for is written into it.** The package comment carries a table naming, for
+each of `better()`'s five ordered tests, a press where it is the first test that separates the
+candidates — and says plainly that the fifth is unreachable, because it needs two surfaces
+with the same rect and a tiling board never produces one. That gap closes with floats and
+modals in M4.
+
+**Focus changes how a surface looks and never how much room it has.** The focus marker's
+column is reserved whether or not it is drawn — a title that grew by two cells when focused
+wrapped inside a box that had not moved, which reads as a layout bug and is not one. Worth
+remembering wherever chrome draws focus indication.
+
+**Driving it produced two findings within the first session, and both are history problems
+rather than tie-break problems.** #28: leaving the sidebar and coming back lands on the row
+nearest straight ahead rather than the row you left. #29: an arrow and its opposite do not
+undo each other. The second carries a result worth not rediscovering — reversibility cannot
+be guaranteed by any purely geometric rule, because a many-to-one move has no single inverse,
+and on the board Reply and Forward both move down to Archive. Tuning `better()` toward
+reversibility is wasted effort; the answers are an explicit override or a memory.
+
+**No tests.** Deliberate, and decided rather than skipped: a test pinning which surface a
+press lands on would pin a board that is supposed to keep changing through M3 and M4, and
+would turn every layout tweak into a failure. The rule itself is tested in
+`direction_test.go`, where the board's geometry cannot reach it.

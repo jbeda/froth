@@ -1,0 +1,61 @@
+package main
+
+import (
+	tea "charm.land/bubbletea/v2"
+	"github.com/jbeda/froth"
+)
+
+// The three containers the board is divided into. A container draws nothing and
+// is not a tab stop, so traversal walks through it without landing on it and a
+// directional move never resolves to it — the panels inside are what navigation
+// sees.
+
+// toolbar is the row of buttons along the top: three of them, at three
+// different widths, aligned with nothing below.
+type toolbar struct{ bd *board }
+
+func (t *toolbar) Mount(ac *froth.ApplyCtx) {
+	for i, name := range []string{"Compose", "Refresh", "Help"} {
+		ac.Create(&panel{name: name, region: regButton, index: i, bd: t.bd}, froth.TabStop())
+	}
+	ac.SetLayout(buttons{s: &t.bd.splits})
+}
+
+func (t *toolbar) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (t *toolbar) Update(*froth.UpdateCtx, tea.Msg)           {}
+
+// sidebar is the list down the left. Its rows are surfaces rather than lines in
+// one surface, because controls are surfaces — which is what makes a move out of
+// the list and back into it a question about geometry rather than about a
+// selection index.
+type sidebar struct{ bd *board }
+
+func (s *sidebar) Mount(ac *froth.ApplyCtx) {
+	for i, name := range []string{"Inbox", "Starred", "Drafts", "Sent"} {
+		ac.Create(&panel{name: name, region: regRow, index: i, bd: s.bd}, froth.TabStop())
+	}
+	ac.SetLayout(rows{s: &s.bd.splits})
+}
+
+func (s *sidebar) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (s *sidebar) Update(*froth.UpdateCtx, tea.Msg)           {}
+
+// rightCol is two panels with the scope beneath them. Two, so a move rightwards
+// out of the detail pane has to choose between them rather than having one
+// obvious answer. The scope's wall is against the detail pane, which is the
+// neighbour a move is most likely to try to cross it from.
+type rightCol struct {
+	bd    *board
+	scope froth.Handle
+	out   froth.Handle
+}
+
+func (rc *rightCol) Mount(ac *froth.ApplyCtx) {
+	ac.Create(&panel{name: "Metadata", region: regRight, index: 0, bd: rc.bd}, froth.TabStop())
+	ac.Create(&panel{name: "Labels", region: regRight, index: 1, bd: rc.bd}, froth.TabStop())
+	rc.scope = ac.Create(&scope{bd: rc.bd, out: rc.out}, froth.FocusScope())
+	ac.SetLayout(stack{s: &rc.bd.splits})
+}
+
+func (rc *rightCol) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (rc *rightCol) Update(*froth.UpdateCtx, tea.Msg)           {}

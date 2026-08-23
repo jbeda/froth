@@ -33,6 +33,13 @@ tasks:
     cmds:
       - ./{{.BIN}}/panes
 
+  run:dir-nav:
+    desc: Build and run the directional navigation board
+    deps: [build]
+    interactive: true
+    cmds:
+      - ./{{.BIN}}/dir-nav
+
   test:
     desc: Run the tests
     cmds:
