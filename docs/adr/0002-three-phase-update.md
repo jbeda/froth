@@ -2,8 +2,9 @@
 
 Each Bubble Tea update runs three phases. **Deliver** hands one message to one
 surface, which may change only itself and may return work. **Apply** commits
-structural change: creation, destruction, reparenting, and intents raised to
-ancestors. **Render** draws. Deliver and Apply loop until the message queue drains
+structural change: creation, destruction, and intents raised to ancestors
+(reparenting was cut — see the amendment to
+[ADR 0006](./0006-one-parent-relation.md)). **Render** draws. Deliver and Apply loop until the message queue drains
 and only then does Render run, so a modal can close and its opener handle the
 result within the same frame, with no skew. The phase check is always on: every
 froth call asserts its phase on entry.

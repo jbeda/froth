@@ -18,15 +18,20 @@ surface is a defined drop rather than an error.
 _Avoid_: id, ref, pointer
 
 **Parent**:
-The surface a surface hangs off. Parenthood determines coordinate origin,
-lifetime, stacking context, modality scope, and the routing chain — one link
-carrying all five.
+The surface a surface hangs off. Parenthood determines the space a surface is
+given, its lifetime, its stacking context, its modality scope, and its routing
+chain — one link carrying all five, and fixed for the surface's lifetime. It is
+the space rather than a coordinate origin because froth never translates: every
+rect is already the screen's.
 _Avoid_: owner, container, host
 
 **Stacking context**:
 The ordering scope a surface's Z-order applies within. A surface's Z orders it
 only among its siblings; it never orders it against a surface under a different
-parent.
+parent. Siblings order by their Z and then by creation, and a surface may not
+escape the scope its parent gives it — what a click reaches is decided by what
+draws on top, so escaping would be a claim on input, not a way of looking.
+_Avoid_: layer, z-index
 
 **Focus chain**:
 The path from the root to the deepest active surface. Focus itself is one
@@ -136,6 +141,13 @@ _Avoid_: command, shortcut, hotkey
 **Text sink**:
 A surface that consumes ordinary typing. While one is focused, bare printable keys
 are never matched as shortcuts; modified chords still are.
+
+**Float**:
+A surface placed against the screen rather than by its parent's layout, which
+never sees it among the children it arranges. Everything else about it is
+ordinary: its parent still governs its lifetime, its modality scope, its routing
+and the stacking scope it sits in. A dropdown or a popover is a float.
+_Avoid_: overlay, popup, absolute
 
 **Leaf**:
 A surface with no children. Adapted third-party components are always leafs,

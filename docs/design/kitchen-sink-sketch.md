@@ -530,8 +530,9 @@ open — narrow, visible, and local to the case that needs it.
 
 `Mount` runs **once**, during the Apply in which the surface is created — after its
 handle exists, before its first render. Never per-frame; `RenderCtx` has no `Create`
-to begin with. Reparenting does not re-trigger it: entering the tree happens once,
-moving within it is not re-entering.
+to begin with. Nothing re-triggers it: entering the tree happens once, and since
+`Reparent` was cut a surface never moves within the tree either — its parent is fixed
+for its lifetime.
 
 It is not the only way to get children, and it is not for dynamic ones. Three routes,
 with different jobs:
@@ -795,7 +796,7 @@ runtime one. Every context can read the Environment and report the caller's own 
 | `*RenderCtx` | Render | `Cursor(Point)` — claim the terminal cursor · `Rect()` · `Focused()` — whether this surface holds focus |
 | `*MeasureCtx` | Measure | nothing beyond the common set; deliberately the narrowest |
 | `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Focus(Handle)` / `FocusSelf()` · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `NeedsReconcile()` · `Rect()` |
-| `*ApplyCtx` | Apply | `Create(Surface, ...Option) Handle` — a child of self · `Destroy(Handle)` · `Reparent(Handle, Handle)` · `SetLayout(Layout)` · `Focus(Handle)` / `FocusSelf()` · `Capture()` · `Produce(next, ...ProducerOpt)` · `Root()` · `Sender()` — the handle that raised the intent being applied |
+| `*ApplyCtx` | Apply | `Create(Surface, ...Option) Handle` — a child of self · `Destroy(Handle)` · `SetLayout(Layout)` · `Focus(Handle)` / `FocusSelf()` · `Post(Handle, tea.Msg)` · `Capture()` · `Produce(next, ...ProducerOpt)` · `Root()` · `Sender()` — the handle that raised the intent being applied |
 
 Every context knows the surface it belongs to and exposes it as `Self()`, so the
 self-relative operations take no handle. Structural calls made on an `*UpdateCtx` are
@@ -831,6 +832,8 @@ Passed to `Create` and `OpenModal`, stored as handle metadata:
 
 ```go
 froth.Weight(n)        // relative share of the parent layout's space
+froth.Float()          // placed against the screen, not by the parent's layout
+froth.Z(n)             // stacking among siblings; default 0, ties by creation order
 froth.Clip()           // clip children to this surface's rect
 froth.Modal()          // take input for the parent's whole subtree
 froth.FocusScope()     // keyboard navigation cycles within this subtree
@@ -842,14 +845,18 @@ froth.NoTabStop()      // skip in keyboard navigation
 
 ### Ownership
 
-One rule governs `Create`, `Destroy`, `Reparent` and `SetEnv`:
+One rule governs `Create`, `Destroy` and `SetEnv`:
 
 > **A surface owns itself and its immediate children.**
 
 Mostly this is structural rather than checked: `Create` makes a child of self and takes
 no parent, `SetEnv` sets on self and takes no handle. Only the operations that must name
-a target — `Destroy`, `Reparent`, `SetEnvOn` — validate that the target is an immediate
-child.
+a target — `Destroy`, `SetEnvOn` — validate that the target is an immediate child.
+
+A surface can also only destroy a handle it *holds*, and `OpenModal` hands none back, so
+a surface reconciling its own children cannot reach a modal opened beneath it even by
+accident. That is why nothing needs to exempt modals from reconcile: froth destroys
+nothing on its own, and there is no way to enumerate children to sweep them.
 
 Ownership is parenthood. It is deliberately *not* "whatever you created" — that would be
 a second relation running alongside the parent link, which is the parent-versus-owner
