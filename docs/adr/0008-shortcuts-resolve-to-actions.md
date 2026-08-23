@@ -106,8 +106,9 @@ Most of it is already reachable without any of that: declare an action of your o
 key and call `uc.FocusNext()` in the branch where you do not want to override. So
 declining buys ergonomics and the froth-owned-action case rather than new power.
 
-**Deferred to M5**, to be designed alongside intents. The two are one question: an intent
+**Deferred to M3**, which is where intents ship. The two are one question: an intent
 already walks parent-ward and reports through a claim, and an action that can be declined
 is the same walk anchored at the focused surface instead of at the raiser. Deciding them
 apart would land froth with two chain-of-responsibility mechanisms that differ for no
-reason.
+reason. Deferring further, once intents exist and the walk has been felt, is a legitimate
+outcome; designing declining without looking at intents is not.
