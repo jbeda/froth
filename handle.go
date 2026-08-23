@@ -18,7 +18,7 @@ import (
 type Handle struct{ reg, id uint64 }
 
 // String renders a handle for diagnostics. It is also the layer ID froth gives
-// the compositor, which is what a later milestone hit-tests a click against.
+// the compositor.
 func (h Handle) String() string {
 	if h.id == 0 {
 		return "froth.Handle(none)"
@@ -28,14 +28,20 @@ func (h Handle) String() string {
 }
 
 // A node is froth's record of one surface: the surface itself, the parent it
-// hangs off, its children in sibling order, and the layout that places them.
-// Sibling order is creation order, and it is what depth-first Z assignment
-// turns into stacking order.
+// hangs off, its children in sibling order, the layout that places them, and
+// what its creator said about it. Sibling order is creation order, and it is
+// what depth-first Z assignment turns into stacking order.
+//
+// The metadata sits here rather than on the Handle: a handle is copied
+// everywhere and outlives what it names, so a copy carrying stale flags would
+// be a second answer to a question the registry already answers. See ADR
+// 0001's amendment.
 type node struct {
 	surface  Surface
 	parent   Handle
 	children []Handle
 	layout   Layout
+	meta     meta
 }
 
 // registries counts froth instances, so each one's handles are distinguishable
@@ -51,16 +57,19 @@ type registry struct {
 	lastID uint64
 	// entered records handles in the order their surfaces entered the tree,
 	// which is the order they are mounted in. add is the only thing that puts
-	// a handle here and nextEntered the only thing that takes one out, so the
-	// bookkeeping that keeps the two in step stays in one place — which is
-	// where destroy will have to reach when a surface leaves before it mounts.
+	// a handle here and nextEntered the only thing that takes one out.
 	entered []Handle
 }
 
 // add registers s as a child of parent and returns its handle. A zero parent
 // registers a root, which is the one surface froth is handed rather than told
 // about by another surface.
-func (r *registry) add(parent Handle, s Surface) Handle {
+//
+// The options are folded into the node's metadata here, at the only moment a
+// surface's creator gets to describe it: parenthood is fixed for a surface's
+// lifetime (ADR 0006's amendment), and so are the flags decided alongside it.
+// A root gets no options because New takes instance options, not create ones.
+func (r *registry) add(parent Handle, s Surface, opts ...CreateOption) Handle {
 	if s == nil {
 		panic("froth: a nil surface cannot enter the tree")
 	}
@@ -70,7 +79,9 @@ func (r *registry) add(parent Handle, s Surface) Handle {
 	}
 	r.lastID++
 	h := Handle{reg: r.id, id: r.lastID}
-	r.nodes[h] = &node{surface: s, parent: parent}
+	n := &node{surface: s, parent: parent}
+	n.meta.apply(opts)
+	r.nodes[h] = n
 	r.entered = append(r.entered, h)
 	if p := r.nodes[parent]; p != nil {
 		p.children = append(p.children, h)

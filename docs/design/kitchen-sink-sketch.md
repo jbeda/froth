@@ -5,10 +5,12 @@
 > Where this and the code disagree, **the code wins**; fix this document in the same
 > change. Delete it once the example application and godoc cover the same ground.
 >
-> Most of what is below is unbuilt. M1 shipped `Create` (without options yet), `Mount`,
-> `SetLayout`, `Focus`, `Post`, `Run`, `Ctx` and three of the four context types
-> (`MeasureCtx` waits for M7); everything concerning intents, modals, the Environment,
-> producers, reconcile, destroy, bindings and the bubbles adapter is still design.
+> Most of what is below is unbuilt. M1 shipped `Create`, `Mount`, `SetLayout`, `Focus`,
+> `Post`, `Run`, `Ctx` and three of the four context types (`MeasureCtx` waits for M7);
+> M2 gave `Create` its option list, as `Create(Surface, ...CreateOption)` — the name
+> `Option` was already taken by the instance options `New` takes. Everything concerning
+> intents, modals, the Environment, producers, reconcile, destroy, bindings and the
+> bubbles adapter is still design.
 > [`milestone-log.md`](./milestone-log.md) records what shipped and where it diverged.
 
 Client code for a sample app, written as if froth existed. **None of this compiles.**
@@ -633,7 +635,7 @@ mentions hit-testing, click regions, or focus rings.
 
 **Tab order is child order.** There are two orders in froth and no third: the child list
 drives what a layout arranges, the depth-first walk, and keyboard traversal; `Z` affects
-stacking alone. `NoTabStop` takes a surface out of traversal without moving it. Win32 has
+stacking alone. `TabStop` admits a surface to traversal without moving it. Win32 has
 no separate focus index either — its dialog manager searches in the order controls were
 created — and HTML's `tabindex` is the standing example of what a third order costs. Button is froth's own — bubbles
 has no button, because in a single-model world a button is just a styled string.
@@ -801,7 +803,7 @@ runtime one. Every context can read the Environment and report the caller's own 
 |---|---|---|
 | `*RenderCtx` | Render | `Cursor(Point)` — claim the terminal cursor · `Rect()` · `Focused()` — whether this surface holds focus |
 | `*MeasureCtx` | Measure | nothing beyond the common set; deliberately the narrowest |
-| `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Focus(Handle)` / `FocusSelf()` · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `NeedsReconcile()` · `Rect()` |
+| `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Focus(Handle)` / `FocusSelf()` · `FocusNext()` / `FocusPrev()` — relative moves froth resolves · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `NeedsReconcile()` · `Rect()` |
 | `*ApplyCtx` | Apply | `Create(Surface, ...Option) Handle` — a child of self · `Destroy(Handle)` · `SetLayout(Layout)` · `Focus(Handle)` / `FocusSelf()` · `Post(Handle, tea.Msg)` · `Capture()` · `Produce(next, ...ProducerOpt)` · `Root()` · `Sender()` — the handle that raised the intent being applied |
 
 Every context knows the surface it belongs to and exposes it as `Self()`, so the
@@ -835,7 +837,9 @@ type ActionMsg struct{ Action Action }
 
 ### Create options
 
-Passed to `Create` and `OpenModal`, stored as handle metadata:
+Passed to `Create` and `OpenModal`, stored as handle metadata. The type is
+`CreateOption`, not `Option`: `Option` is what `New` takes, and one type for both would
+let a caller pass an instance option where a surface's description was meant.
 
 ```go
 froth.Weight(n)        // relative share of the parent layout's space
@@ -847,8 +851,14 @@ froth.FocusScope()     // keyboard navigation cycles within this subtree
 froth.TextSink()       // bare printable keys are not matched as shortcuts here
 froth.RepliesTo(h)     // where uc.Reply() sends
 froth.AutoRaise()      // raise among siblings on focus; off by default
-froth.NoTabStop()      // skip in keyboard navigation
+froth.TabStop()        // admit to keyboard navigation; off by default
 ```
+
+**Built so far (M2):** `TabStop`, which works; `FocusScope` and `TextSink`, which are
+stored and read by nobody until the tickets that give them behaviour. The rest waits for
+the milestones that give it a consumer — a layout that weighs children, modality, a
+stacking order a surface can set — because a flag stored against semantics nobody has
+had to implement is a guess later code has to honour.
 
 ### Ownership
 

@@ -24,11 +24,8 @@ func (rc *RenderCtx) Self() Handle {
 // Focused reports whether this surface is the focused one — the deep end of the
 // focus chain, and where a raw key would be delivered.
 //
-// It is a read, not a claim: a surface renders differently when focused, and
-// that is what a focus indicator is made of. It answers for this surface alone,
-// so an ancestor of the focused surface reports false; the chrome froth draws
-// around a surface on the chain is M2's, from handle metadata rather than from
-// here.
+// It answers for this surface alone, so an ancestor of the focused surface
+// reports false.
 func (rc *RenderCtx) Focused() bool {
 	rc.check()
 	return rc.f.focus == rc.self
@@ -91,12 +88,33 @@ func (uc *UpdateCtx) FocusSelf() {
 	uc.f.pendingFocus, uc.f.focusPending = uc.self, true
 }
 
-// Ctx reports the context this surface's asynchronous work should use.
+// FocusNext moves focus to the next surface created with TabStop, in
+// depth-first child order, wrapping at the end. No surface implements the walk.
 //
-// Today every surface gets froth's root context. The per-surface tree — where a
-// surface's context is cancelled when the surface is destroyed — arrives with
-// the registry, since it needs surface lifetimes to hang off. Until then, work
-// started here outlives the surface that started it.
+// It names no target, so it cannot fail: a tree with no stop in it leaves focus
+// where it is rather than reporting a diagnostic.
+//
+// Like Focus, the move commits in the Apply that follows this delivery. The
+// target is resolved now rather than then, so two moves in one delivery advance
+// two stops.
+func (uc *UpdateCtx) FocusNext() { uc.stepFocus(1) }
+
+// FocusPrev moves focus to the previous surface in traversal order. See
+// FocusNext.
+func (uc *UpdateCtx) FocusPrev() { uc.stepFocus(-1) }
+
+func (uc *UpdateCtx) stepFocus(delta int) {
+	uc.check()
+	to, ok := uc.f.stepFocus(uc.f.stepFrom(), delta)
+	if !ok {
+		return
+	}
+	uc.f.pendingFocus, uc.f.focusPending = to, true
+}
+
+// Ctx reports the context this surface's asynchronous work should use. Every
+// surface gets froth's root context, so work started here outlives the surface
+// that started it and is cancelled only when the instance's context is.
 func (uc *UpdateCtx) Ctx() context.Context {
 	uc.check()
 	return uc.ctx
@@ -132,14 +150,17 @@ func (ac *ApplyCtx) Self() Handle {
 // immediate children" is structural rather than validated, and creating a
 // grandchild or a sibling is not expressible.
 //
+// The options say what froth should know about the child and are recorded
+// against its handle for its lifetime: creation is the only moment a surface's
+// creator gets to describe it. Passing none means every flag is off.
+//
 // The child is mounted before the frame it was created for is drawn.
 //
-// Create panics if s is nil. A handle naming nothing would be indistinguishable
-// from one whose surface has died, and the caller would hold it believing
-// otherwise.
-func (ac *ApplyCtx) Create(s Surface) Handle {
+// Create panics if s is nil: the handle would be indistinguishable from one
+// whose surface has died.
+func (ac *ApplyCtx) Create(s Surface, opts ...CreateOption) Handle {
 	ac.check()
-	return ac.f.reg.add(ac.self, s)
+	return ac.f.reg.add(ac.self, s, opts...)
 }
 
 // Focus moves focus to a surface, immediately — this is Apply, which is where

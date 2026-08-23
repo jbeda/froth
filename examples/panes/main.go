@@ -1,25 +1,25 @@
-// Command panes is froth's running example. It grows with each milestone; today
-// it is a root surface that assembles two child panes, places them side by side
-// with a row layout, and hands keys to whichever of them holds focus.
+// Command panes is froth's running example: a root surface that assembles three
+// child panes, places them side by side with a row layout, and hands keys to
+// whichever of them holds focus.
 //
-// The root draws a field of dots behind them, which is visible in the one-cell
-// gap the layout leaves between the panes — the panes cover the rest of it,
-// because each fills the rect the layout gave it.
+// The root draws a field of dots behind them, visible in the one-cell gap the
+// layout leaves between the panes.
 //
-// Focus is one handle held by froth. Tab moves it between the panes, each pane
-// reads its own focus while rendering and draws itself differently for it, and
-// every keystroke is delivered to the focused pane and to no other surface.
+// Focus is one handle held by froth. Tab moves it between the two panes created
+// with froth.TabStop(); the notes pane is created without it, so the walk passes
+// over it while it keeps its place in the row and its share of the space. No
+// surface implements traversal — the panes ask froth to move focus, and froth
+// decides where it goes.
 //
-// What the update loop buys is visible in one keystroke: the focused pane posts
-// what it saw to its sibling, and both have handled it before anything is drawn.
-// Pressing "d" posts a message that comes straight back, which is a cycle; froth
-// abandons it, reports it through the diagnostic hook, and the program carries
-// on.
+// One keystroke shows what the update loop buys: the focused pane posts what it
+// saw to its sibling, and both have handled it before anything is drawn.
+// Pressing "d" posts a message that comes straight back, which is a cycle;
+// froth abandons it, reports it through the diagnostic hook, and the program
+// carries on.
 //
-// The quit key is on both panes rather than on the root, because a raw key
-// reaches only the focused surface. A global shortcut that works wherever focus
-// is arrives in M2, when keys resolve against bindings declared along the focus
-// chain before anything is delivered.
+// The quit and tab keys sit on the panes rather than the root because a raw key
+// reaches only the focused surface. Bindings declared along the focus chain are
+// what move them.
 package main
 
 import (
@@ -45,10 +45,8 @@ type echoMsg struct{ key string }
 type cycleMsg struct{}
 
 // report is where the diagnostic hook leaves what froth said. The hook is
-// application code, called with no phase in progress and so with no context to
-// post through; a value the application shares with the surface that draws it is
-// the honest way onto the screen, and it keeps surface pointers out of the
-// application — a handle is the only name a surface has.
+// called with no phase in progress and so has no context to post through; a
+// value shared with the surface that draws it is the way onto the screen.
 type report struct{ text string }
 
 // root is the surface the application hands froth. It creates the panes it is
@@ -66,22 +64,38 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 			"and at no other surface.\n\n" +
 			"Neither pane knows where focus is except by asking about itself, " +
 			"and neither computes a position: the layout is the only thing " +
-			"that places them.",
+			"that places them.\n\n" +
+			"tab hands focus to the right pane and shift-tab takes it back. " +
+			"The notes pane is skipped.",
 	}
 	right := &pane{
-		title:  "right",
-		report: rt.report,
-		body: "froth — M1: focus is one handle, and raw keys go to it.\n\n" +
-			"tab moves focus. The pane that sees a key posts it to its " +
-			"sibling, and the frame is drawn once, after both have handled " +
-			"it — you never see a half-settled screen.\n\n" +
+		title: "right",
+		body: "froth: focus is one handle, raw keys go to it, and froth " +
+			"walks it.\n\n" +
+			"tab and shift-tab move focus, and neither pane implements the " +
+			"walk: they ask froth, and froth answers from the tree. The pane " +
+			"that sees a key posts it to its sibling, and the frame is drawn " +
+			"once, after both have handled it — you never see a half-settled " +
+			"screen.\n\n" +
 			"d posts a message that comes back to its sender, which is a " +
-			"cycle. The iteration cap catches it and reports it below rather " +
-			"than hanging.\n\n" +
+			"cycle. The iteration cap catches it and reports it in the notes " +
+			"pane rather than hanging.\n\n" +
 			"q or ctrl+c quits.",
 	}
+	notes := &pane{
+		title:  "notes",
+		report: rt.report,
+		body: "This pane was created without froth.TabStop(), so tab never " +
+			"lands here — but it still sits third in the row, still gets its " +
+			"share of the space, and could still be given focus by name. " +
+			"Being outside the keyboard walk is not being moved and not " +
+			"being hidden.\n\n" +
+			"Whatever froth reports through the diagnostic hook shows up " +
+			"under the title above.",
+	}
 
-	leftH, rightH := ac.Create(left), ac.Create(right)
+	leftH, rightH := ac.Create(left, froth.TabStop()), ac.Create(right, froth.TabStop())
+	ac.Create(notes)
 	left.sibling, right.sibling = rightH, leftH
 	ac.SetLayout(layout.Row(layout.Gap(1)))
 	ac.Focus(leftH)
@@ -134,9 +148,12 @@ func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
 
 	status := p.status
 	if status == "" {
-		if focused {
+		switch {
+		case focused:
 			status = "nothing yet — press a key, or tab to hand focus over"
-		} else {
+		case p.report != nil:
+			status = "nothing reported yet — press d"
+		default:
 			status = "tab moves focus here"
 		}
 	}
@@ -167,12 +184,16 @@ func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 		switch key := msg.String(); key {
 		case "q", "ctrl+c":
 			uc.Run(tea.Quit)
-		case "tab":
-			// Focus is structural, so it commits in the Apply after this
-			// delivery — still within this update, and before anything is
-			// drawn.
-			uc.Focus(p.sibling)
-			p.status = "handed focus to the other pane"
+		case "tab", "shift+tab":
+			// froth walks the tree; the pane only says which way. Focus is
+			// structural, so the move commits in the Apply after this delivery
+			// — still within this update, and before anything is drawn.
+			if key == "tab" {
+				uc.FocusNext()
+			} else {
+				uc.FocusPrev()
+			}
+			p.status = "asked froth for the " + key + " stop, and it walked the tree"
 		case "d":
 			// Answering a message with the same message is the cycle the
 			// iteration cap is for.

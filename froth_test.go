@@ -569,7 +569,7 @@ func TestALayoutSeesItsChildrenAsHandlesInSiblingOrder(t *testing.T) {
 }
 
 // Without a layout the children stack at the container's whole rect, which is
-// what M0 shipped and what a container that never calls SetLayout still gets.
+// what a container that never calls SetLayout gets.
 func TestChildrenStackAtTheContainersRectWithoutALayout(t *testing.T) {
 	a, b := &block{ch: "a", w: 4, h: 1}, &block{ch: "b", w: 2, h: 1}
 	root := &parent{body: "....", kids: []froth.Surface{a, b}}
@@ -667,9 +667,8 @@ func TestClippingCountsColumnsNotBytes(t *testing.T) {
 
 // A layout can hand a child a rect with no cells — a row starves the children
 // it cannot fit — and a layout with an arithmetic bug can hand it a negative
-// extent. Compositing that subtree drew nothing, so it answers the zero Frame
-// rather than sizing a canvas from the rect, which for a negative one used to
-// panic inside the compositor.
+// extent. Compositing that subtree answers the zero Frame rather than sizing a
+// canvas from the rect, which for a negative one panics inside the compositor.
 func TestCompositingASubtreeWithNoCellsReturnsTheZeroFrame(t *testing.T) {
 	for name, r := range map[string]froth.Rect{
 		"empty":    {X: 0, Y: 0, W: 0, H: 1},
@@ -828,8 +827,7 @@ func TestEverySurfaceRendersExactlyOncePerFrame(t *testing.T) {
 	root := &relay{next: kid, kids: []froth.Surface{kid}}
 	f := newSized(t, root, 4, 1)
 
-	// An update that cascades is the case the drain loop introduces: several
-	// deliveries, one frame.
+	// Several deliveries, one frame.
 	f.Update(bumpMsg{})
 	f.View()
 
@@ -898,7 +896,7 @@ func (s *spawner) Update(*froth.UpdateCtx, tea.Msg)           {}
 func (s *spawner) Mount(ac *froth.ApplyCtx)                   { ac.Create(&spawner{}) }
 
 // A handle outlives the surface it names, so addressing one that names nothing
-// is a defined drop rather than an error. M5 counts them.
+// is a defined drop rather than an error.
 func TestAPostToAHandleThatNamesNothingIsDropped(t *testing.T) {
 	f := newSized(t, &dropper{}, 4, 1)
 
@@ -959,8 +957,8 @@ func TestAHookThatProvokesItsOwnDiagnosticTerminates(t *testing.T) {
 
 // focusMsg asks the root to move focus somewhere, and selfFocusMsg asks the
 // surface named to focus itself. They are ordinary messages rather than a test
-// hook: nothing in M1 moves focus except a surface asking froth to, so a test
-// moves focus by telling a surface to ask.
+// hook: focus only moves when a surface asks froth to move it, so a test moves
+// focus by telling a surface to ask.
 type focusMsg struct{ to froth.Handle }
 
 type selfFocusMsg struct{ to froth.Handle }
@@ -988,9 +986,7 @@ func (r *focusRoot) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 }
 
 // focusable draws one letter, upper case while it holds focus, and moves focus
-// on to the surface it was told about when it sees a key. In M1 the surface
-// holding the key is the only thing that can move focus; tab navigation is
-// froth's own job from M2.
+// on to the surface it was told about when it sees a key.
 type focusable struct {
 	letter string
 	toward *froth.Handle // where a key sends focus; nil to keep it
@@ -1020,9 +1016,9 @@ func (x *focusable) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	}
 }
 
-// twoPanes is the shape the milestone demo has: two surfaces side by side that
-// hand focus to each other. It settles the mounts before returning, so the
-// handles are real by the time a test names one.
+// twoPanes builds two surfaces side by side that hand focus to each other. It
+// settles the mounts before returning, so the handles are real by the time a
+// test names one.
 func twoPanes(t *testing.T) (f *froth.Froth, root *focusRoot, left, right *focusable) {
 	t.Helper()
 	left, right = &focusable{letter: "l"}, &focusable{letter: "r"}
@@ -1117,9 +1113,8 @@ func TestAKeyMovesFocusAndTheFrameFollows(t *testing.T) {
 	}
 }
 
-// Only keys are routed by focus. Everything else still arrives at the root,
-// which is where an application's own messages belong until something claims
-// them — mouse messages are hit-tested against the rendered frame in M4.
+// Only keys are routed by focus. Everything else arrives at the root, which is
+// where an application's own messages belong.
 func TestANonKeyMessageStillGoesToTheRoot(t *testing.T) {
 	f, root, left, right := twoPanes(t)
 	f.Update(focusMsg{to: root.handles[0]})
@@ -1250,4 +1245,233 @@ type focusingParent struct {
 func (p *focusingParent) Mount(ac *froth.ApplyCtx) {
 	p.focusRoot.Mount(ac)
 	ac.Focus(p.handles[p.which])
+}
+
+// ---- Create options and keyboard traversal ----------------------------------
+
+// tabMsg asks froth for a relative focus move, the way an application does: it
+// tells a surface, and the surface asks froth. times is how many moves one
+// delivery asks for, which is the only way to get two relative moves without an
+// Apply between them.
+type tabMsg struct {
+	back  bool
+	times int
+}
+
+// cells gives every child a one-cell column, left to right, so a frame is one
+// character per surface and "who has focus" is readable as a string.
+type cells struct{}
+
+func (cells) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
+	out := make([]froth.Rect, len(children))
+	for i := range out {
+		out[i] = froth.Rect{X: space.X + i, Y: space.Y, W: 1, H: space.H}
+	}
+	return out
+}
+
+// optRoot creates each of its children with the option list it was given for
+// that child, and asks froth to move focus when told to. It is the fixture for
+// everything about create options: an option is only ever passed at creation,
+// so a test that wants one has to own the surface that creates.
+type optRoot struct {
+	kids    []froth.Surface
+	opts    [][]froth.CreateOption
+	handles []froth.Handle
+}
+
+func (r *optRoot) Render(rc *froth.RenderCtx, rect froth.Rect) string {
+	return strings.Repeat(".", rect.W)
+}
+
+func (r *optRoot) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	switch m := msg.(type) {
+	case tabMsg:
+		for i := 0; i < max(m.times, 1); i++ {
+			if m.back {
+				uc.FocusPrev()
+			} else {
+				uc.FocusNext()
+			}
+		}
+	case focusMsg:
+		uc.Focus(m.to)
+	}
+}
+
+func (r *optRoot) Mount(ac *froth.ApplyCtx) {
+	for i, k := range r.kids {
+		var opts []froth.CreateOption
+		if i < len(r.opts) {
+			opts = r.opts[i]
+		}
+		r.handles = append(r.handles, ac.Create(k, opts...))
+	}
+	ac.SetLayout(cells{})
+}
+
+// tabRow builds a row of one-cell surfaces, each created with the options given
+// for it. The letters are lower case unless the surface holds focus, so the
+// frame reads as "l m r" with the focused one shouting.
+func tabRow(t *testing.T, letters string, opts ...[]froth.CreateOption) (*froth.Froth, *optRoot) {
+	t.Helper()
+	root := &optRoot{opts: opts}
+	for _, c := range letters {
+		root.kids = append(root.kids, &focusable{letter: string(c)})
+	}
+	f := newSized(t, root, len(letters), 1)
+	f.View()
+	return f, root
+}
+
+// stop is the option list for a surface traversal should land on. Traversal is
+// opt-in, so a test that wants a stop has to say so.
+var stop = []froth.CreateOption{froth.TabStop()}
+
+func TestTraversalMovesFocusInChildOrderAndWraps(t *testing.T) {
+	f, _ := tabRow(t, "lmr", stop, stop, stop)
+
+	// The root holds focus and is not a stop, so the first move lands on the
+	// first child rather than stepping off the root onto itself.
+	want := []string{"Lmr", "lMr", "lmR", "Lmr"}
+	for i, w := range want {
+		f.Update(tabMsg{})
+		if got := f.View().Content; got != w {
+			t.Errorf("after %d moves, View().Content = %q, want %q", i+1, got, w)
+		}
+	}
+}
+
+func TestTraversalBackwardsWalksTheOtherWayAndWraps(t *testing.T) {
+	f, _ := tabRow(t, "lmr", stop, stop, stop)
+
+	// Backwards from the root wraps to the last stop, which is what a
+	// shift-tab from a fresh application should reach.
+	want := []string{"lmR", "lMr", "Lmr", "lmR"}
+	for i, w := range want {
+		f.Update(tabMsg{back: true})
+		if got := f.View().Content; got != w {
+			t.Errorf("after %d backward moves, View().Content = %q, want %q", i+1, got, w)
+		}
+	}
+}
+
+func TestASurfaceThatIsNotATabStopIsPassedOver(t *testing.T) {
+	f, _ := tabRow(t, "lmr", stop, nil, stop)
+
+	f.Update(tabMsg{})
+	if got, want := f.View().Content, "Lmr"; got != want {
+		t.Errorf("first move: View().Content = %q, want %q", got, want)
+	}
+
+	// The middle surface is skipped rather than reordered: the move goes
+	// straight past it to the one after it.
+	f.Update(tabMsg{})
+	if got, want := f.View().Content, "lmR"; got != want {
+		t.Errorf("second move: View().Content = %q, want %q", got, want)
+	}
+}
+
+// Being outside traversal is not being reordered, and not being hidden: the
+// surface is still where its parent's layout put it.
+func TestASurfaceOutsideTraversalKeepsItsPosition(t *testing.T) {
+	f, root := tabRow(t, "lmr", stop, nil, stop)
+
+	rects := f.Composite(f.Root()).Rects
+	if got, want := rects[root.handles[1]], (froth.Rect{X: 1, Y: 0, W: 1, H: 1}); got != want {
+		t.Errorf("the skipped surface sits at %+v, want %+v", got, want)
+	}
+	if got, want := f.View().Content, "lmr"; got != want {
+		t.Errorf("View().Content = %q, want %q — it should still draw", got, want)
+	}
+}
+
+// TabStop says where the keyboard walks, not who may hold focus. A surface a
+// container focuses by name still gets it.
+func TestASurfaceOutsideTraversalCanStillBeFocusedByName(t *testing.T) {
+	f, root := tabRow(t, "lmr", stop, nil, stop)
+
+	f.Update(focusMsg{to: root.handles[1]})
+
+	if got, want := f.View().Content, "lMr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// A container never has to be a stop to keep its contents reachable: its
+// children are walked whether or not traversal can land on it.
+func TestChildrenOfANonStopSurfaceAreStillTraversed(t *testing.T) {
+	inner := &focusable{letter: "i"}
+	wrapper := &optRoot{kids: []froth.Surface{inner}, opts: [][]froth.CreateOption{stop}}
+	root := &optRoot{kids: []froth.Surface{wrapper}}
+	f := newSized(t, root, 1, 1)
+	f.View()
+
+	f.Update(tabMsg{})
+
+	if got, want := f.View().Content, "I"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// Every option sets a flag rather than toggling one, so a caller that passes the
+// same thing twice — or builds an option list in a loop that repeats itself —
+// gets what it asked for once.
+func TestPassingTheSameOptionTwiceSaysWhatPassingItOnceSaid(t *testing.T) {
+	f, _ := tabRow(t, "lm",
+		[]froth.CreateOption{froth.TabStop(), froth.TabStop()},
+		stop)
+
+	f.Update(tabMsg{})
+	f.Update(tabMsg{})
+
+	if got, want := f.View().Content, "lM"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// Traversal is opt-in, so a surface whose creator said nothing about it is not
+// a stop. An empty list and a nil list say the same nothing.
+func TestASurfaceCreatedWithNoOptionsIsNotATabStop(t *testing.T) {
+	f, _ := tabRow(t, "lm", []froth.CreateOption{}, stop)
+
+	f.Update(tabMsg{})
+	f.Update(tabMsg{})
+
+	if got, want := f.View().Content, "lM"; got != want {
+		t.Errorf("View().Content = %q, want %q — the first surface is not a stop", got, want)
+	}
+}
+
+// A tree with nowhere to go is not an error. Nothing moves, nothing is
+// reported, and nothing hangs looking for a stop that is not there.
+func TestTraversalWithNoStopAtAllLeavesFocusWhereItIs(t *testing.T) {
+	root := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "a"}, &focusable{letter: "b"}},
+	}
+	var got []froth.Diagnostic
+	f := froth.New(context.Background(), root,
+		froth.OnDiagnostic(func(d froth.Diagnostic) { got = append(got, d) }))
+	f.Update(tea.WindowSizeMsg{Width: 2, Height: 1})
+
+	f.Update(tabMsg{})
+
+	if content, want := f.View().Content, "ab"; content != want {
+		t.Errorf("View().Content = %q, want %q — focus should not have moved", content, want)
+	}
+	if len(got) != 0 {
+		t.Errorf("froth reported %v; having nowhere to tab to is not a diagnostic", got)
+	}
+}
+
+// A relative move counts from the move already pending, not from the focus that
+// has yet to be replaced, so two moves in one delivery advance two stops.
+func TestTwoMovesInOneDeliveryAdvanceTwoStops(t *testing.T) {
+	f, _ := tabRow(t, "lmr", stop, stop, stop)
+
+	f.Update(tabMsg{times: 2})
+
+	if got, want := f.View().Content, "lMr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
 }

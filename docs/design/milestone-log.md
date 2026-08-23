@@ -192,3 +192,97 @@ an application model; `Handle`; `Surface` and the `Mounter` capability; `RenderC
   it" is an assertion on a map, not on the shape of a rendered box. Nothing in the suite
   reaches past the seam except `layout/row_test.go`, which tests a published interface as
   the pure function it is — the one second attachment point `testing.md` sanctions.
+
+## M2 — Input (in progress)
+
+Written per ticket while the milestone is open, and folded into one entry when it lands.
+Everything here is subject to a later ticket in the same milestone contradicting it.
+
+### #9 — Create options and handle metadata
+
+**Shipped.** `ApplyCtx.Create(Surface, ...CreateOption) Handle`; `CreateOption` with
+`TabStop`, `TextSink` and `FocusScope`; the metadata stored on the node next to the
+parent link, the child list and the layout; keyboard traversal reading `TabStop`, with
+`UpdateCtx.FocusNext` and `FocusPrev`. The example's two panes are created with
+`froth.TabStop()` and a third is not, and its tab key asks froth to walk rather than
+naming a sibling.
+
+**Two calls the ticket left open, and the reasoning.**
+
+- **`CreateOption` is a function over an unexported struct**, mirroring the existing
+  `Option func(*options)` that `New` takes. Opacity is structural rather than checked: an
+  application can name the type but cannot write a value of it, because the only thing an
+  option may touch is `*meta`, which it cannot name — so there is no list of legal options
+  to validate against, because an illegal one cannot be spelled. The alternatives were a
+  struct with an unexported field and an exported constructor returning an unexported
+  interface. Both give the same guarantee; neither is better here, and both would have put
+  a second options idiom in a package that already had one. All three share one hole — the
+  zero value, a nil function — and froth skips a nil option rather than dereferencing it,
+  since panicking inside `Create` would blame the wrong line.
+- **The name is `CreateOption`, not the sketch's `Option`.** `Option` was taken by the
+  instance options in M1, and sharing one type would let a caller pass `OnDiagnostic` to
+  `Create` and have it compile. The sketch was corrected rather than the code.
+
+**Traversal is opt-in, against the spec.** Story 45 says a surface is opted *out* of the
+tab order, and the sketch listed `NoTabStop`. Both were written before controls-as-surfaces
+was fully absorbed: under [ADR 0003](../adr/0003-controls-are-surfaces.md) a tree is mostly
+structural containers, so opt-out means marking the majority of surfaces, and it gets worse
+as trees deepen. HTML, Win32 and GTK are all opt-in for the same reason — a `div` is not in
+the tab order, `WS_TABSTOP` is a per-control style. froth was inverting the precedent
+ADR 0008 otherwise cites approvingly. The flag is `TabStop` and the default is off; the
+scope change is recorded on the spec.
+
+**Which flags, and which of them does anything.** `TabStop`, `TextSink` and
+`FocusScope` are M2's three; `Weight`, `Float`, `Z`, `Clip`, `Modal`, `RepliesTo` and
+`AutoRaise` are not shipped, because each needs a consumer that does not exist and a flag
+stored against guessed semantics is a guess later code has to honour. Of the three, only
+`TabStop` acts today — the other two are read by nobody until the tickets that give
+them behaviour, on the same terms #10 ships `SurvivesModal` inert.
+
+**The debatable call: traversal came with the flag.** An option nothing acts on is an
+option nothing tests, and none of M2's three flags could be made observable without
+building something. `TextSink` needs bindings to lose to (#10, #11) and `FocusScope` needs
+a walk to bound (#12), so the cheapest honest option was to give `TabStop` a walk here.
+What landed is deliberately the minimum: depth-first over the child list, skipping
+excluded surfaces, wrapping at the ends. **#12 should treat this as its starting point
+rather than as settled**, because two of its decisions were pre-empted by shipping it:
+
+- **Whether a container is a stop.** Under opt-in this stopped being a rule and became a
+  consequence: nothing is a stop unless its creator said so, the root included, since
+  `New` takes instance options and cannot be handed a create option. The question #12
+  inherits is narrower than it was — whether a focus scope's own surface can ever be a
+  stop within itself.
+- **A relative move counts from the move already pending**, not from committed focus, so
+  two moves in one delivery advance two stops. That is not the "later request wins" rule
+  absolute moves follow, and deliberately so: a relative move is a request about a
+  starting point, not about a destination.
+
+**Next tickets should know.**
+
+- **Nothing reads a surface's own metadata, and no context exposes it.** froth reads
+  `node.meta` while deciding something; there is no `uc.IsTextSink()` and no reason for
+  one yet. #11 should read the focused node's `meta.textSink` from inside binding
+  resolution rather than adding an accessor, unless a surface turns out to need to know.
+- **Traversal has no notion of a scope, and `FocusScope` bounds nothing.** A dialog
+  created with it today cycles into the rest of the tree exactly as if it had not been.
+- **Restoration state does not exist.** Focus entering a subtree lands on the next stop in
+  document order, not on the child that was last active there.
+- **froth binds no key to `FocusNext`/`FocusPrev`.** The example's panes call them from
+  their own key handler, which is the same workaround its quit key is: it comes out when
+  froth services its own navigation actions.
+- **`preorder` is a third walk over the tree**, alongside `place` in render.go and
+  `chainTo` in focus.go, and it is the one that will need to see floats when they exist —
+  a float is still a child, so it is still traversed, even though its parent's layout
+  never sees it.
+- **The metadata is on the node, not in the `Handle`.** A handle gets copied everywhere;
+  a copy carrying flags would be a second answer to a question the registry already
+  answers. `Child` in layout.go is still handle-only — when a layout needs weight, the
+  field goes there and froth fills it from `node.meta`.
+
+**Documents corrected in this change.** The sketch's status note and its Create-options
+block (name, and which flags exist); its `UpdateCtx` reference row, which gains
+`FocusNext`/`FocusPrev`. [ADR 0010](../adr/0010-presentation-is-metadata-authority-is-the-link.md)
+gained an amendment: all three flags are about input, which is the word its test does not
+use, so it now says why input flags that change only what happens to their own surface are
+metadata — and where the line is for one that would redirect input away from where the
+tree says it goes.

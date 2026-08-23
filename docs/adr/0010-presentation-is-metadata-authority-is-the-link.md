@@ -49,3 +49,25 @@ The known cost is on the table: a dropdown parented inside a pane is covered by 
 sibling wherever it overflows that pane. The alternative was a second stacking relation.
 Modals are real today and dropdowns are theoretical, so the cost is accepted and this
 gets revisited if real screens hit it.
+
+## Amendment: input flags sort as metadata, and why that is not a loophole
+
+Applied in M2, when `Create` grew its option list and the first three flags landed
+(`TabStop`, `TextSink`, `FocusScope`). All three are about **input**, which is the one
+word the test above does not use, so they are worth walking through rather than filing
+next to clipping without comment.
+
+The test asks whether overriding the property changes who may destroy this surface, who
+hears from it, or who may act on it. None of the three does. Each changes only what
+happens *to the surface carrying it*: whether the keyboard walk stops there, whether the
+keys it is already receiving are matched as shortcuts first, whether a walk that entered
+its subtree leaves again. A surface cannot use any of them to take input on behalf of a
+subtree it does not belong to, which is the specific harm the stacking argument above
+refuses — and it is why they are not the fourth exception the test was written to stop.
+
+The line to hold if a fourth input flag is proposed: a flag that redirects input **away**
+from where the tree says it goes — one surface claiming another's keys, or claiming them
+for a subtree it is not in — is authority, and belongs on the link or nowhere. Modality is
+exactly that. The sketch spells it as a create option, and it can stay one, because what
+the flag says is only *that* the surface is modal: the subtree it takes input for is the
+one its parent gives it, so the authority is in the link either way.
