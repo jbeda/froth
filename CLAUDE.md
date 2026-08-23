@@ -40,6 +40,18 @@ When these disagree:
 Where reality has diverged from a document, fix the document in the same change — and
 record it in the milestone log if the divergence was a decision rather than a typo.
 
+## Standard actions
+
+`Taskfile.yml` holds them; `task` with no argument lists them. Use these rather than
+inventing a command line, so everyone runs the same thing.
+
+`task check` is the gate before a commit: formatting, `go vet`, tests. `task build`
+compiles the example applications into `bin/` — froth itself is a library and produces no
+binary. `task test -- -run TestFoo` passes arguments through to `go test`.
+
+`task lint` needs `golangci-lint` built with a toolchain at least as new as the `go`
+directive in `go.mod`, or it refuses to start.
+
 ## Code comments
 
 Comments document **the current state** and **how to use the thing**. Nothing else.

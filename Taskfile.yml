@@ -1,0 +1,97 @@
+version: '3'
+
+# Standard actions for the repo. `task` with no argument lists them.
+#
+# froth itself is a library and produces no binary; `build` compiles the
+# example applications under examples/ into bin/.
+
+vars:
+  BIN: bin
+
+tasks:
+  default:
+    desc: List the available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  build:
+    desc: Build the example applications into bin/
+    cmds:
+      - go build -o {{.BIN}}/ ./examples/...
+    sources:
+      - '**/*.go'
+      - go.mod
+      - go.sum
+    generates:
+      - '{{.BIN}}/*'
+
+  run:
+    desc: Build and run the panes example
+    deps: [build]
+    interactive: true
+    cmds:
+      - ./{{.BIN}}/panes
+
+  test:
+    desc: Run the tests
+    cmds:
+      - go test ./... {{.CLI_ARGS}}
+
+  test:race:
+    desc: Run the tests under the race detector
+    cmds:
+      - go test -race ./... {{.CLI_ARGS}}
+
+  test:cover:
+    desc: Run the tests and open the coverage report
+    cmds:
+      - go test -coverprofile={{.BIN}}/coverage.out ./...
+      - go tool cover -html={{.BIN}}/coverage.out
+    preconditions:
+      - sh: mkdir -p {{.BIN}}
+        msg: could not create {{.BIN}}
+
+  fmt:
+    desc: Format the code
+    cmds:
+      - gofmt -w .
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  tidy:
+    desc: Tidy go.mod and go.sum
+    cmds:
+      - go mod tidy
+
+  check:
+    desc: Everything that must pass before a commit — formatting, vet, tests
+    cmds:
+      - task: fmt:check
+      - task: vet
+      - task: test
+
+  fmt:check:
+    desc: Fail if any file needs formatting
+    silent: true
+    cmds:
+      - |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then
+          echo "not gofmt'd:" >&2
+          echo "$unformatted" >&2
+          exit 1
+        fi
+
+  clean:
+    desc: Remove build output
+    cmds:
+      - rm -rf {{.BIN}}

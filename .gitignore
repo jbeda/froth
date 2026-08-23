@@ -7,5 +7,5 @@
 # Agent working notes (per-machine)
 HANDOFF.md
 
-# Example binaries
-/panes
+# Build output (task build)
+/bin/
