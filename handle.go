@@ -50,7 +50,10 @@ type registry struct {
 
 	lastID uint64
 	// entered records handles in the order their surfaces entered the tree,
-	// which is the order they are mounted in.
+	// which is the order they are mounted in. add is the only thing that puts
+	// a handle here and nextEntered the only thing that takes one out, so the
+	// bookkeeping that keeps the two in step stays in one place — which is
+	// where destroy will have to reach when a surface leaves before it mounts.
 	entered []Handle
 }
 
@@ -74,6 +77,25 @@ func (r *registry) add(parent Handle, s Surface) Handle {
 	}
 	return h
 }
+
+// hasEntered reports whether any surface is waiting to be mounted.
+func (r *registry) hasEntered() bool { return len(r.entered) > 0 }
+
+// nextEntered takes the surface that has been waiting longest to mount,
+// reporting false when none is.
+func (r *registry) nextEntered() (Handle, bool) {
+	if len(r.entered) == 0 {
+		return Handle{}, false
+	}
+	h := r.entered[0]
+	r.entered = r.entered[1:]
+	return h, true
+}
+
+// abandonEntered drops the surfaces still waiting to mount. They stay in the
+// registry and stay in the tree; they are simply never mounted, which is what
+// froth is left with when a mount cascade runs out of budget.
+func (r *registry) abandonEntered() { r.entered = nil }
 
 // get returns the node h names, or nil if it names nothing.
 func (r *registry) get(h Handle) *node { return r.nodes[h] }

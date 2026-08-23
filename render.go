@@ -1,0 +1,189 @@
+// Render: the walk that turns a tree of surfaces into a frame.
+//
+// This is the only file that knows which compositor froth drives. Everything
+// above it — the depth-first walk, the rects, the clip, the Z ordinals — is
+// froth's own, so substituting the back-end named in the README is a change
+// confined to here. See ADR 0007 for why the ordinals are froth's.
+
+package froth
+
+import (
+	"strconv"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+)
+
+// View composites the surface tree into a frame. Forward it from the
+// application model's View.
+//
+// It is Composite of the root and shares its behaviour, including that pending
+// structure is applied before anything is drawn.
+func (f *Froth) View() tea.View {
+	return tea.NewView(f.Composite(f.root).Content)
+}
+
+// A Frame is what a subtree drew: the composited output for the subtree alone,
+// and the rect each surface in it resolved to. The rects are screen
+// coordinates, so "is the button where I think it is" is answerable even when
+// the string is a small window onto the frame.
+type Frame struct {
+	Content string
+	Rects   map[Handle]Rect
+}
+
+// Composite renders the tree and returns the frame for the subtree rooted at h.
+// A handle that names nothing returns the zero Frame; so does any handle before
+// the first terminal size arrives, since nothing has been drawn yet, and so
+// does one whose surface a layout gave a rect with no cells in it.
+//
+// The whole tree renders either way: rects resolve from the root down, and Z
+// ordinals are global, so a subtree cannot be drawn without placing everything
+// around it. This is froth's own render path — View is Composite of the root —
+// rather than a second one that could drift from it.
+//
+// Compositing is not read-only, and a caller has to know it. Structure that is
+// waiting to be applied is applied first — a surface created since the last
+// update mounts here, and Mount runs application code — and the diagnostics that
+// produces go to the hook before Composite returns. A frame drawn from an
+// unmounted tree would be a frame of surfaces that never got to assemble
+// themselves, so the alternative is worse; but it does mean that compositing a
+// tree can run a surface's Mount and call the hook, which matters most to a test
+// that composites without ever calling Update.
+func (f *Froth) Composite(h Handle) Frame {
+	f.applyPending()
+
+	screen := Rect{W: f.size.W, H: f.size.H}
+	if f.reg.get(h) == nil || screen.Empty() {
+		return Frame{}
+	}
+
+	// A subtree is contiguous in depth-first order, so it is a slice of the
+	// placements rather than a second walk. The root's subtree is all of them,
+	// which is the frame every ordinary View asks for.
+	sub := f.place(screen)
+	if h != f.root {
+		start := 0
+		for start < len(sub) && sub[start].h != h {
+			start++
+		}
+		if start == len(sub) {
+			return Frame{} // registered but not in the tree: nothing was drawn
+		}
+		end := start + 1
+		for end < len(sub) && f.reg.descends(sub[end].h, h) {
+			end++
+		}
+		sub = sub[start:end]
+	}
+
+	// A subtree whose root has no cells drew nothing, so it answers the same
+	// zero Frame as a handle that names nothing. A layout can hand a child an
+	// empty rect — a row starves the children it cannot fit — and a buggy one
+	// can hand it a negative extent; either would size the canvas below, where
+	// a negative one is a makeslice panic from inside the compositor.
+	origin := sub[0].rect
+	if origin.Empty() {
+		return Frame{}
+	}
+
+	rects := make(map[Handle]Rect, len(sub))
+	layers := make([]*lipgloss.Layer, 0, len(sub))
+	for _, p := range sub {
+		rects[p.h] = p.rect
+		layers = append(layers, lipgloss.NewLayer(p.content).
+			ID(p.h.String()).
+			X(p.rect.X-origin.X).
+			Y(p.rect.Y-origin.Y).
+			Z(p.z))
+	}
+
+	canvas := lipgloss.NewCanvas(origin.W, origin.H)
+	canvas.Compose(lipgloss.NewCompositor(layers...))
+	return Frame{Content: canvas.Render(), Rects: rects}
+}
+
+// A placement is one surface's contribution to a frame: what it drew, where,
+// and how far up the stack.
+type placement struct {
+	h       Handle
+	rect    Rect
+	content string
+	z       int
+}
+
+// place renders every surface, clips it to its rect, and assigns each one a Z
+// ordinal. Even with one surface the frame goes through Lip Gloss's canvas and
+// compositor rather than being assembled as a string, so wide graphemes and Z
+// ordering are the compositor's job from the first frame onwards. Clipping is
+// only partly the compositor's: Lip Gloss drops what falls outside the canvas,
+// but a layer's own bounds come from the size of the string it was given rather
+// than from the rect the surface was allotted, so clipping a surface to its
+// rect is froth's job.
+//
+// Ordinals are unique, global and assigned depth-first, because Lip Gloss
+// accumulates position through the layer tree but sorts Z across the whole tree
+// with an unstable sort. Depth-first means a subtree occupies a contiguous
+// range, which is what makes a surface's Z order it among its siblings and
+// never against a surface under another parent. They start at 1: a compositor
+// wraps its layers in an implicit root at Z 0, and a tie there would be exactly
+// the undefined order the ordinals exist to avoid.
+func (f *Froth) place(screen Rect) []placement {
+	token := f.enter(phaseRender)
+	defer f.leave()
+
+	var out []placement
+	f.placeSubtree(token, f.root, screen, &out)
+	return out
+}
+
+func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placement) {
+	// A handle that names nothing draws nothing, and its children are not
+	// reachable through it either. Unreachable until M3 can destroy a surface;
+	// the alternative there is a nil dereference in the render path.
+	n := f.reg.get(h)
+	if n == nil {
+		return
+	}
+	rc := &RenderCtx{phaseToken: token, self: h, rect: r}
+	content := clip(n.surface.Render(rc, r), r.Size())
+	*out = append(*out, placement{h: h, rect: r, content: content, z: len(*out) + 1})
+
+	// A container with no layout stacks its children at its own whole rect,
+	// which is what a surface that never calls SetLayout gets, and which needs
+	// no rect slice to say.
+	if n.layout == nil {
+		for _, c := range n.children {
+			f.placeSubtree(token, c, r, out)
+		}
+		return
+	}
+
+	rects := f.arrange(n, r)
+	for i, c := range n.children {
+		f.placeSubtree(token, c, rects[i], out)
+	}
+}
+
+// arrange asks a container's layout where its children go. It is only called
+// for a container that has one; placeSubtree handles the layout-less case,
+// where every child takes the container's whole rect.
+//
+// A layout returning the wrong number of rects is a bug in the layout: a child
+// with no rect has nowhere to render, and a rect with no child is an answer
+// about a surface that does not exist. Neither has a sane interpretation, so
+// froth says so rather than guessing.
+func (f *Froth) arrange(n *node, r Rect) []Rect {
+	children := make([]Child, len(n.children))
+	for i, c := range n.children {
+		children[i] = Child{Handle: c}
+	}
+
+	rects := n.layout.Arrange(r, children)
+	if len(rects) != len(children) {
+		panic("froth: a layout returned " + strconv.Itoa(len(rects)) +
+			" rects for " + strconv.Itoa(len(children)) +
+			" children; a layout must return exactly one rect per child, in order")
+	}
+	return rects
+}
