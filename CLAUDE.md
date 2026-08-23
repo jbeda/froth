@@ -40,6 +40,17 @@ When these disagree:
 Where reality has diverged from a document, fix the document in the same change — and
 record it in the milestone log if the divergence was a decision rather than a typo.
 
+## Working state
+
+`HANDOFF.md` at the repo root holds working state across sessions — agreements, current
+project state, anything a later session needs and the repo does not already record. It is
+gitignored and per-machine. Read it at the start of a session and keep it current; keep it
+under 200 lines. Record durable state there rather than in the agent memory system, and do
+not create memory files.
+
+Scratch and intermediate files go in `.scratch/` (gitignored), not `/tmp` or a session
+temp dir, so they are easy to find and clean out.
+
 ## Standard actions
 
 `Taskfile.yml` holds them; `task` with no argument lists them. Use these rather than
