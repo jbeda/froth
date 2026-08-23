@@ -7,7 +7,7 @@
 package froth
 
 import (
-	"strconv"
+	"fmt"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -112,9 +112,9 @@ func (f *Froth) settle() tea.Cmd {
 			break
 		}
 		if !b.spend() {
-			f.trip(&b, "the message queue did not drain within "+
-				strconv.Itoa(iterationCap)+" deliveries and mounts; a surface "+
-				"is almost certainly posting a message that comes back to it")
+			f.trip(&b, fmt.Sprintf("the message queue did not drain within %d "+
+				"deliveries and mounts; a surface is almost certainly posting "+
+				"a message that comes back to it", iterationCap))
 			f.queue = nil
 			break
 		}
@@ -129,9 +129,6 @@ func (f *Froth) settle() tea.Cmd {
 	}
 
 	f.flush()
-	if len(cmds) == 0 {
-		return nil
-	}
 	return tea.Batch(cmds...)
 }
 
@@ -182,9 +179,9 @@ func (f *Froth) apply(b *budget) {
 func (f *Froth) mountEntered(b *budget, token phaseToken) {
 	for {
 		if !b.spend() {
-			f.trip(b, "mounting did not settle within "+strconv.Itoa(iterationCap)+
-				" deliveries and mounts; a surface is almost certainly mounting "+
-				"a child of its own type")
+			f.trip(b, fmt.Sprintf("mounting did not settle within %d deliveries "+
+				"and mounts; a surface is almost certainly mounting a child of "+
+				"its own type", iterationCap))
 			f.reg.abandonEntered()
 			return
 		}

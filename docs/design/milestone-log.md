@@ -578,3 +578,19 @@ binds keys to the actions it services itself.
 the sketch's `ActionCancel` comment, which claimed a stock key froth does not bind.
 `CONTEXT.md`'s **Focus scope** entry, which described the boundary in one direction only
 and said nothing about restoration.
+
+### #8 — M1 Go-idiom follow-ups
+
+**Shipped.** The dead `len(cmds) == 0` guard is gone from `settle` — `tea.Batch` already
+answers `nil` for an empty set. `chainTo` reverses with `slices.Reverse` and `Composite`
+finds its subtree start with `slices.IndexFunc`. The test split landed earlier, in 0fd92f5.
+
+**`fmt.Sprintf` builds every message a human reads, and the reason is not readability.**
+`go list -deps .` puts `fmt` in froth's graph already: Bubble Tea and lipgloss both import
+it, so no consumer's binary loses a byte by froth hand-assembling its panic strings with
+`strconv` and `+`. The one argument for the old style bought nothing, which left only the
+cost — a sentence whose shape is invisible until you mentally concatenate it. The rule is
+in `CLAUDE.md`; the conversion is uniform, including `Handle.String`, which is the layer ID
+the compositor gets and so the only per-frame caller. Measured at ~50ns per call over the
+concatenation, against a whole tree rendered every frame; if the immediate-mode rendering
+assumption above ever comes under real measurement, this is not the line to look at first.

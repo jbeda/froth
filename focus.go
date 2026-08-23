@@ -1,5 +1,10 @@
 package froth
 
+import (
+	"fmt"
+	"slices"
+)
+
 // Focus is one handle, not a flag per surface. The focus chain — the path from
 // the root down to that surface — is derived from it by walking parents, so the
 // two can never disagree: there is no per-surface boolean to leave set behind a
@@ -22,10 +27,8 @@ func (f *Froth) chainTo(h Handle) []Handle {
 		}
 		up = append(up, h)
 		if h == f.root {
-			// Reverse in place: the walk is leaf-first, the chain is root-first.
-			for i, j := 0, len(up)-1; i < j; i, j = i+1, j-1 {
-				up[i], up[j] = up[j], up[i]
-			}
+			// The walk is leaf-first; the chain is root-first.
+			slices.Reverse(up)
 			return up
 		}
 		h = n.parent
@@ -63,8 +66,8 @@ func (f *Froth) setFocus(h Handle) {
 	if f.chainTo(h) == nil {
 		f.report(Diagnostic{
 			Kind: DiagInvalidFocus,
-			Detail: "focus was asked to move to " + h.String() +
-				", which is not in the tree; focus is unchanged",
+			Detail: fmt.Sprintf("focus was asked to move to %s, which is not "+
+				"in the tree; focus is unchanged", h),
 		})
 		return
 	}

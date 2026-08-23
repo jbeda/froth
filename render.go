@@ -8,7 +8,8 @@
 package froth
 
 import (
-	"strconv"
+	"fmt"
+	"slices"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -59,11 +60,8 @@ func (f *Froth) Composite(h Handle) Frame {
 	// which is the frame every ordinary View asks for.
 	sub := f.place(screen)
 	if h != f.root {
-		start := 0
-		for start < len(sub) && sub[start].h != h {
-			start++
-		}
-		if start == len(sub) {
+		start := slices.IndexFunc(sub, func(p placement) bool { return p.h == h })
+		if start < 0 {
 			return Frame{} // registered but not in the tree: nothing was drawn
 		}
 		end := start + 1
@@ -172,9 +170,9 @@ func (f *Froth) arrange(n *node, r Rect) []Rect {
 
 	rects := n.layout.Arrange(r, children)
 	if len(rects) != len(children) {
-		panic("froth: a layout returned " + strconv.Itoa(len(rects)) +
-			" rects for " + strconv.Itoa(len(children)) +
-			" children; a layout must return exactly one rect per child, in order")
+		panic(fmt.Sprintf("froth: a layout returned %d rects for %d children; "+
+			"a layout must return exactly one rect per child, in order",
+			len(rects), len(children)))
 	}
 	return rects
 }

@@ -1,7 +1,7 @@
 package froth
 
 import (
-	"strconv"
+	"fmt"
 	"sync/atomic"
 )
 
@@ -23,8 +23,7 @@ func (h Handle) String() string {
 	if h.id == 0 {
 		return "froth.Handle(none)"
 	}
-	return "froth.Handle(" + strconv.FormatUint(h.reg, 10) +
-		":" + strconv.FormatUint(h.id, 10) + ")"
+	return fmt.Sprintf("froth.Handle(%d:%d)", h.reg, h.id)
 }
 
 // A node is froth's record of one surface: the surface itself, the parent it

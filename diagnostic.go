@@ -1,5 +1,7 @@
 package froth
 
+import "fmt"
+
 // A Diagnostic is something froth detected and should not decide about: a
 // message cycle, an intent nobody claimed, a surface that panicked. Each is
 // nearly always a bug, and none of them is froth's to escalate — hence one hook
@@ -13,7 +15,9 @@ type Diagnostic struct {
 }
 
 // String renders a diagnostic as one line, which is what most hooks want.
-func (d Diagnostic) String() string { return "froth: " + string(d.Kind) + ": " + d.Detail }
+func (d Diagnostic) String() string {
+	return fmt.Sprintf("froth: %s: %s", d.Kind, d.Detail)
+}
 
 // A DiagnosticKind names what froth detected.
 type DiagnosticKind string

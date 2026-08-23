@@ -95,6 +95,14 @@ sized to what a caller needs.
 Length is the tell: a 40-line comment over a 3-line function is wrong regardless of how
 good the prose is. Err toward too little.
 
+## Messages a human reads
+
+Panic strings and `Diagnostic` details are built with `fmt.Sprintf`, and so is every
+`String` method. `fmt` is already in froth's dependency graph through Bubble Tea and
+lipgloss, so hand-assembling these with `strconv` and `+` buys a consumer nothing and
+costs the reader the shape of the sentence. Wrapping a long literal across lines with `+`
+is not the same thing and stays.
+
 ## Agent skills
 
 ### Issue tracker
