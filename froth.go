@@ -2,6 +2,12 @@
 // hands froth a root surface and forwards Init, Update and View to it; froth
 // renders the surface tree through Lip Gloss's compositor and routes messages to
 // the surfaces that should see them.
+//
+// A froth instance is not safe for concurrent use. Bubble Tea drives a program
+// from one goroutine, and everything froth does happens on it: there is no lock
+// anywhere, and none is wanted. Work a surface starts elsewhere comes back
+// through a message rather than by touching froth from the goroutine that did
+// it — which is what commands do today, and what producers will do in M5.
 package froth
 
 import (
@@ -17,6 +23,9 @@ import (
 // application model by value — which Bubble Tea does on every update — copies a
 // pointer rather than the tree.
 type Froth struct {
+	// ctx is the root of the per-surface context tree rather than a request
+	// scope, which is why it is held on the struct: it outlives every call
+	// froth makes and every surface hangs its own cancellation off it.
 	ctx  context.Context
 	reg  registry
 	root Handle
@@ -32,6 +41,10 @@ type Froth struct {
 	focusPending bool
 
 	onDiagnostic func(Diagnostic)
+	// flushing says the hook is being called from the stack below, so a hook
+	// that drives froth queues its diagnostics for the pass already running
+	// rather than starting a nested one.
+	flushing bool
 	// queue holds the messages waiting to be delivered. Delivery drains it and
 	// may add to it, which is the whole point: a surface can post during Deliver
 	// and have it handled before anything is drawn.
@@ -55,6 +68,10 @@ type envelope struct {
 // is destroyed, and all of it when ctx is. Options configure the instance for
 // its lifetime — today OnDiagnostic, which is the one hook froth reports
 // through.
+//
+// New panics if root is nil: an instance with nothing to render and nowhere to
+// deliver has no defined behaviour to fall back on. A nil ctx is taken as
+// context.Background, since a caller with no context to give means that one.
 func New(ctx context.Context, root Surface, opts ...Option) *Froth {
 	if ctx == nil {
 		ctx = context.Background()
@@ -194,6 +211,9 @@ func (f *Froth) settle() tea.Cmd {
 			break
 		}
 		e := f.queue[0]
+		// Clear the slot as well as dropping it: the backing array outlives the
+		// reslice, and a delivered message should not be kept alive by it.
+		f.queue[0] = envelope{}
 		f.queue = f.queue[1:]
 		if cmd := f.deliver(e.to, e.msg); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -273,7 +293,15 @@ func (f *Froth) mountEntered(b *budget, token phaseToken) {
 
 		h := f.reg.entered[0]
 		f.reg.entered = f.reg.entered[1:]
-		if m, ok := f.reg.get(h).surface.(Mounter); ok {
+
+		// A surface that entered the tree and left it again before it was
+		// mounted has nothing to mount. Unreachable until M3 can destroy one,
+		// and cheaper to allow for than to discover as a nil dereference then.
+		n := f.reg.get(h)
+		if n == nil {
+			continue
+		}
+		if m, ok := n.surface.(Mounter); ok {
 			m.Mount(&ApplyCtx{phaseToken: token, self: h})
 		}
 	}
@@ -394,7 +422,13 @@ func (f *Froth) place(screen Rect) []placement {
 }
 
 func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placement) {
+	// A handle that names nothing draws nothing, and its children are not
+	// reachable through it either. Unreachable until M3 can destroy a surface;
+	// the alternative there is a nil dereference in the render path.
 	n := f.reg.get(h)
+	if n == nil {
+		return
+	}
 	rc := &RenderCtx{phaseToken: token, self: h, rect: r}
 	content := clip(n.surface.Render(rc, r), r.Size())
 	*out = append(*out, placement{h: h, rect: r, content: content, z: len(*out) + 1})

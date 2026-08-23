@@ -931,6 +931,30 @@ func TestTheDiagnosticHookCanCallBackIntoFroth(t *testing.T) {
 	}
 }
 
+// A hook is application code, and application code may drive froth. A hook that
+// provokes the very diagnostic it is handling would otherwise never return —
+// each report calling the hook that causes the next one. froth bounds the
+// rounds and drops what is left rather than recursing.
+func TestAHookThatProvokesItsOwnDiagnosticTerminates(t *testing.T) {
+	calls := 0
+	var f *froth.Froth
+	f = froth.New(context.Background(), &cycler{},
+		froth.OnDiagnostic(func(froth.Diagnostic) {
+			calls++
+			f.Update(bumpMsg{}) // trips the cap again, from inside the report of it
+		}))
+	f.Update(tea.WindowSizeMsg{Width: 8, Height: 1})
+
+	f.Update(bumpMsg{})
+
+	if calls == 0 {
+		t.Fatal("the hook never fired")
+	}
+	if got, want := f.View().Content, "cycling"; got != want {
+		t.Errorf("View().Content = %q, want %q; froth stopped drawing", got, want)
+	}
+}
+
 // ---- Focus and raw key delivery ---------------------------------------------
 
 // focusMsg asks the root to move focus somewhere, and selfFocusMsg asks the

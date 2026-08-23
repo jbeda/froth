@@ -133,6 +133,10 @@ func (ac *ApplyCtx) Self() Handle {
 // grandchild or a sibling is not expressible.
 //
 // The child is mounted before the frame it was created for is drawn.
+//
+// Create panics if s is nil. A handle naming nothing would be indistinguishable
+// from one whose surface has died, and the caller would hold it believing
+// otherwise.
 func (ac *ApplyCtx) Create(s Surface) Handle {
 	ac.check()
 	return ac.f.reg.add(ac.self, s)

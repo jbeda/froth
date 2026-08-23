@@ -110,8 +110,11 @@ an application model; `Handle`; `Surface` and the `Mounter` capability; `RenderC
   silent, because the diagnostic already fired.
 - **Diagnostics are recorded during a phase and handed to the hook after it.** A hook is
   application code, and calling it mid-phase would hand it a froth instance that panics
-  on the first thing it looked at. The example's hook renders the tree from inside itself,
-  which is the case that forced this.
+  on the first thing it looked at — a hook that renders the tree from inside itself is
+  the case that forced this, and it is a test rather than the example, whose hook only
+  writes down what it was told. Flushing is bounded and non-re-entrant for the same
+  reason: a hook that drives froth can provoke the diagnostic it is handling, and did,
+  recursively, until `flushRounds` stopped it.
 - **A retained context still panics rather than reporting through the hook.** The hook is
   for what froth detects but cannot decide about; a surface using a context in the wrong
   phase is that surface's own bug, caught at the call site where the stack still names it.
