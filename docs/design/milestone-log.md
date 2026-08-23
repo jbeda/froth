@@ -459,3 +459,122 @@ would put every character in twice.
 
 **Documents corrected in this change.** The sketch's status note and its Create-options
 block, which said `TextSink` was stored and read by nobody.
+
+### #12 — Tab navigation, focus scopes, and restoration
+
+**Shipped.** `FocusScope()` bounds traversal; every surface records the child focus was
+last on and moving focus to a scope lands there; `ActionFocusNext` and `ActionFocusPrev`
+are froth's own, with `tab` and `shift+tab` bound to them and serviced by froth. The
+example's panes and filter stop calling `FocusNext`/`FocusPrev` from a key handler, and it
+grows a focus scope holding two controls.
+
+**Decision 2, revisited and left standing: a relative move counts from the pending move.**
+Two `FocusNext` calls in one delivery advance two stops. What changed under it is that
+keys no longer take this path — `tab` arrives as one press per `Update`, so each move sees
+a committed focus and the rule never fires for typing. What is left is application code
+calling the method twice in one handler, and there "advance two" is the only reading of
+the second call that does anything. The alternative — the later request wins, as it does
+for absolute moves — would make the second call a no-op, which is a silent one. The
+asymmetry with absolute moves stands too, and is the point: an absolute move names a
+destination and the last one named is what the caller wants, while a relative move names
+a distance from wherever the caller has got to.
+
+[ADR 0011](../adr/0011-a-focus-scope-is-closed-to-traversal.md) is new and carries the
+boundary rule with its rejected alternatives; the summary below is what building it
+settled.
+
+**A scope's own surface is a stop within itself, and in no other scope.** That is the
+question #9 left open. The rule underneath it is one line — a surface's scope is the
+nearest `FocusScope` at or above it, itself included — and everything else falls out:
+`scopeOf(dialog)` is the dialog, so focus resting on a dialog and then tabbing stays
+inside it, and the dialog is absent from the walk above because that walk covers only
+surfaces whose scope is the one being walked. `TabStop` on a scope therefore admits it to
+its own cycle and to nothing else. Had a scope belonged to the scope above it, a dialog
+holding focus would tab straight out into the application behind it.
+
+**The boundary holds in both directions, and traversal never crosses it.** The walk above
+a scope steps over the scope surface *and everything under it*; the walk inside cycles at
+its ends. Considered and rejected: letting `tab` enter a scope as one unit, which reads
+well until you notice it makes every stop *after* the scope in child order unreachable —
+focus goes in and traversal cannot bring it out, so a scope halfway down a tree eats the
+rest of the tab order. Entering is worth an explicit move, and the two real cases already
+are one: a dialog is focused when it opens and focus is put back when it closes.
+
+**Moving focus to a scope means entering it — but only from outside.** `Focus(scope)`
+resolves down to the scope's remembered child, or its first stop, and this is the only
+place in froth where a focus move does not land on the handle it names. It earns that:
+the sketch's `ac.Focus(dlg)` wants a control focused rather than the dialog frame, and
+every caller would otherwise write the descent by hand. The exemption for a move that
+starts *inside* the scope is what makes a scope marked `TabStop` reachable at all — the
+walk reaching it would otherwise be sent straight back to the child it just came from.
+A scope with no stop anywhere in it keeps focus on its own surface: a defined place to be,
+not a rejected move, and not a diagnostic.
+
+**Restoration is written on every node and read only on entering a scope.**
+`node.lastActive` is written for every surface on the chain each time focus commits, so a
+container's record is correct whether or not it is ever entered — and writing on commit
+rather than on the way out means a surface that dies while focused leaves its ancestors'
+records already right. Only `enterScope` reads it.
+
+That narrows the acceptance criterion, which said *a container* remembers its last active
+child and focus entering *that subtree* lands there. It does remember; what is deliberately
+missing is any redirect for `Focus(plainContainer)`, which still lands on the container it
+names. Only a scope has a defined notion of being entered, and a container that handles
+keys itself has to be able to hold focus — a redirect on every container would take that
+away with no way to opt out.
+
+The chain of records is read deepest-first, because "where focus left" means the button
+rather than the row the button sits in. Every link is checked against the tree and against
+still being a `TabStop`, so a remembered surface its creator kept out of traversal falls
+back to the scope's first stop; a remembered surface that is itself a scope is *entered*
+rather than skipped, so restoration through a nested scope lands on that scope's stop
+rather than on the outer scope's first one. The dead-handle half of the guard is written
+but untestable through the seam until M3 ships `Destroy`.
+
+**Focus is still one handle.** Nothing consults `lastActive` to answer where focus is;
+`f.focus` and the chain derived from it are the only answer, and a test pins that a
+remembered surface neither renders as focused nor receives a key.
+
+**Every froth action is one entry in one list.** `frothBindings` holds the action, its
+default keys and its help text together, and `frothOwned` reads that list rather than
+repeating the set. An entry with no keys is an identity froth publishes and binds nothing
+to, which is what `ActionCancel` is. Only `service` is separate, because it is behaviour
+rather than data.
+
+**froth's stock bindings are matched last and overridden by declaring them.** `resolve`
+asks every surface on the chain first and only then its own two, skipping any whose action
+a declaration on the chain named — enabled or disabled. So rebinding is declaring
+`{Action: froth.ActionFocusNext, Keys: []string{"ctrl+n"}}`, disabling is declaring it
+with `Disabled: true`, and a surface that wants `tab` for itself just declares `tab` and
+wins on depth. No override table, and nothing an application can do to its own bindings
+that it cannot do to froth's. A serviced action is delivered nowhere: the declarer asked
+froth to move focus, not to be told it did. `route` therefore returns `(envelope, bool)` —
+a key froth answered itself produces no message.
+
+**`ActionCancel` is declared with no key.** froth services nothing for it until modals
+exist, and a key bound to an action nobody services is a key taken from the application
+for nothing. The identity ships now so surfaces and applications spell it the same way.
+ADR 0008's amendment is narrowed to quit and a second amendment states the line: froth
+binds keys to the actions it services itself.
+
+**Next tickets should know.**
+
+- **`scopeOf`, `scopeOrder` and `stepFocus` are where #13's directional movement plugs
+  in.** Directional moves are bounded by the same scope and should read the same three
+  functions rather than growing a second notion of "the surfaces you can reach".
+- **#13's directional keys are froth-owned in the same family**, so they are entries in
+  `frothBindings` and are overridden the same way. Nothing else has to learn about them.
+- **#14's help query will want to list froth's own bindings**, which `frothBindings` holds
+  with `Help` text already filled in. The query has to apply the same override rule
+  resolution does, or help will list `tab` for an application that rebound it.
+- **M4 gives `ActionCancel` behaviour**, and it is the first froth action serviced by
+  something other than a focus move. `service` is the switch to extend.
+- **The example's scope is entered and left by the same key**, `g`, declared on the root
+  and on the scope. That is not a mechanism — it is ADR 0008's depth-first precedence,
+  with the scope on the chain and deeper than the root while focus is inside it.
+
+**Documents corrected in this change.** The sketch's status note, its Create-options block
+(`FocusScope` was listed as stored and read by nobody) and its `UpdateCtx` reference row;
+the sketch's `ActionCancel` comment, which claimed a stock key froth does not bind.
+`CONTEXT.md`'s **Focus scope** entry, which described the boundary in one direction only
+and said nothing about restoration.

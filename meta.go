@@ -54,4 +54,9 @@ func TextSink() CreateOption { return func(m *meta) { m.textSink = true } }
 // FocusScope confines keyboard traversal to a surface's subtree, so tab cycles
 // within it rather than escaping into the rest of the tree. Dialogs and modals
 // are scopes; plain layout containers are not.
+//
+// The boundary holds both ways: traversal outside a scope steps over the scope
+// and everything under it, so focus crosses only by being moved by name. Such a
+// move enters the scope — it lands on the child the scope last had focus on, or
+// on its first tab stop — which is what a dialog wants when it opens.
 func FocusScope() CreateOption { return func(m *meta) { m.focusScope = true } }

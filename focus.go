@@ -68,7 +68,26 @@ func (f *Froth) setFocus(h Handle) {
 		})
 		return
 	}
+	// Moving focus to a scope from outside means entering it; from inside the
+	// same move is literal. See ADR 0011.
+	if f.isScope(h) && !f.reg.descends(f.focused(), h) {
+		if to, ok := f.enterScope(h); ok {
+			h = to
+		}
+	}
 	f.focus = h
+	f.remember()
+}
+
+// remember records the focus chain as restoration state: every surface on it
+// notes which of its children the chain went through. It is written on every
+// commit rather than on the way out of a subtree, so a surface that dies while
+// focused leaves its ancestors' records already correct.
+func (f *Froth) remember() {
+	chain := f.focusChain()
+	for i := 0; i+1 < len(chain); i++ {
+		f.reg.get(chain[i]).lastActive = chain[i+1]
+	}
 }
 
 // applyFocus commits the focus move a surface asked for during Deliver. It runs
@@ -89,23 +108,58 @@ func (f *Froth) applyFocus() {
 // Tab order is child order. There are two orders in froth and no third: the
 // child list drives what a layout arranges, the depth-first walk that assigns Z,
 // and keyboard traversal. Z affects stacking alone.
+//
+// A focus scope bounds that walk, in both directions: the walk above a scope
+// steps over it and everything under it, and the walk inside one cycles at its
+// ends. Focus crosses only by being moved by name. See ADR 0011.
 
-// preorder returns every surface in the tree depth-first, root first — the same
-// order place() draws in and Z ordinals are assigned in.
-func (f *Froth) preorder() []Handle {
-	var out []Handle
-	f.collectPreorder(f.root, &out)
+// scopeOf reports the scope a surface traverses within: the nearest ancestor —
+// or the surface itself — marked FocusScope, and the root when nothing on the
+// way up is one. Answering "itself" for a scope surface is what keeps a scope
+// closed.
+func (f *Froth) scopeOf(h Handle) Handle {
+	for h != (Handle{}) {
+		n := f.reg.get(h)
+		if n == nil {
+			break
+		}
+		if h == f.root || n.meta.focusScope {
+			return h
+		}
+		h = n.parent
+	}
+	return f.root
+}
+
+func (f *Froth) isScope(h Handle) bool {
+	n := f.reg.get(h)
+	return n != nil && n.meta.focusScope
+}
+
+// scopeOrder returns the surfaces the walk within s visits, depth-first and s
+// first. A nested scope and everything under it are absent: they belong to that
+// scope's own walk, not to this one. s itself is present, so a scope marked
+// TabStop is a stop within itself and in no other scope.
+func (f *Froth) scopeOrder(s Handle) []Handle {
+	n := f.reg.get(s)
+	if n == nil {
+		return nil
+	}
+	out := []Handle{s}
+	for _, c := range n.children {
+		f.collectScoped(c, &out)
+	}
 	return out
 }
 
-func (f *Froth) collectPreorder(h Handle, out *[]Handle) {
+func (f *Froth) collectScoped(h Handle, out *[]Handle) {
 	n := f.reg.get(h)
-	if n == nil {
+	if n == nil || n.meta.focusScope {
 		return
 	}
 	*out = append(*out, h)
 	for _, c := range n.children {
-		f.collectPreorder(c, out)
+		f.collectScoped(c, out)
 	}
 }
 
@@ -120,13 +174,58 @@ func (f *Froth) isTabStop(h Handle) bool {
 	return n != nil && n.meta.tabStop
 }
 
-// stepFocus resolves a relative focus move: the next tab stop after from in
-// depth-first order, or the previous one when delta is -1. It wraps.
+// enterScope reports where focus lands when it is moved to the scope s: the
+// deepest surface s remembers that is still a stop, and the first stop within s
+// when it remembers nothing usable. It reports false for a scope holding no stop
+// at all, which leaves focus on the scope surface itself.
 //
-// It reports false when no surface is a tab stop, which leaves focus where it
-// is. A from outside the tree starts the walk at the root.
+// The remembered chain is walked deepest-first because that is what "where focus
+// left" means — a dialog remembers a button, not the row the button sits in.
+// Every link is checked against the tree and against still being a stop, so a
+// remembered surface that has died, or that its creator has kept out of
+// traversal, costs a fallback rather than stranding focus. A remembered surface
+// that is itself a scope is entered rather than landed on, so the rule holds
+// however deep restoration reaches.
+func (f *Froth) enterScope(s Handle) (Handle, bool) {
+	var remembered []Handle
+	for cur := s; ; {
+		n := f.reg.get(cur)
+		if n == nil || n.lastActive == (Handle{}) || f.reg.get(n.lastActive) == nil {
+			break
+		}
+		remembered = append(remembered, n.lastActive)
+		cur = n.lastActive
+	}
+	for i := len(remembered) - 1; i >= 0; i-- {
+		h := remembered[i]
+		if f.isScope(h) {
+			if to, ok := f.enterScope(h); ok {
+				return to, true
+			}
+			continue
+		}
+		if f.isTabStop(h) {
+			return h, true
+		}
+	}
+
+	for _, h := range f.scopeOrder(s) {
+		if f.isTabStop(h) {
+			return h, true
+		}
+	}
+	return Handle{}, false
+}
+
+// stepFocus resolves a relative focus move: the next place focus can go after
+// from, within from's scope, or the previous one when delta is -1. It wraps at
+// the scope's ends.
+//
+// It reports false when the scope holds nowhere to go, which leaves focus where
+// it is. A from outside the tree walks the root's scope.
 func (f *Froth) stepFocus(from Handle, delta int) (Handle, bool) {
-	order := f.preorder()
+	s := f.scopeOf(from)
+	order := f.scopeOrder(s)
 	if len(order) == 0 {
 		return Handle{}, false
 	}

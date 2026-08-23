@@ -88,6 +88,15 @@ func twoPanes(t *testing.T) (f *froth.Froth, root *focusRoot, left, right *focus
 
 func keyPress(code rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: code} }
 
+// tabPress and shiftTabPress are the two keys froth binds itself. They are
+// named rather than spelled at every call site because tab carries no text and
+// so cannot be written as a rune the way an ordinary character can.
+func tabPress() tea.KeyPressMsg { return tea.KeyPressMsg{Code: tea.KeyTab} }
+
+func shiftTabPress() tea.KeyPressMsg {
+	return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+}
+
 // Nothing has moved focus, so the root holds it: an application that never
 // mentions focus still receives its keys somewhere.
 func TestTheRootHoldsFocusUntilSomethingMovesIt(t *testing.T) {
@@ -143,16 +152,19 @@ func TestASurfaceReadsItsOwnFocusWhileRendering(t *testing.T) {
 // output changes to match. The move commits within the update that carried the
 // key, because focus commits in Apply and nothing is drawn until the queue has
 // drained.
+//
+// The key is an ordinary one rather than tab: these panes hand focus to each
+// other themselves, and tab is froth's own.
 func TestAKeyMovesFocusAndTheFrameFollows(t *testing.T) {
 	f, root, left, right := twoPanes(t)
 	f.Update(focusMsg{to: root.handles[0]})
 
-	f.Update(keyPress('\t'))
+	f.Update(keyPress('x'))
 	if got, want := f.View().Content, "lR"; got != want {
 		t.Errorf("after one key, View().Content = %q, want %q", got, want)
 	}
 
-	f.Update(keyPress('\t'))
+	f.Update(keyPress('x'))
 	if got, want := f.View().Content, "Lr"; got != want {
 		t.Errorf("after two keys, View().Content = %q, want %q", got, want)
 	}
@@ -329,6 +341,7 @@ func (cells) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
 type optRoot struct {
 	kids    []froth.Surface
 	opts    [][]froth.CreateOption
+	lay     froth.Layout // cells when nil
 	handles []froth.Handle
 }
 
@@ -358,6 +371,10 @@ func (r *optRoot) Mount(ac *froth.ApplyCtx) {
 			opts = r.opts[i]
 		}
 		r.handles = append(r.handles, ac.Create(k, opts...))
+	}
+	if r.lay != nil {
+		ac.SetLayout(r.lay)
+		return
 	}
 	ac.SetLayout(cells{})
 }
@@ -507,6 +524,9 @@ func TestTraversalWithNoStopAtAllLeavesFocusWhereItIs(t *testing.T) {
 	f.Update(tea.WindowSizeMsg{Width: 2, Height: 1})
 
 	f.Update(tabMsg{})
+	// The key froth binds itself takes the same walk and finds the same
+	// nothing.
+	f.Update(tabPress())
 
 	if content, want := f.View().Content, "ab"; content != want {
 		t.Errorf("View().Content = %q, want %q — focus should not have moved", content, want)
@@ -525,5 +545,310 @@ func TestTwoMovesInOneDeliveryAdvanceTwoStops(t *testing.T) {
 
 	if got, want := f.View().Content, "lMr"; got != want {
 		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// Focus scopes
+//
+// A scope's subtree is a walk of its own: traversal above it steps over it, and
+// traversal inside it cycles at its ends. These build a row where every surface
+// is one cell wide, so a frame reads as one letter per surface with the focused
+// one in upper case.
+
+// columns gives each child a column of the width it was told, left to right, so
+// a container can be wider than one cell and still lay its own children out in
+// cells of the space it was given.
+type columns struct{ w []int }
+
+func (l columns) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
+	out := make([]froth.Rect, len(children))
+	x := space.X
+	for i := range out {
+		w := 1
+		if i < len(l.w) {
+			w = l.w[i]
+		}
+		out[i] = froth.Rect{X: x, Y: space.Y, W: w, H: space.H}
+		x += w
+	}
+	return out
+}
+
+var scope = []froth.CreateOption{froth.FocusScope()}
+
+// scopedRow builds "a [b c] d": two stops either side of a two-stop container,
+// created with the options it is given. It returns the instance, the outer root
+// and that container, which is what a test names to move focus into it.
+func scopedRow(t *testing.T, inner []froth.CreateOption) (*froth.Froth, *optRoot, *optRoot) {
+	t.Helper()
+	middle := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "b"}, &focusable{letter: "c"}},
+		opts: [][]froth.CreateOption{stop, stop},
+	}
+	root := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "a"}, middle, &focusable{letter: "d"}},
+		opts: [][]froth.CreateOption{stop, inner, stop},
+		lay:  columns{w: []int{1, 2, 1}},
+	}
+	f := newSized(t, root, 4, 1)
+	f.View()
+	return f, root, middle
+}
+
+func TestTraversalInsideAFocusScopeCyclesAtItsEnds(t *testing.T) {
+	f, root, _ := scopedRow(t, scope)
+	f.Update(focusMsg{to: root.handles[1]})
+
+	// Focus entered the scope, so it starts on the scope's first stop rather
+	// than on the scope surface.
+	if got, want := f.View().Content, "aBcd"; got != want {
+		t.Fatalf("on entering the scope, View().Content = %q, want %q", got, want)
+	}
+
+	want := []string{"abCd", "aBcd", "abCd"}
+	for i, w := range want {
+		f.Update(tabMsg{})
+		if got := f.View().Content; got != w {
+			t.Errorf("after %d moves inside the scope, View().Content = %q, want %q",
+				i+1, got, w)
+		}
+	}
+}
+
+// Traversal never crosses a scope boundary in either direction, so the walk
+// above one steps over the scope surface and everything under it. Reaching a
+// scope is an explicit move, which is what opening a dialog already is.
+func TestTraversalAboveAScopeStepsOverItAndItsContents(t *testing.T) {
+	f, _, _ := scopedRow(t, scope)
+
+	want := []string{"Abcd", "abcD", "Abcd"}
+	for i, w := range want {
+		f.Update(tabMsg{})
+		if got := f.View().Content; got != w {
+			t.Errorf("after %d moves, View().Content = %q, want %q", i+1, got, w)
+		}
+	}
+}
+
+// Without the flag the same tree is one walk: the middle surface is an ordinary
+// container and its children are stops in the row like any other.
+func TestWithoutTheFlagTheSameSubtreeIsWalkedThrough(t *testing.T) {
+	f, _, _ := scopedRow(t, nil)
+
+	want := []string{"Abcd", "aBcd", "abCd", "abcD", "Abcd"}
+	for i, w := range want {
+		f.Update(tabMsg{})
+		if got := f.View().Content; got != w {
+			t.Errorf("after %d moves, View().Content = %q, want %q", i+1, got, w)
+		}
+	}
+}
+
+// A scope inside a scope walks itself, and its boundary behaves against the
+// scope above it exactly as that one's does against the root.
+func TestANestedScopeTraversesWithinItselfAndItsBoundaryHolds(t *testing.T) {
+	inner := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "c"}, &focusable{letter: "d"}},
+		opts: [][]froth.CreateOption{stop, stop},
+	}
+	outer := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "b"}, inner, &focusable{letter: "e"}},
+		opts: [][]froth.CreateOption{stop, scope, stop},
+		lay:  columns{w: []int{1, 2, 1}},
+	}
+	root := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "a"}, outer},
+		opts: [][]froth.CreateOption{stop, scope},
+		lay:  columns{w: []int{1, 4}},
+	}
+	f := newSized(t, root, 5, 1)
+	f.View()
+
+	// The root's walk sees one stop, the outer scope having taken the rest.
+	f.Update(tabMsg{})
+	if got, want := f.View().Content, "Abcde"; got != want {
+		t.Fatalf("the root's walk reached %q, want %q", got, want)
+	}
+
+	// The outer scope's walk sees its own two stops and steps over the inner
+	// scope, exactly as the root stepped over it.
+	f.Update(focusMsg{to: root.handles[1]})
+	want := []string{"aBcde", "abcdE", "aBcde"}
+	for i, w := range want {
+		if got := f.View().Content; got != w {
+			t.Errorf("after %d moves in the outer scope, View().Content = %q, want %q", i, got, w)
+		}
+		f.Update(tabMsg{})
+	}
+
+	// The inner scope's walk is its own two stops and nothing else.
+	f.Update(focusMsg{to: outer.handles[1]})
+	want = []string{"abCde", "abcDe", "abCde"}
+	for i, w := range want {
+		if got := f.View().Content; got != w {
+			t.Errorf("after %d moves in the inner scope, View().Content = %q, want %q", i, got, w)
+		}
+		f.Update(tabMsg{})
+	}
+}
+
+// Restoration: the scope remembers the child focus was on, and coming back
+// lands there rather than at the first stop.
+func TestFocusReenteringAScopeLandsWhereItLeft(t *testing.T) {
+	f, root, _ := scopedRow(t, scope)
+	f.Update(focusMsg{to: root.handles[1]})
+	f.Update(tabMsg{})
+	if got, want := f.View().Content, "abCd"; got != want {
+		t.Fatalf("View().Content = %q, want %q", got, want)
+	}
+
+	f.Update(focusMsg{to: root.handles[0]})
+	f.Update(focusMsg{to: root.handles[1]})
+
+	if got, want := f.View().Content, "abCd"; got != want {
+		t.Errorf("re-entering the scope: View().Content = %q, want %q", got, want)
+	}
+}
+
+// What a scope remembers is where focus lands when it re-enters, and nothing
+// else. It is never an answer to where focus is: that is one handle, and the
+// chain is derived from it.
+func TestARememberedChildIsNotFocused(t *testing.T) {
+	f, root, scoped := scopedRow(t, scope)
+	f.Update(focusMsg{to: root.handles[1]})
+	f.Update(tabMsg{})
+
+	f.Update(focusMsg{to: root.handles[0]})
+
+	if got, want := f.View().Content, "Abcd"; got != want {
+		t.Errorf("View().Content = %q, want %q — only the focused surface is focused",
+			got, want)
+	}
+	// The remembered surface is not on the chain, so a key goes to the surface
+	// that holds focus rather than to the one the scope remembers.
+	f.Update(keyPress('x'))
+	if got := scoped.kids[1].(*focusable).keys; len(got) != 0 {
+		t.Errorf("the remembered surface saw %v, want nothing", got)
+	}
+}
+
+// A remembered child its creator kept out of traversal is not somewhere focus
+// can be walked to, so entry falls back to the scope's first stop rather than
+// landing on it.
+func TestARememberedChildOutsideTraversalFallsBackToTheFirstStop(t *testing.T) {
+	scoped := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "b"}, &focusable{letter: "c"}},
+		opts: [][]froth.CreateOption{stop, nil},
+	}
+	root := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "a"}, scoped},
+		opts: [][]froth.CreateOption{stop, scope},
+		lay:  columns{w: []int{1, 2}},
+	}
+	f := newSized(t, root, 3, 1)
+	f.View()
+
+	// Focused by name, so the scope remembers a surface traversal cannot reach.
+	f.Update(focusMsg{to: scoped.handles[1]})
+	if got, want := f.View().Content, "abC"; got != want {
+		t.Fatalf("View().Content = %q, want %q", got, want)
+	}
+
+	f.Update(focusMsg{to: root.handles[0]})
+	f.Update(focusMsg{to: root.handles[1]})
+
+	if got, want := f.View().Content, "aBc"; got != want {
+		t.Errorf("re-entering the scope: View().Content = %q, want %q", got, want)
+	}
+}
+
+// A scope surface is a stop within its own walk and in no other, which is the
+// same rule that puts its children there: everything about a scope belongs to
+// the scope, including the surface that declares it.
+func TestAScopeThatIsATabStopIsAStopWithinItselfOnly(t *testing.T) {
+	f, _, scoped := scopedRow(t, []froth.CreateOption{froth.FocusScope(), froth.TabStop()})
+
+	// The walk above it steps over it, flag or no flag.
+	f.Update(tabMsg{})
+	f.Update(tabMsg{})
+	if got, want := f.View().Content, "abcD"; got != want {
+		t.Fatalf("the walk above the scope reached %q, want %q", got, want)
+	}
+
+	// Inside, it is the head of its own walk: three stops — itself, b and c —
+	// so three moves from b return to b, and the middle one lands on the scope
+	// surface, where no letter is upper case.
+	f.Update(focusMsg{to: scoped.handles[0]})
+	if got, want := f.View().Content, "aBcd"; got != want {
+		t.Fatalf("View().Content = %q, want %q", got, want)
+	}
+	for i, w := range []string{"abCd", "abcd", "aBcd"} {
+		f.Update(tabMsg{})
+		if got := f.View().Content; got != w {
+			t.Errorf("after %d moves inside the scope, View().Content = %q, want %q",
+				i+1, got, w)
+		}
+	}
+}
+
+// A scope with nowhere to go inside it keeps focus on its own surface, which is
+// a defined place to be rather than a rejected move.
+func TestFocusMovedToAScopeWithNoStopInItStaysOnTheScope(t *testing.T) {
+	empty := &optRoot{kids: []froth.Surface{&focusable{letter: "b"}}}
+	root := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "a"}, empty},
+		opts: [][]froth.CreateOption{stop, scope},
+		lay:  columns{w: []int{1, 1}},
+	}
+	f, diags := newWatched(t, root, 2, 1)
+	f.View()
+
+	f.Update(focusMsg{to: root.handles[1]})
+	f.Update(tabMsg{})
+
+	if got, want := f.View().Content, "ab"; got != want {
+		t.Errorf("View().Content = %q, want %q — the scope holds focus and nothing moves",
+			got, want)
+	}
+	if len(*diags) != 0 {
+		t.Errorf("froth reported %v; a scope with no stop in it is not a diagnostic", *diags)
+	}
+}
+
+// Restoration reaches through a scope inside a scope. The remembered surface
+// here is out of traversal, so the walk up the remembered chain reaches the
+// inner scope — and a remembered scope is entered rather than skipped, so focus
+// comes back to the inner scope's own stop rather than to the outer scope's
+// first one.
+func TestRestorationFallingBackOntoANestedScopeEntersIt(t *testing.T) {
+	inner := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "c"}, &focusable{letter: "d"}},
+		opts: [][]froth.CreateOption{stop, nil},
+	}
+	outer := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "b"}, inner},
+		opts: [][]froth.CreateOption{stop, scope},
+		lay:  columns{w: []int{1, 2}},
+	}
+	root := &optRoot{
+		kids: []froth.Surface{&focusable{letter: "a"}, outer},
+		opts: [][]froth.CreateOption{stop, scope},
+		lay:  columns{w: []int{1, 3}},
+	}
+	f := newSized(t, root, 4, 1)
+	f.View()
+
+	// Focus rests in the inner scope, so the outer one remembers the inner
+	// scope surface and the inner one remembers d.
+	f.Update(focusMsg{to: inner.handles[1]})
+	if got, want := f.View().Content, "abcD"; got != want {
+		t.Fatalf("View().Content = %q, want %q", got, want)
+	}
+
+	f.Update(focusMsg{to: root.handles[0]})
+	f.Update(focusMsg{to: root.handles[1]})
+
+	if got, want := f.View().Content, "abCd"; got != want {
+		t.Errorf("re-entering the outer scope: View().Content = %q, want %q", got, want)
 	}
 }

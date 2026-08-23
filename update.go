@@ -21,27 +21,32 @@ type envelope struct {
 }
 
 // route addresses a message arriving from Bubble Tea, and is where a key press
-// stops being a key.
+// stops being a key. It reports false when there is nothing to deliver, which is
+// a press froth answered itself.
 //
 // A press that matches a binding on the focus chain becomes an ActionMsg
 // addressed to the surface that declared it, which is not necessarily the
-// focused one. A press that matches nothing, and every other key event, goes to
-// the focused surface as it stands. Everything else goes to the root, which is
-// the surface the application handed froth and so the one its own messages
-// belong at.
+// focused one — unless the action is one froth services, which froth performs
+// here and delivers nowhere. A press that matches nothing, and every other key
+// event, goes to the focused surface as it stands. Everything else goes to the
+// root, which is the surface the application handed froth and so the one its own
+// messages belong at.
 //
 // Only a press resolves. A release is the same key arriving a second time, so
 // matching it would fire every action twice.
-func (f *Froth) route(msg tea.Msg) envelope {
+func (f *Froth) route(msg tea.Msg) (envelope, bool) {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
 		if to, a, ok := f.resolve(k); ok {
-			return envelope{to: to, msg: ActionMsg{Action: a}}
+			if f.service(a) {
+				return envelope{}, false
+			}
+			return envelope{to: to, msg: ActionMsg{Action: a}}, true
 		}
 	}
 	if _, ok := msg.(tea.KeyMsg); ok {
-		return envelope{to: f.focused(), msg: msg}
+		return envelope{to: f.focused(), msg: msg}, true
 	}
-	return envelope{to: f.root, msg: msg}
+	return envelope{to: f.root, msg: msg}, true
 }
 
 // A budget bounds one settle pass. Delivering a message and mounting a surface

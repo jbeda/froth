@@ -52,9 +52,35 @@ One exception, declared rather than built in: a binding carries a `SurvivesModal
 and those still resolve from above. It survives modality only — not focus scopes, not
 anything else — and any surface may declare one.
 
-froth owns no bindings of its own and hardcodes no quit key. The consequence is
-deliberate and worth stating plainly: an application that marks nothing as surviving can
-write a modal it cannot quit past, and froth will not save it. The alternative is froth
-deciding what quit means, which is worse — a double-tap `ctrl-c` is a common and
-perfectly reasonable policy, and it belongs to the application. Such a policy needs no
-new mechanism either: the surface receives its action twice and compares timestamps.
+froth hardcodes no quit key. The consequence is deliberate and worth stating plainly: an
+application that marks nothing as surviving can write a modal it cannot quit past, and
+froth will not save it. The alternative is froth deciding what quit means, which is worse
+— a double-tap `ctrl-c` is a common and perfectly reasonable policy, and it belongs to the
+application. Such a policy needs no new mechanism either: the surface receives its action
+twice and compares timestamps.
+
+## Amendment: froth binds the keys for the actions it services itself
+
+The amendment above once read "froth owns no bindings of its own and hardcodes no quit
+key". The first half was overreach: it was written about quit and generalised to every
+binding, and it contradicts both the sketch's `froth.ActionCancel, // esc, per froth's
+stock bindings` and the user story that wants tab to move focus without an application
+implementing it.
+
+**The line is what froth services.** Moving focus is froth's job — no surface implements
+traversal — so the action that asks for it is froth's, and so is the key. Quit is not:
+froth would only forward it to a surface, so it stays the application's to declare.
+`ActionFocusNext` and `ActionFocusPrev` are froth's with `tab` and `shift+tab` bound to
+them; `ActionCancel` is a froth identity with no key, because froth services nothing for
+it until modals exist.
+
+**An application takes one over through this same machinery.** froth's stock bindings are
+matched after every surface on the focus chain, so a surface that declares `tab` for
+something else simply wins. Declaring a `Binding` for a froth action anywhere on the chain
+replaces froth's keys for it, and a declaration marked `Disabled` leaves the action with
+no keys at all — as inert as any other disabled binding. There is no second override
+table, and there is nothing an application can do to a binding of its own that it cannot
+do to one of froth's.
+
+**A serviced action is delivered nowhere.** The surface that declared the binding asked
+froth to move focus, not to be told that it did.

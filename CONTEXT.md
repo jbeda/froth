@@ -81,8 +81,12 @@ _Avoid_: last frame, screen state
 
 **Focus scope**:
 A surface whose subtree keyboard navigation cycles within, rather than escaping
-into the rest of the tree. Dialogs and modals are scopes; plain layout
-containers are not.
+into the rest of the tree. The boundary holds in both directions: the walk
+outside a scope steps over the scope and everything under it, so focus crosses
+only by being moved by name — which is what opening and closing a dialog are.
+A scope remembers which child was last active, so being moved to it lands
+where focus left. Dialogs and modals are scopes; plain layout containers are
+not.
 _Avoid_: focus trap, focus group
 
 **Phase**:

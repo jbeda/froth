@@ -5,11 +5,18 @@
 // The root draws a field of dots behind them, visible in the one-cell gap the
 // layout leaves between the panes.
 //
-// Focus is one handle held by froth. Tab moves it between the two panes created
+// Focus is one handle held by froth. Tab moves it between the surfaces created
 // with froth.TabStop(); the notes pane is created without it, so the walk passes
 // over it while it keeps its place in the row and its share of the space. No
-// surface implements traversal — the panes ask froth to move focus, and froth
-// decides where it goes.
+// surface implements traversal and none binds tab: tab and shift-tab are froth's
+// own bindings for actions froth services itself, and an application rebinds or
+// disables them by declaring them like any other.
+//
+// The scope on the right is a focus scope. Tab neither lands on it nor walks
+// into it, and tab inside it reaches nothing outside: g moves focus in, and the
+// same key inside reaches the scope first — it is deeper on the chain than the
+// root — and moves focus back out. Come back later and focus lands on the
+// control it was on, because a surface remembers which child was last active.
 //
 // One keystroke shows what the update loop buys: the focused pane posts what it
 // saw to its sibling, and both have handled it before anything is drawn.
@@ -59,8 +66,10 @@ type report struct{ text string }
 // key: the root answers actionQuit wherever focus is, and the panes answer
 // actionCycle only while they hold it.
 const (
-	actionQuit  froth.Action = "quit"
-	actionCycle froth.Action = "cycle"
+	actionQuit       froth.Action = "quit"
+	actionCycle      froth.Action = "cycle"
+	actionEnterScope froth.Action = "enter scope"
+	actionLeaveScope froth.Action = "leave scope"
 )
 
 // root is the surface the application hands froth. It creates the panes it is
@@ -69,6 +78,7 @@ const (
 // nobody else's.
 type root struct {
 	report *report
+	scope  froth.Handle
 }
 
 func (rt *root) Mount(ac *froth.ApplyCtx) {
@@ -79,23 +89,25 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 			"Neither pane knows where focus is except by asking about itself, " +
 			"and neither computes a position: the layout is the only thing " +
 			"that places them.\n\n" +
-			"tab hands focus to the right pane and shift-tab takes it back. " +
+			"tab hands focus to the right pane and shift-tab takes it back, " +
+			"and neither pane says anything about tab: the binding is froth's. " +
 			"The notes pane is skipped.",
 	}
 	right := &pane{
 		title: "right",
 		body: "froth: focus is one handle, raw keys go to it, and froth " +
 			"walks it.\n\n" +
-			"tab and shift-tab move focus, and neither pane implements the " +
-			"walk: they ask froth, and froth answers from the tree. The pane " +
-			"that sees a key posts it to its sibling, and the frame is drawn " +
-			"once, after both have handled it — you never see a half-settled " +
-			"screen.\n\n" +
+			"tab and shift-tab are froth's own bindings, serviced by froth " +
+			"and delivered to nobody, so no pane implements the walk. The " +
+			"pane that sees a key posts it to its sibling, and the frame is " +
+			"drawn once, after both have handled it — you never see a " +
+			"half-settled screen.\n\n" +
 			"d posts a message that comes back to its sender, which is a " +
 			"cycle. The iteration cap catches it and reports it in the notes " +
 			"pane rather than hanging.\n\n" +
 			"q or ctrl+c quits — and tab to the filter field to see why " +
-			"the binding names both.",
+			"the binding names both. g moves focus into the scope on the " +
+			"right.",
 	}
 	notes := &pane{
 		title:  "notes",
@@ -112,6 +124,13 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	ac.Create(&filter{}, froth.TabStop(), froth.TextSink())
 	leftH, rightH := ac.Create(left, froth.TabStop()), ac.Create(right, froth.TabStop())
 	ac.Create(notes)
+
+	// The scope is created without TabStop, so tab neither lands on it nor
+	// walks into it. It is reached by name, which is what the root's g binding
+	// does — and the same key inside the scope reaches the scope first and
+	// takes focus back out.
+	rt.scope = ac.Create(&scopePane{out: leftH}, froth.FocusScope())
+
 	left.sibling, right.sibling = rightH, leftH
 	ac.SetLayout(filterOnTop{rest: layout.Row(layout.Gap(1))})
 	ac.Focus(leftH)
@@ -136,16 +155,100 @@ func (rt *root) Bindings() []froth.Binding {
 		Keys:          []string{"q", "ctrl+c"},
 		Help:          "quit",
 		SurvivesModal: true,
+	}, {
+		Action: actionEnterScope,
+		Keys:   []string{"g"},
+		Help:   "focus the scope",
 	}}
 }
 
 // The root sees no raw keys — those go to the focused pane — so the only thing
 // addressed to it is the action it declared.
 func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
-	if m, ok := msg.(froth.ActionMsg); ok && m.Action == actionQuit {
+	m, ok := msg.(froth.ActionMsg)
+	if !ok {
+		return
+	}
+	switch m.Action {
+	case actionQuit:
 		uc.Run(tea.Quit)
+	case actionEnterScope:
+		// Moving focus to a scope enters it: froth lands on the control the
+		// scope last had focus on, or its first one.
+		uc.Focus(rt.scope)
 	}
 }
+
+// scopePane is a focus scope. Tab inside it moves between its own two controls and
+// never reaches the panes beside it, and the walk out there never reaches the
+// controls. Focus crosses the boundary only by being moved, which is what the
+// binding below does — and what a dialog's open and close would do.
+type scopePane struct {
+	out froth.Handle
+}
+
+func (g *scopePane) Mount(ac *froth.ApplyCtx) {
+	ac.Create(&control{label: "first"}, froth.TabStop())
+	ac.Create(&control{label: "second"}, froth.TabStop())
+	ac.SetLayout(stack{})
+}
+
+// The scope is on the focus chain while one of its controls has focus, and it
+// is deeper than the root, so its g wins over the root's while focus is inside.
+func (g *scopePane) Bindings() []froth.Binding {
+	return []froth.Binding{{
+		Action: actionLeaveScope,
+		Keys:   []string{"g"},
+		Help:   "leave the scope",
+	}}
+}
+
+func (g *scopePane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	if m, ok := msg.(froth.ActionMsg); ok && m.Action == actionLeaveScope {
+		uc.Focus(g.out)
+	}
+}
+
+func (g *scopePane) Render(rc *froth.RenderCtx, r froth.Rect) string {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(0, 1).
+		Width(r.W).
+		Height(r.H).
+		Render("scope\n\ng gets in and back out; tab cycles between the two " +
+			"controls below and reaches nothing else. Come back and focus is " +
+			"where you left it.")
+}
+
+// stack gives each child a row of the space, top to bottom, leaving the first
+// two rows to the surface that owns them.
+type stack struct{}
+
+func (stack) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
+	out := make([]froth.Rect, len(children))
+	y := space.Y + max(space.H-len(children)-1, 0)
+	for i := range out {
+		out[i] = froth.Rect{X: space.X + 1, Y: y + i, W: max(space.W-2, 0), H: 1}
+	}
+	return out
+}
+
+// control is a one-line surface that does nothing but show whether it has
+// focus. It is a tab stop, so the scope's walk lands on it.
+type control struct{ label string }
+
+func (c *control) Render(rc *froth.RenderCtx, r froth.Rect) string {
+	if rc.Focused() {
+		return lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")).
+			Bold(true).
+			Render("▸ " + c.label)
+	}
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("  " + c.label)
+}
+
+func (c *control) Update(*froth.UpdateCtx, tea.Msg) {}
 
 // onDiagnostic is froth's one hook, registered at construction. It is ordinary
 // application code called with no phase in progress, so it is free to touch the
@@ -203,10 +306,6 @@ func (fl *filter) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 		return
 	}
 	switch k.String() {
-	case "tab":
-		uc.FocusNext()
-	case "shift+tab":
-		uc.FocusPrev()
 	case "backspace":
 		if r := []rune(fl.text); len(r) > 0 {
 			fl.text = string(r[:len(r)-1])
@@ -291,21 +390,9 @@ func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 			uc.Post(uc.Self(), cycleMsg{})
 		}
 	case tea.KeyMsg:
-		switch key := msg.String(); key {
-		case "tab", "shift+tab":
-			// froth walks the tree; the pane only says which way. Focus is
-			// structural, so the move commits in the Apply after this delivery
-			// — still within this update, and before anything is drawn.
-			if key == "tab" {
-				uc.FocusNext()
-			} else {
-				uc.FocusPrev()
-			}
-			p.status = "asked froth for the " + key + " stop, and it walked the tree"
-		default:
-			p.status = "I had focus, so froth gave me " + strconv.Quote(key)
-			uc.Post(p.sibling, echoMsg{key: key})
-		}
+		key := msg.String()
+		p.status = "I had focus, so froth gave me " + strconv.Quote(key)
+		uc.Post(p.sibling, echoMsg{key: key})
 	case echoMsg:
 		p.status = "the focused pane passed on " + strconv.Quote(msg.key) +
 			", same frame as the keystroke"

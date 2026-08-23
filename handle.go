@@ -42,6 +42,12 @@ type node struct {
 	children []Handle
 	layout   Layout
 	meta     meta
+
+	// lastActive is the child of this surface that most recently sat on the
+	// focus chain. It is restoration state — where focus lands when traversal
+	// re-enters this subtree — and is never consulted to answer where focus is:
+	// that is f.focus and the chain derived from it, and nothing else.
+	lastActive Handle
 }
 
 // registries counts froth instances, so each one's handles are distinguishable

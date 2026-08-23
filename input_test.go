@@ -459,3 +459,137 @@ func TestABindingOnBothAPrintableAndAChordKeepsTheChordWhileATextSinkHasFocus(t 
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
 }
+
+// froth's own navigation bindings
+//
+// Tab and shift-tab resolve to froth-owned actions with froth-owned keys, and
+// froth services them itself. An application takes one over by declaring a
+// Binding for it, which is the machinery it already uses for its own.
+
+// navRow stands a root over one-cell focusable children, all of them tab stops,
+// with whatever bindings the root was given. The root's own row draws the last
+// action it received, so a frame says both where focus is and whether anything
+// was delivered.
+func navRow(t *testing.T, bindings []froth.Binding, letters string) (*froth.Froth, *bindRoot) {
+	t.Helper()
+	root := &bindRoot{speaker: speaker{letter: ".", bindings: bindings}}
+	for _, c := range letters {
+		root.kids = append(root.kids, &focusable{letter: string(c)})
+		root.opts = append(root.opts, []froth.CreateOption{froth.TabStop()})
+	}
+	return bindTree(t, root), root
+}
+
+func TestTabMovesFocusWithoutTheApplicationBindingAnything(t *testing.T) {
+	f, _ := navRow(t, nil, "lr")
+
+	f.Update(tabPress())
+	if got, want := f.View().Content, "..\nLr"; got != want {
+		t.Errorf("after tab, View().Content = %q, want %q", got, want)
+	}
+
+	f.Update(tabPress())
+	if got, want := f.View().Content, "..\nlR"; got != want {
+		t.Errorf("after a second tab, View().Content = %q, want %q", got, want)
+	}
+}
+
+func TestShiftTabMovesFocusTheOtherWay(t *testing.T) {
+	f, _ := navRow(t, nil, "lr")
+
+	f.Update(shiftTabPress())
+
+	if got, want := f.View().Content, "..\nlR"; got != want {
+		t.Errorf("after shift-tab, View().Content = %q, want %q", got, want)
+	}
+}
+
+// froth services its own action rather than delivering it: the surface that
+// declared the binding asked froth to move focus, not to be told about it.
+func TestAFrothActionIsServicedAndNotDelivered(t *testing.T) {
+	f, _ := navRow(t, []froth.Binding{
+		{Action: froth.ActionFocusNext, Keys: []string{"n"}, Help: "next"},
+	}, "lr")
+
+	f.Update(keyPress('n'))
+
+	if got, want := f.View().Content, "..\nLr"; got != want {
+		t.Errorf("View().Content = %q, want %q — focus moves and nobody is told", got, want)
+	}
+}
+
+// Rebinding is declaring: the declaration takes the action over, so froth's own
+// key for it stops matching.
+func TestAnApplicationRebindsAFrothNavigationAction(t *testing.T) {
+	f, root := navRow(t, []froth.Binding{
+		{Action: froth.ActionFocusNext, Keys: []string{"n"}, Help: "next"},
+	}, "lr")
+
+	f.Update(tabPress())
+
+	// The key matched nothing anywhere, so it reached the focused surface raw
+	// and the root drew it — clipped to the two cells it has.
+	if got, want := f.View().Content, "ta\nlr"; got != want {
+		t.Errorf("View().Content = %q, want %q — tab is no longer bound", got, want)
+	}
+	if got := root.last; got != "tab" {
+		t.Errorf("the focused surface saw %q raw, want %q", got, "tab")
+	}
+}
+
+// A disabled froth binding is as inert as a disabled application one: the
+// action has no keys at all, and tab is an ordinary key again.
+func TestAnApplicationDisablesAFrothNavigationAction(t *testing.T) {
+	f, root := navRow(t, []froth.Binding{
+		{Action: froth.ActionFocusNext, Disabled: true, Help: "next"},
+	}, "lr")
+
+	f.Update(tabPress())
+
+	if got, want := f.View().Content, "ta\nlr"; got != want {
+		t.Errorf("View().Content = %q, want %q — focus should not have moved", got, want)
+	}
+	if got := root.last; got != "tab" {
+		t.Errorf("the focused surface saw %q raw, want %q", got, "tab")
+	}
+	// shift-tab is a separate action and is untouched by disabling this one.
+	f.Update(shiftTabPress())
+	if got, want := f.View().Content, "ta\nlR"; got != want {
+		t.Errorf("after shift-tab, View().Content = %q, want %q", got, want)
+	}
+}
+
+// A surface's own binding on tab wins, because froth's are matched only after
+// the whole chain has been asked.
+func TestASurfacesOwnBindingOnTabBeatsFroths(t *testing.T) {
+	f, _ := navRow(t, []froth.Binding{
+		{Action: "T", Keys: []string{"tab"}, Help: "mine"},
+	}, "lr")
+
+	f.Update(tabPress())
+
+	if got, want := f.View().Content, "T.\nlr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// Tab prints nothing, so it is not typing and still navigates out of a text
+// sink. That is what makes the sink escapable with no key of its own.
+func TestTabStillNavigatesWhileATextSinkHasFocus(t *testing.T) {
+	root := &bindRoot{
+		speaker: speaker{letter: "."},
+		kids:    []froth.Surface{&focusable{letter: "l"}, &focusable{letter: "r"}},
+		opts: [][]froth.CreateOption{
+			{froth.TabStop(), froth.TextSink()},
+			{froth.TabStop()},
+		},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(tabPress())
+
+	if got, want := f.View().Content, "..\nlR"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}

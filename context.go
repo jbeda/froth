@@ -72,6 +72,9 @@ func (uc *UpdateCtx) Post(to Handle, msg tea.Msg) {
 // recorded here and commits in the Apply that follows this delivery — a key
 // that moves focus and the frame that shows the move are still one update.
 //
+// A surface created with FocusScope is entered rather than focused: the move
+// lands on the child the scope last had focus on, or on its first tab stop.
+//
 // The target is validated when it commits: a handle that is not in the tree is
 // reported through the diagnostic hook and focus does not move. It is not a
 // panic, because a stored handle whose surface has gone is exactly what handles
@@ -91,7 +94,11 @@ func (uc *UpdateCtx) FocusSelf() {
 // FocusNext moves focus to the next surface created with TabStop, in
 // depth-first child order, wrapping at the end. No surface implements the walk.
 //
-// It names no target, so it cannot fail: a tree with no stop in it leaves focus
+// The walk is bounded by the focus scope this surface sits in and never leaves
+// it. froth binds tab to this, so a surface calls it only to move focus from
+// something other than that key.
+//
+// It names no target, so it cannot fail: a scope with no stop in it leaves focus
 // where it is rather than reporting a diagnostic.
 //
 // Like Focus, the move commits in the Apply that follows this delivery. The

@@ -10,9 +10,11 @@
 > M2 gave `Create` its option list, as `Create(Surface, ...CreateOption)` — the name
 > `Option` was already taken by the instance options `New` takes — and shipped `Binder`,
 > `Action`, `Binding` and `ActionMsg`, with `Binding` carrying froth's own key and help
-> fields rather than bubbles' `key.Binding`, and the text sink that keeps typing out of
-> them. Everything concerning intents, modals, the Environment, producers, reconcile,
-> destroy, the help query and the bubbles adapter is still design.
+> fields rather than bubbles' `key.Binding`, the text sink that keeps typing out of
+> them, keyboard traversal bounded by focus scopes, and froth's own `ActionFocusNext`
+> and `ActionFocusPrev` with `tab` and `shift+tab` bound to them. Everything concerning
+> intents, modals, the Environment, producers, reconcile, destroy, the help query and
+> the bubbles adapter is still design.
 > [`milestone-log.md`](./milestone-log.md) records what shipped and where it diverged.
 
 Client code for a sample app, written as if froth existed. **None of this compiles.**
@@ -264,7 +266,7 @@ func (d *confirmDialog) Update(uc *froth.UpdateCtx, msg tea.Msg) {
         uc.Reply(ConfirmResult{OK: false})
         uc.Close()
     case froth.ActionMsg:
-        if m.Action == froth.ActionCancel {      // esc, per froth's stock bindings
+        if m.Action == froth.ActionCancel {      // froth's identity; no key until M4
             uc.Reply(ConfirmResult{OK: false})
             uc.Close()
         }
@@ -806,7 +808,7 @@ runtime one. Every context can read the Environment and report the caller's own 
 |---|---|---|
 | `*RenderCtx` | Render | `Cursor(Point)` — claim the terminal cursor · `Rect()` · `Focused()` — whether this surface holds focus |
 | `*MeasureCtx` | Measure | nothing beyond the common set; deliberately the narrowest |
-| `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Focus(Handle)` / `FocusSelf()` · `FocusNext()` / `FocusPrev()` — relative moves froth resolves · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `NeedsReconcile()` · `Rect()` |
+| `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Focus(Handle)` / `FocusSelf()` · `FocusNext()` / `FocusPrev()` — relative moves froth resolves, which `tab` and `shift+tab` reach without a surface calling them · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `NeedsReconcile()` · `Rect()` |
 | `*ApplyCtx` | Apply | `Create(Surface, ...Option) Handle` — a child of self · `Destroy(Handle)` · `SetLayout(Layout)` · `Focus(Handle)` / `FocusSelf()` · `Post(Handle, tea.Msg)` · `Capture()` · `Produce(next, ...ProducerOpt)` · `Root()` · `Sender()` — the handle that raised the intent being applied |
 
 Every context knows the surface it belongs to and exposes it as `Self()`, so the
@@ -862,9 +864,8 @@ froth.AutoRaise()      // raise among siblings on focus; off by default
 froth.TabStop()        // admit to keyboard navigation; off by default
 ```
 
-**Built so far (M2):** `TabStop` and `TextSink`, which work; `FocusScope`, which is
-stored and read by nobody until the ticket that gives it behaviour. The rest waits for
-the milestones that give it a consumer — a layout that weighs children, modality, a
+**Built so far (M2):** `TabStop`, `TextSink` and `FocusScope`, all three of which work.
+The rest waits for the milestones that give it a consumer — a layout that weighs children, modality, a
 stacking order a surface can set — because a flag stored against semantics nobody has
 had to implement is a guess later code has to honour.
 

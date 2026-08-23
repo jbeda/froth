@@ -20,6 +20,78 @@ import (
 // they meant to.
 type Action string
 
+// The actions froth owns. They name what froth is asked to do rather than what
+// an application is: moving focus is froth's job, so the action that asks for it
+// is froth's too, and froth binds default keys to the ones it services itself.
+//
+// An application takes one over by declaring a Binding for it like any other:
+// a declaration on the focus chain replaces froth's default keys for that
+// action, and a declaration marked Disabled leaves the action with no keys at
+// all. There is no second override table.
+const (
+	// ActionFocusNext moves focus to the next stop in traversal order. froth
+	// services it and binds tab to it.
+	ActionFocusNext Action = "froth.focus.next"
+
+	// ActionFocusPrev moves focus to the previous stop. froth services it and
+	// binds shift+tab to it.
+	ActionFocusPrev Action = "froth.focus.prev"
+
+	// ActionCancel asks whatever is in front to back out — dismiss a dialog,
+	// abandon an edit. froth owns the identity so surfaces and applications
+	// agree on one spelling, and binds no key to it: nothing froth implements
+	// services it, so a key bound here would be a key taken from the
+	// application for nothing.
+	ActionCancel Action = "froth.cancel"
+)
+
+// frothBindings is every action froth owns and the keys it binds to each. It is
+// one list rather than a set of identities beside a list of keys, so an action
+// cannot be owned without being declared. An entry with no keys is an identity
+// froth publishes and binds nothing to.
+//
+// They are matched after every surface on the focus chain, so a surface that
+// wants tab for something else simply declares it and wins.
+var frothBindings = []Binding{
+	{Action: ActionFocusNext, Keys: []string{"tab"}, Help: "move focus to the next surface"},
+	{Action: ActionFocusPrev, Keys: []string{"shift+tab"}, Help: "move focus to the previous surface"},
+	{Action: ActionCancel, Help: "back out of what is in front"},
+}
+
+// frothOwned reports whether an action is one of froth's identities, and so one
+// a declaration takes over rather than merely shares a name with.
+func frothOwned(a Action) bool {
+	for i := range frothBindings {
+		if frothBindings[i].Action == a {
+			return true
+		}
+	}
+	return false
+}
+
+// service performs an action froth implements itself, reporting whether it was
+// one. A serviced action is not delivered anywhere: the surface that declared
+// the binding asked froth to do the thing, not to be told about it.
+//
+// It reports true even when nothing moved. The action was froth's either way,
+// and a tree with nowhere to tab to is not a key the application should start
+// seeing raw.
+func (f *Froth) service(a Action) bool {
+	var delta int
+	switch a {
+	case ActionFocusNext:
+		delta = 1
+	case ActionFocusPrev:
+		delta = -1
+	default:
+		return false
+	}
+	if to, ok := f.stepFocus(f.stepFrom(), delta); ok {
+		f.pendingFocus, f.focusPending = to, true
+	}
+	return true
+}
+
 // An ActionMsg is what a surface receives when one of its bindings matched. It
 // arrives in Update like any other message, in place of the key.
 type ActionMsg struct{ Action Action }
@@ -99,6 +171,10 @@ func (b *Binding) matches(k string) bool {
 //
 // A focused text sink is asked first: it takes typing as characters, so a bare
 // printable matches nothing anywhere on the chain, its own bindings included.
+//
+// froth's own stock bindings are matched last, and only for actions no surface
+// on the chain declared. Declaring one is therefore how an application rebinds
+// or disables a froth key, through the machinery it already uses for its own.
 func (f *Froth) resolve(k tea.KeyPressMsg) (Handle, Action, bool) {
 	focused := f.focused()
 	if isTyping(k) {
@@ -109,6 +185,7 @@ func (f *Froth) resolve(k tea.KeyPressMsg) (Handle, Action, bool) {
 
 	pressed := k.String()
 	chain := f.chainTo(focused)
+	var taken map[Action]bool
 	for i := len(chain) - 1; i >= 0; i-- {
 		n := f.reg.get(chain[i])
 		if n == nil {
@@ -123,6 +200,24 @@ func (f *Froth) resolve(k tea.KeyPressMsg) (Handle, Action, bool) {
 			if declared[j].matches(pressed) {
 				return chain[i], declared[j].Action, true
 			}
+			// Any declaration of a froth action takes it over, a disabled one
+			// included — which is what makes disabling a froth binding as inert
+			// as disabling an application one.
+			if frothOwned(declared[j].Action) {
+				if taken == nil {
+					taken = make(map[Action]bool)
+				}
+				taken[declared[j].Action] = true
+			}
+		}
+	}
+
+	for i := range frothBindings {
+		if taken[frothBindings[i].Action] {
+			continue
+		}
+		if frothBindings[i].matches(pressed) {
+			return Handle{}, frothBindings[i].Action, true
 		}
 	}
 	return Handle{}, "", false
