@@ -1475,3 +1475,241 @@ func TestTwoMovesInOneDeliveryAdvanceTwoStops(t *testing.T) {
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
 }
+
+// Bindings and actions
+//
+// speaker declares whatever bindings it was given and draws the last thing that
+// reached it — an action's identity, or a raw key — falling back to its own
+// letter until something does. Every action and key in these tests is one
+// character wide, so a frame reads as "who got what".
+type speaker struct {
+	letter   string
+	bindings []froth.Binding
+	last     string
+}
+
+func (s *speaker) Bindings() []froth.Binding { return s.bindings }
+
+func (s *speaker) Render(rc *froth.RenderCtx, r froth.Rect) string {
+	if s.last != "" {
+		return s.last
+	}
+	return s.letter
+}
+
+func (s *speaker) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	switch m := msg.(type) {
+	case froth.ActionMsg:
+		s.last = string(m.Action)
+	case tea.KeyMsg:
+		s.last = m.String()
+	}
+}
+
+// under puts each child in a one-cell column on the row below its parent's,
+// leaving the parent's own first row to draw for itself.
+type under struct{}
+
+func (under) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
+	out := make([]froth.Rect, len(children))
+	for i := range out {
+		out[i] = froth.Rect{X: space.X + i, Y: space.Y + 1, W: 1, H: 1}
+	}
+	return out
+}
+
+// bindRoot is the container the binding tests hang off. It speaks on the top
+// row and its children speak on the row below, so one frame says which of them
+// a key reached.
+type bindRoot struct {
+	speaker
+	kids    []froth.Surface
+	handles []froth.Handle
+}
+
+func (r *bindRoot) Mount(ac *froth.ApplyCtx) {
+	for _, k := range r.kids {
+		r.handles = append(r.handles, ac.Create(k))
+	}
+	ac.SetLayout(under{})
+}
+
+func (r *bindRoot) Render(rc *froth.RenderCtx, rect froth.Rect) string {
+	return r.speaker.Render(rc, rect) + strings.Repeat(".", rect.W-1) +
+		"\n" + strings.Repeat(".", rect.W)
+}
+
+func (r *bindRoot) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	if m, ok := msg.(focusMsg); ok {
+		uc.Focus(m.to)
+		return
+	}
+	r.speaker.Update(uc, msg)
+}
+
+// binds is one binding on one key, which is all any of these tests needs.
+func binds(k string, a froth.Action) []froth.Binding {
+	return []froth.Binding{{Action: a, Keys: []string{k}, Help: string(a)}}
+}
+
+// bindTree stands a root over its children and settles the mounts, so the
+// handles are real by the time a test focuses one.
+func bindTree(t *testing.T, root *bindRoot) *froth.Froth {
+	t.Helper()
+	f := newSized(t, root, len(root.kids), 2)
+	f.View()
+	return f
+}
+
+func TestAnAncestorsBindingFiresWhileAChildHasFocus(t *testing.T) {
+	left, right := &speaker{letter: "l"}, &speaker{letter: "r"}
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: binds("q", "Q")},
+		kids:    []froth.Surface{left, right},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('q'))
+
+	if got, want := f.View().Content, "Q.\nlr"; got != want {
+		t.Errorf("View().Content = %q, want %q: the surface that declared the "+
+			"binding gets the action, not the one that had focus", got, want)
+	}
+}
+
+func TestADeeperBindingBeatsAnAncestorsForTheSameKey(t *testing.T) {
+	left, right := &speaker{letter: "l", bindings: binds("x", "L")}, &speaker{letter: "r"}
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: binds("x", "R")},
+		kids:    []froth.Surface{left, right},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('x'))
+
+	if got, want := f.View().Content, "..\nLr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+func TestADisabledBindingFallsThroughToAnAncestor(t *testing.T) {
+	left := &speaker{letter: "l", bindings: binds("x", "L")}
+	left.bindings[0].Disabled = true
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: binds("x", "R")},
+		kids:    []froth.Surface{left, &speaker{letter: "r"}},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('x'))
+
+	if got, want := f.View().Content, "R.\nlr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+func TestADisabledBindingWithNothingAboveItLetsTheRawKeyThrough(t *testing.T) {
+	left := &speaker{letter: "l", bindings: binds("x", "L")}
+	left.bindings[0].Disabled = true
+	root := &bindRoot{
+		speaker: speaker{letter: "."},
+		kids:    []froth.Surface{left, &speaker{letter: "r"}},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('x'))
+
+	if got, want := f.View().Content, "..\nxr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+func TestAnUnboundKeyStillReachesTheFocusedSurface(t *testing.T) {
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: binds("q", "Q")},
+		kids:    []froth.Surface{&speaker{letter: "l"}, &speaker{letter: "r"}},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('x'))
+
+	if got, want := f.View().Content, "..\nxr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+func TestABoundKeyNeverReachesASurfaceThatDeclaresNothing(t *testing.T) {
+	left := &focusable{letter: "l"}
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: binds("q", "Q")},
+		kids:    []froth.Surface{left, &focusable{letter: "r"}},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('q'))
+	f.Update(keyPress('x'))
+
+	if got, want := strings.Join(left.keys, ","), "x"; got != want {
+		t.Errorf("the focused surface saw %q, want %q: a key that matched a "+
+			"binding is not also delivered raw", got, want)
+	}
+}
+
+func TestBindingsOnOneSurfaceResolveInDeclarationOrder(t *testing.T) {
+	left := &speaker{letter: "l", bindings: []froth.Binding{
+		{Action: "A", Keys: []string{"x"}, Help: "first"},
+		{Action: "B", Keys: []string{"x"}, Help: "second"},
+	}}
+	root := &bindRoot{
+		speaker: speaker{letter: "."},
+		kids:    []froth.Surface{left, &speaker{letter: "r"}},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('x'))
+
+	if got, want := f.View().Content, "..\nAr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+func TestABindingOffTheFocusChainDoesNotFire(t *testing.T) {
+	left, right := &speaker{letter: "l"}, &speaker{letter: "r", bindings: binds("x", "R")}
+	root := &bindRoot{
+		speaker: speaker{letter: "."},
+		kids:    []froth.Surface{left, right},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('x'))
+
+	if got, want := f.View().Content, "..\nxr"; got != want {
+		t.Errorf("View().Content = %q, want %q: only the focus chain is "+
+			"searched, so a sibling's binding is not in play", got, want)
+	}
+}
+
+func TestOneBindingCanCarrySeveralKeys(t *testing.T) {
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: []froth.Binding{
+			{Action: "Q", Keys: []string{"q", "ctrl+c"}, Help: "quit"},
+		}},
+		kids: []froth.Surface{&speaker{letter: "l"}, &speaker{letter: "r"}},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+
+	if got, want := f.View().Content, "Q.\nlr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}

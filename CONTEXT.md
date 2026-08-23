@@ -109,8 +109,9 @@ never surface state.
 
 **Query**:
 A read-only walk over the surface tree collecting from surfaces that implement
-a given capability — help bindings being the first. The only synchronous call
-into a surface.
+a given capability — help bindings being the first. Queries and shortcut
+resolution are the only synchronous calls into a surface, and both read the same
+declarations.
 
 **Capture**:
 A claim on all mouse input regardless of what lies under the cursor. Held by at

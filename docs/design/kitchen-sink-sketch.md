@@ -8,9 +8,11 @@
 > Most of what is below is unbuilt. M1 shipped `Create`, `Mount`, `SetLayout`, `Focus`,
 > `Post`, `Run`, `Ctx` and three of the four context types (`MeasureCtx` waits for M7);
 > M2 gave `Create` its option list, as `Create(Surface, ...CreateOption)` — the name
-> `Option` was already taken by the instance options `New` takes. Everything concerning
-> intents, modals, the Environment, producers, reconcile, destroy, bindings and the
-> bubbles adapter is still design.
+> `Option` was already taken by the instance options `New` takes — and shipped `Binder`,
+> `Action`, `Binding` and `ActionMsg`, with `Binding` carrying froth's own key and help
+> fields rather than bubbles' `key.Binding`. Everything concerning intents, modals, the
+> Environment, producers, reconcile, destroy, the help query and the bubbles adapter is
+> still design.
 > [`milestone-log.md`](./milestone-log.md) records what shipped and where it diverged.
 
 Client code for a sample app, written as if froth existed. **None of this compiles.**
@@ -208,7 +210,8 @@ func (s *sessionList) Render(rc *froth.RenderCtx, r froth.Rect) string {
 func (s *sessionList) Bindings() []froth.Binding {
     return []froth.Binding{{
         Action: ActionDeleteSession,
-        Keys:   key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete session")),
+        Keys:   []string{"d"},
+        Help:   "delete session",
     }}
 }
 
@@ -828,11 +831,16 @@ func NewKeyDefault[T any](name string, def T) *Key[T]
 
 type Action  string              // stable identity for a shortcut
 type Binding struct {
-    Action Action
-    Keys   key.Binding           // default keys and help text
+    Action  Action
+    Keys    []string             // as Bubble Tea spells a key: "q", "ctrl+c"
+    Help    string               // what the action does
+    KeyHelp string               // how to spell the keys in help; empty means Keys does
+    Disabled      bool           // neither fires nor blocks resolution from going higher
     SurvivesModal bool           // still resolves from outside an open modal
 }
 type ActionMsg struct{ Action Action }
+
+type Binder interface{ Bindings() []Binding }
 ```
 
 ### Create options

@@ -286,3 +286,81 @@ gained an amendment: all three flags are about input, which is the word its test
 use, so it now says why input flags that change only what happens to their own surface are
 metadata — and where the line is for one that would redirect input away from where the
 tree says it goes.
+
+### #10 — Bindings resolve to actions along the focus chain
+
+**Shipped.** `Action`, `Binding`, `ActionMsg` and the `Binder` capability; resolution in
+`binding.go` matching a key press against the focus chain deepest first and addressing an
+`ActionMsg` to the surface that declared the winning binding; `destination` in update.go
+becomes `route`, which returns a whole envelope because a key press now changes its
+message as well as its address. The example's quit key moves to the root as a binding and
+fires while a pane holds focus; the panes declare their own binding for the cycle key, and
+tab stays a raw key they match themselves.
+
+**`Binding` carries froth's own fields, not bubbles' `key.Binding`.** The sketch wrote
+`Keys key.Binding`, which cannot be built: the spec's module boundaries make
+`froth/bubbleadapt` the only package depending on bubbles, and story 72 says so outright.
+`charm.land/bubbles/v2/key` is itself a leaf package with no non-stdlib imports, so the
+cost is not compiled code — it is that importing it drags the whole bubbles *module* and
+its eight transitive modules into every consumer's `go.sum`, SBOM and dependency scan.
+froth is a library, so that is a cost it imposes on people rather than pays.
+
+The reframe that made the choice cheap: `Binding` was always a wrapper. `Action` identity
+and `SurvivesModal` are froth concepts `key.Binding` has no room for, so the only question
+was whether the keys/help/enabled part held bubbles' type or froth's. It holds froth's:
+`Keys []string` spelled as Bubble Tea's `KeyMsg.String()` renders itself — which is what
+bubbles matches on too, so the fidelity is identical — plus `Help` and `KeyHelp`.
+
+`KeyHelp` exists for **lossless convertibility**. `key.Binding` exposes `Keys() []string`,
+`Help() struct{ Key, Desc string }` and `Enabled() bool`, all four exported, so a
+`key.Binding` converts into a froth `Binding` with nothing dropped — and an adapted
+bubbles component's `ShortHelp`/`FullHelp` is exactly what the help query will need to
+read. **The converter belongs in `bubbleadapt`, and lives there when that package
+exists**; writing it now would mean creating an M8 package for one function.
+
+**Enabled-ness is a `Disabled bool` field, not a method or a closure.** `Bindings()` is
+answered fresh on every key press and every help walk, so a surface recomputes the field
+from its own state at the moment it is asked; a `func() bool` would buy nothing that a
+value recomputed just as often does not already give. ADR 0008 asks only that help can
+tell a disabled binding from an enabled one at query time, and a field is queryable
+without firing anything. It is phrased as `Disabled` rather than bubbles' `Enabled` so the
+zero `Binding` is one that works.
+
+**How resolution resolves ties.** Deepest surface on the chain first; within one surface,
+the first binding in the returned slice that lists the key. Both are pinned by tests. A
+surface off the focus chain is not consulted at all, and a disabled binding is skipped
+entirely rather than counting as a match — the key keeps climbing, and reaches the focused
+surface raw if nothing above claims it.
+
+**Only a key *press* resolves.** `tea.KeyMsg` is an interface covering press and release,
+and matching both would fire every action twice. A release goes to the focused surface as
+a raw key, which is what M1 did with it.
+
+**Next tickets should know.**
+
+- **`Bindings()` is called with no phase in progress and no context.** A surface cannot
+  reach froth from inside it, which is the constraint that keeps a synchronous call into
+  application code safe. It may be called more than once for one key press. The help query
+  (#14) is the second such call and inherits the same rule.
+- **`resolve` walks `f.chainTo(f.focused())`**, not `f.focusChain()`, so it agrees with
+  where a raw key would have gone when focus names nothing and falls back to the root.
+- **#11's text sink goes inside `resolve`**, before the per-surface loop: the focused
+  node's `meta.textSink` is readable there, so no accessor has to be added to any context.
+- **#12's navigation bindings are froth's own**, and nothing in `resolve` knows about
+  froth-owned bindings yet — the walk asks surfaces and nothing else. The example still
+  calls `uc.FocusNext()`/`FocusPrev()` from a raw key handler, which is the workaround that
+  ticket removes.
+- **#14 reads the same `Bindings()` declarations**, so help cannot drift from what fires.
+  `Help` is the description and `KeyHelp` the optional key spelling; how several keys are
+  joined when `KeyHelp` is empty is the help query's presentation choice, not stored here.
+- **`SurvivesModal` is stored and read by nobody.** There are no modals, so nothing
+  truncates the chain for it to survive. M4 both truncates and honours it.
+- **The remap layer is still unbuilt.** `Binding.Keys` is the default keys with no override
+  table in front of it, which is what ADR 0008 says v1 ships; identity is what makes adding
+  one later not a rewrite.
+
+**Documents corrected in this change.** The sketch's status note, its `Binding` reference
+block (which named `key.Binding`) and its worked `Bindings()` example, which called
+`key.NewBinding`. `CONTEXT.md`'s **Query** entry said a query was the *only* synchronous
+call into a surface; shortcut resolution is the other one, and both read the same
+declarations.

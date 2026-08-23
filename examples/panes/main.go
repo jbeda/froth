@@ -17,9 +17,10 @@
 // froth abandons it, reports it through the diagnostic hook, and the program
 // carries on.
 //
-// The quit and tab keys sit on the panes rather than the root because a raw key
-// reaches only the focused surface. Bindings declared along the focus chain are
-// what move them.
+// Quit is a binding declared by the root, so it fires while a pane holds focus:
+// froth matches the key against the focus chain and hands the action to the
+// surface that declared it. The panes declare one of their own, and tab is
+// still a raw key they match themselves.
 package main
 
 import (
@@ -48,6 +49,14 @@ type cycleMsg struct{}
 // called with no phase in progress and so has no context to post through; a
 // value shared with the surface that draws it is the way onto the screen.
 type report struct{ text string }
+
+// The actions the application declares. An action is an identity rather than a
+// key: the root answers actionQuit wherever focus is, and the panes answer
+// actionCycle only while they hold it.
+const (
+	actionQuit  froth.Action = "quit"
+	actionCycle froth.Action = "cycle"
+)
 
 // root is the surface the application hands froth. It creates the panes it is
 // made of, says how they sit, and says which of them starts focused — all in
@@ -112,9 +121,24 @@ func (rt *root) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Render(strings.Join(rows, "\n"))
 }
 
-// The root sees no keys — those go to the focused pane — and nothing else is
-// addressed to it, so it has nothing to handle.
-func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {}
+// Quit belongs to the whole application, so the root declares it and the panes
+// know nothing about it.
+func (rt *root) Bindings() []froth.Binding {
+	return []froth.Binding{{
+		Action:        actionQuit,
+		Keys:          []string{"q", "ctrl+c"},
+		Help:          "quit",
+		SurvivesModal: true,
+	}}
+}
+
+// The root sees no raw keys — those go to the focused pane — so the only thing
+// addressed to it is the action it declared.
+func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	if m, ok := msg.(froth.ActionMsg); ok && m.Action == actionQuit {
+		uc.Run(tea.Quit)
+	}
+}
 
 // onDiagnostic is froth's one hook, registered at construction. It is ordinary
 // application code called with no phase in progress, so it is free to touch the
@@ -178,12 +202,26 @@ func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Render(content)
 }
 
+// The cycle binding is the pane's own, so it resolves only while this pane is
+// on the focus chain.
+func (p *pane) Bindings() []froth.Binding {
+	return []froth.Binding{{
+		Action: actionCycle,
+		Keys:   []string{"d"},
+		Help:   "post a message that comes back",
+	}}
+}
+
 func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	switch msg := msg.(type) {
+	case froth.ActionMsg:
+		if msg.Action == actionCycle {
+			// Answering a message with the same message is the cycle the
+			// iteration cap is for.
+			uc.Post(uc.Self(), cycleMsg{})
+		}
 	case tea.KeyMsg:
 		switch key := msg.String(); key {
-		case "q", "ctrl+c":
-			uc.Run(tea.Quit)
 		case "tab", "shift+tab":
 			// froth walks the tree; the pane only says which way. Focus is
 			// structural, so the move commits in the Apply after this delivery
@@ -194,10 +232,6 @@ func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 				uc.FocusPrev()
 			}
 			p.status = "asked froth for the " + key + " stop, and it walked the tree"
-		case "d":
-			// Answering a message with the same message is the cycle the
-			// iteration cap is for.
-			uc.Post(uc.Self(), cycleMsg{})
 		default:
 			p.status = "I had focus, so froth gave me " + strconv.Quote(key)
 			uc.Post(p.sibling, echoMsg{key: key})

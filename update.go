@@ -20,15 +20,28 @@ type envelope struct {
 	msg tea.Msg
 }
 
-// destination is where a message arriving from Bubble Tea goes. A key goes to
-// the focused surface and to nothing else; everything else goes to the root,
-// which is the surface the application handed froth and so the one its own
-// messages belong at.
-func (f *Froth) destination(msg tea.Msg) Handle {
-	if _, ok := msg.(tea.KeyMsg); ok {
-		return f.focused()
+// route addresses a message arriving from Bubble Tea, and is where a key press
+// stops being a key.
+//
+// A press that matches a binding on the focus chain becomes an ActionMsg
+// addressed to the surface that declared it, which is not necessarily the
+// focused one. A press that matches nothing, and every other key event, goes to
+// the focused surface as it stands. Everything else goes to the root, which is
+// the surface the application handed froth and so the one its own messages
+// belong at.
+//
+// Only a press resolves. A release is the same key arriving a second time, so
+// matching it would fire every action twice.
+func (f *Froth) route(msg tea.Msg) envelope {
+	if k, ok := msg.(tea.KeyPressMsg); ok {
+		if to, a, ok := f.resolve(k); ok {
+			return envelope{to: to, msg: ActionMsg{Action: a}}
+		}
 	}
-	return f.root
+	if _, ok := msg.(tea.KeyMsg); ok {
+		return envelope{to: f.focused(), msg: msg}
+	}
+	return envelope{to: f.root, msg: msg}
 }
 
 // A budget bounds one settle pass. Delivering a message and mounting a surface
