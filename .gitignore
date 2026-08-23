@@ -9,3 +9,6 @@ HANDOFF.md
 
 # Build output (task build)
 /bin/
+
+# go-task's local checksum cache
+/.task/
