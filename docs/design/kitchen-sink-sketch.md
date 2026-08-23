@@ -629,7 +629,13 @@ func (d *confirmDialog) Render(rc *froth.RenderCtx, r froth.Rect) string {
 ```
 
 Tab moves between the buttons because they are surfaces in a focus scope. Nothing here
-mentions hit-testing, click regions, or focus rings. Button is froth's own — bubbles
+mentions hit-testing, click regions, or focus rings.
+
+**Tab order is child order.** There are two orders in froth and no third: the child list
+drives what a layout arranges, the depth-first walk, and keyboard traversal; `Z` affects
+stacking alone. `NoTabStop` takes a surface out of traversal without moving it. Win32 has
+no separate focus index either — its dialog manager searches in the order controls were
+created — and HTML's `tabindex` is the standing example of what a third order costs. Button is froth's own — bubbles
 has no button, because in a single-model world a button is just a styled string.
 
 `Mount` is new: a surface needs somewhere to create children, and it can't be the
@@ -822,6 +828,7 @@ type Action  string              // stable identity for a shortcut
 type Binding struct {
     Action Action
     Keys   key.Binding           // default keys and help text
+    SurvivesModal bool           // still resolves from outside an open modal
 }
 type ActionMsg struct{ Action Action }
 ```

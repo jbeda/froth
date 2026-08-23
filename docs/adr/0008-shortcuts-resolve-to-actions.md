@@ -40,3 +40,21 @@ own internal keymaps, which froth cannot see or remap; rebinding those means
 mutating the component's keymap directly.
 
 Chorded sequences need pending state in the resolver. Not built, not foreclosed.
+
+## Amendment: modality truncates the chain
+
+Settled before M2 was sliced. A modal takes input for its parent's whole subtree, and
+that has to mean bindings as well as raw keys: with focus inside a modal the chain still
+runs modal → … → root, so on the rule above every ancestor's bindings would keep firing
+underneath it. **Resolution stops at the modal.** Nothing above it matches.
+
+One exception, declared rather than built in: a binding carries a `SurvivesModal` flag,
+and those still resolve from above. It survives modality only — not focus scopes, not
+anything else — and any surface may declare one.
+
+froth owns no bindings of its own and hardcodes no quit key. The consequence is
+deliberate and worth stating plainly: an application that marks nothing as surviving can
+write a modal it cannot quit past, and froth will not save it. The alternative is froth
+deciding what quit means, which is worse — a double-tap `ctrl-c` is a common and
+perfectly reasonable policy, and it belongs to the application. Such a policy needs no
+new mechanism either: the surface receives its action twice and compares timestamps.

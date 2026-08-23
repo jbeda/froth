@@ -19,7 +19,10 @@ Read in this order before changing anything:
 5. **`docs/design/milestone-log.md`** — what has actually been built, what changed
    against the design while building it, and which design assumptions are still
    untested.
-6. **Issue #1** — the spec, including the milestone breakdown.
+6. **Issue #1, with its comments** — the spec and the milestone breakdown. Read it as
+   `gh issue view 1 --comments`: scope changes and decisions taken ahead of a milestone's
+   slicing are recorded as comments, not by editing the body, so the body alone is out of
+   date. Reparent being cut and M2's input decisions both live there.
 
 The example application is real, current code and is often the fastest way to
 understand the API.
