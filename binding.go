@@ -4,7 +4,11 @@
 
 package froth
 
-import tea "charm.land/bubbletea/v2"
+import (
+	"unicode"
+
+	tea "charm.land/bubbletea/v2"
+)
 
 // An Action is the stable identity of a shortcut, chosen by whoever declares
 // it. A surface handles actions rather than keys, so the keys that reach it can
@@ -92,9 +96,19 @@ func (b *Binding) matches(k string) bool {
 // The chain is walked from the focused surface rather than from f.focus, so
 // resolution and a raw key agree about where the deep end is when focus names
 // nothing.
+//
+// A focused text sink is asked first: it takes typing as characters, so a bare
+// printable matches nothing anywhere on the chain, its own bindings included.
 func (f *Froth) resolve(k tea.KeyPressMsg) (Handle, Action, bool) {
+	focused := f.focused()
+	if isTyping(k) {
+		if n := f.reg.get(focused); n != nil && n.meta.textSink {
+			return Handle{}, "", false
+		}
+	}
+
 	pressed := k.String()
-	chain := f.chainTo(f.focused())
+	chain := f.chainTo(focused)
 	for i := len(chain) - 1; i >= 0; i-- {
 		n := f.reg.get(chain[i])
 		if n == nil {
@@ -112,4 +126,20 @@ func (f *Froth) resolve(k tea.KeyPressMsg) (Handle, Action, bool) {
 		}
 	}
 	return Handle{}, "", false
+}
+
+// chordMods are the modifiers that make a press a chord rather than typing.
+// Shift and the lock keys are not among them: they decide which character the
+// key produces, not whether it produced one, so a capital and a "?" are typing
+// as much as a lower-case letter is.
+const chordMods = tea.ModCtrl | tea.ModAlt | tea.ModMeta | tea.ModHyper | tea.ModSuper
+
+// isTyping reports whether a press is a bare printable key: it produced a
+// character and no chord modifier was held.
+//
+// Text is the terminal's answer and is empty for keys that print nothing, so
+// enter, tab, escape and the arrows are never typing. Code covers a press froth
+// was handed rather than decoded from a terminal, which carries no text.
+func isTyping(k tea.KeyPressMsg) bool {
+	return k.Mod&chordMods == 0 && (k.Text != "" || unicode.IsPrint(k.Code))
 }

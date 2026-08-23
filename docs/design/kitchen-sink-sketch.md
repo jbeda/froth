@@ -10,9 +10,9 @@
 > M2 gave `Create` its option list, as `Create(Surface, ...CreateOption)` — the name
 > `Option` was already taken by the instance options `New` takes — and shipped `Binder`,
 > `Action`, `Binding` and `ActionMsg`, with `Binding` carrying froth's own key and help
-> fields rather than bubbles' `key.Binding`. Everything concerning intents, modals, the
-> Environment, producers, reconcile, destroy, the help query and the bubbles adapter is
-> still design.
+> fields rather than bubbles' `key.Binding`, and the text sink that keeps typing out of
+> them. Everything concerning intents, modals, the Environment, producers, reconcile,
+> destroy, the help query and the bubbles adapter is still design.
 > [`milestone-log.md`](./milestone-log.md) records what shipped and where it diverged.
 
 Client code for a sample app, written as if froth existed. **None of this compiles.**
@@ -862,8 +862,8 @@ froth.AutoRaise()      // raise among siblings on focus; off by default
 froth.TabStop()        // admit to keyboard navigation; off by default
 ```
 
-**Built so far (M2):** `TabStop`, which works; `FocusScope` and `TextSink`, which are
-stored and read by nobody until the tickets that give them behaviour. The rest waits for
+**Built so far (M2):** `TabStop` and `TextSink`, which work; `FocusScope`, which is
+stored and read by nobody until the ticket that gives it behaviour. The rest waits for
 the milestones that give it a consumer — a layout that weighs children, modality, a
 stacking order a surface can set — because a flag stored against semantics nobody has
 had to implement is a guess later code has to honour.

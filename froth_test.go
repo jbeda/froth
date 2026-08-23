@@ -1524,12 +1524,17 @@ func (under) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
 type bindRoot struct {
 	speaker
 	kids    []froth.Surface
+	opts    [][]froth.CreateOption
 	handles []froth.Handle
 }
 
 func (r *bindRoot) Mount(ac *froth.ApplyCtx) {
-	for _, k := range r.kids {
-		r.handles = append(r.handles, ac.Create(k))
+	for i, k := range r.kids {
+		var opts []froth.CreateOption
+		if i < len(r.opts) {
+			opts = r.opts[i]
+		}
+		r.handles = append(r.handles, ac.Create(k, opts...))
 	}
 	ac.SetLayout(under{})
 }
@@ -1710,6 +1715,217 @@ func TestOneBindingCanCarrySeveralKeys(t *testing.T) {
 	f.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 
 	if got, want := f.View().Content, "Q.\nlr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// Text sinks
+//
+// sink is the option list for a surface that consumes ordinary typing.
+var sink = []froth.CreateOption{froth.TextSink()}
+
+// typed is a key press as a terminal delivers ordinary typing: the character it
+// produced, in Text as well as Code.
+func typed(r rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: r, Text: string(r)} }
+
+// sinkTree stands a root that binds bound over a text sink and a plain sibling,
+// and gives the sink focus.
+func sinkTree(t *testing.T, bound []froth.Binding) (*froth.Froth, *bindRoot) {
+	t.Helper()
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: bound},
+		kids:    []froth.Surface{&speaker{letter: "f"}, &speaker{letter: "o"}},
+		opts:    [][]froth.CreateOption{sink},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+	return f, root
+}
+
+func TestABarePrintableKeyReachesAFocusedTextSinkRaw(t *testing.T) {
+	f, _ := sinkTree(t, binds("q", "Q"))
+
+	f.Update(typed('q'))
+
+	if got, want := f.View().Content, "..\nqo"; got != want {
+		t.Errorf("View().Content = %q, want %q: typing must reach the sink and "+
+			"fire nobody's binding", got, want)
+	}
+}
+
+func TestATextSinkSuppressesItsOwnBindingsToo(t *testing.T) {
+	root := &bindRoot{
+		speaker: speaker{letter: "."},
+		kids: []froth.Surface{
+			&speaker{letter: "f", bindings: binds("q", "Q")},
+			&speaker{letter: "o"},
+		},
+		opts: [][]froth.CreateOption{sink},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(typed('q'))
+
+	if got, want := f.View().Content, "..\nqo"; got != want {
+		t.Errorf("View().Content = %q, want %q: a bare printable matches no "+
+			"binding anywhere, the sink's own included", got, want)
+	}
+}
+
+func TestAPrintableKeyWithNoTextIsStillTyping(t *testing.T) {
+	f, _ := sinkTree(t, binds("q", "Q"))
+
+	f.Update(keyPress('q'))
+
+	if got, want := f.View().Content, "..\nqo"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+func TestAModifiedChordStillResolvesWhileATextSinkHasFocus(t *testing.T) {
+	f, _ := sinkTree(t, []froth.Binding{{Action: "Q", Keys: []string{"ctrl+c"}, Help: "quit"}})
+
+	f.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+
+	if got, want := f.View().Content, "Q.\nfo"; got != want {
+		t.Errorf("View().Content = %q, want %q: a chord is not typing, so an "+
+			"ancestor's binding still fires", got, want)
+	}
+}
+
+// A named key prints nothing, so it is not typing however few modifiers were
+// held — a dialog's escape has to keep working while a field holds focus.
+func TestKeysThatPrintNothingStillResolveWhileATextSinkHasFocus(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		key  tea.KeyPressMsg
+	}{
+		{"enter", tea.KeyPressMsg{Code: tea.KeyEnter}},
+		{"tab", tea.KeyPressMsg{Code: tea.KeyTab}},
+		{"esc", tea.KeyPressMsg{Code: tea.KeyEscape}},
+		{"up", tea.KeyPressMsg{Code: tea.KeyUp}},
+		{"shift+tab", tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f, _ := sinkTree(t, binds(c.name, "K"))
+
+			f.Update(c.key)
+
+			if got, want := f.View().Content, "K.\nfo"; got != want {
+				t.Errorf("View().Content = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// Shift makes a different character, not a chord, so a capital and a "?" are
+// ordinary typing and reach the sink.
+func TestAShiftedCharacterIsTypingWhileATextSinkHasFocus(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		key  tea.KeyPressMsg
+		want string
+	}{
+		{"capital", tea.KeyPressMsg{Code: 'a', Text: "A", Mod: tea.ModShift}, "..\nAo"},
+		{"question", tea.KeyPressMsg{Code: '/', Text: "?", Mod: tea.ModShift}, "..\n?o"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f, _ := sinkTree(t, binds(c.key.String(), "H"))
+
+			f.Update(c.key)
+
+			if got := f.View().Content; got != c.want {
+				t.Errorf("View().Content = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestASurfaceThatIsNotATextSinkMatchesOrdinaryTyping(t *testing.T) {
+	f, root := sinkTree(t, binds("q", "Q"))
+	f.Update(focusMsg{to: root.handles[1]})
+
+	f.Update(typed('q'))
+
+	if got, want := f.View().Content, "Q.\nfo"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+func TestMovingFocusOffATextSinkRestoresMatching(t *testing.T) {
+	f, root := sinkTree(t, binds("q", "Q"))
+	f.Update(typed('q'))
+
+	f.Update(focusMsg{to: root.handles[1]})
+	f.Update(typed('q'))
+
+	if got, want := f.View().Content, "Q.\nqo"; got != want {
+		t.Errorf("View().Content = %q, want %q: the flag follows focus and "+
+			"leaves nothing set behind the move", got, want)
+	}
+}
+
+// deep is a speaker with a child of its own, for a text sink that sits on the
+// focus chain without being its deep end.
+type deep struct {
+	speaker
+	kid   froth.Surface
+	child froth.Handle
+}
+
+func (d *deep) Mount(ac *froth.ApplyCtx) {
+	d.child = ac.Create(d.kid)
+	ac.SetLayout(under{})
+}
+
+func TestATextSinkAboveTheFocusedSurfaceSuppressesNothing(t *testing.T) {
+	leaf := &speaker{letter: "l"}
+	mid := &deep{speaker: speaker{letter: "p"}, kid: leaf}
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: binds("q", "Q")},
+		kids:    []froth.Surface{mid},
+		opts:    [][]froth.CreateOption{sink},
+	}
+	f := newSized(t, root, 1, 3)
+	f.View()
+	f.Update(focusMsg{to: mid.child})
+
+	f.Update(typed('q'))
+
+	if got, want := f.View().Content, "Q\np\nl"; got != want {
+		t.Errorf("View().Content = %q, want %q: only the focused surface's own "+
+			"flag suppresses matching", got, want)
+	}
+}
+
+// Space prints a character, so it is typing — even though it is the one key
+// whose String() is a name rather than the character it produced. The sink
+// draws "space" clipped to its one cell.
+func TestSpaceIsTypingWhileATextSinkHasFocus(t *testing.T) {
+	f, _ := sinkTree(t, binds("space", "S"))
+
+	f.Update(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+
+	if got, want := f.View().Content, "..\nso"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// The shape the example ships: one binding on a bare printable and a chord.
+// While the sink has focus the printable is typing and the chord still quits.
+func TestABindingOnBothAPrintableAndAChordKeepsTheChordWhileATextSinkHasFocus(t *testing.T) {
+	f, _ := sinkTree(t, []froth.Binding{
+		{Action: "Q", Keys: []string{"q", "ctrl+c"}, Help: "quit"},
+	})
+
+	f.Update(typed('q'))
+	if got, want := f.View().Content, "..\nqo"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+
+	f.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if got, want := f.View().Content, "Q.\nqo"; got != want {
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
 }

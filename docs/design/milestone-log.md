@@ -364,3 +364,71 @@ block (which named `key.Binding`) and its worked `Bindings()` example, which cal
 `key.NewBinding`. `CONTEXT.md`'s **Query** entry said a query was the *only* synchronous
 call into a surface; shortcut resolution is the other one, and both read the same
 declarations.
+
+### #11 — Text sink
+
+**Shipped.** `TextSink()` acts: `resolve` asks the focused node whether it is one before
+it walks the chain, and a key that counts as typing matches nothing and reaches that
+surface raw. The example grows a filter field along the top, created with
+`froth.TabStop()` and `froth.TextSink()`, and an application-local layout that gives the
+first child a strip and hands the rest to `layout.Row`.
+
+**What counts as "bare printable", exactly.** A press is typing when it produced a
+character and no chord modifier was held:
+
+- **Chord modifiers are ctrl, alt, meta, hyper and super.** Shift and the lock keys are
+  deliberately not among them: they decide *which* character a key produces, not whether
+  it produced one, so `A` and `?` are typing exactly as `a` is — and a `?` help binding
+  therefore does not fire while a field has focus, which is the point. `shift+tab` is
+  still not typing, because tab prints nothing whatever is held with it.
+- **"Produced a character" is `Key.Text` non-empty, or a printable `Key.Code`.** Text is
+  Bubble Tea's own answer — its decoder fills it for printable keys and clears it for
+  anything carrying a modifier other than shift — and it is empty for enter, tab, escape
+  and the arrows, which is what keeps a dialog's escape working while a field is focused.
+  The `Code` half covers a press froth was handed rather than decoded from a terminal,
+  which carries no text; without it a synthetic `KeyPressMsg{Code: 'q'}` would be a
+  shortcut and a real one would be typing.
+- Space is typing. `Key.String()` renders it `"space"` rather than `" "`, so a binding on
+  it is spelled `"space"` and stops resolving while a sink has focus like any other
+  character does.
+
+Rejected: keying on `String()` alone, which cannot tell `?` from a named key without
+re-deriving the classification the fields already carry; and treating shift as a chord,
+which would make a capital letter unavailable to a text field.
+
+**The check is on the focused surface, not the chain.** `resolve` reads
+`f.reg.get(f.focused()).meta.textSink` before the per-surface loop, so a sink that is an
+*ancestor* of the focused surface suppresses nothing — the flag is about where input
+lands, and input lands at the deep end. Nothing is stored anywhere when focus moves: the
+flag is read from the node on every press, so moving off a sink restores matching with no
+state to unwind. No accessor was added to any context; nothing outside `resolve` needs to
+know.
+
+**Suppression is total, the sink's own bindings included.** A bare printable matches
+nothing *anywhere* on the chain rather than skipping ancestors and stopping at the sink.
+A surface that both consumes typing and wants a printable shortcut is asking for two
+incompatible things; the modified chord is the way to have both.
+
+**The example's filter is not a text input.** It appends `Key.Text`, drops the last rune
+on backspace, and draws what it has. No cursor, no selection, no history — the bubbles
+adapter is where a real one comes from. It handles tab and shift-tab itself, the same
+workaround the panes use, because froth still binds no navigation key of its own. It also
+matches only `tea.KeyPressMsg`: a release is the same key arriving a second time and
+would put every character in twice.
+
+**Next tickets should know.**
+
+- **`isTyping` is the only place froth interprets a key beyond `String()`.** #12's
+  navigation bindings are chords and named keys, so none of them is typing and none needs
+  to reason about the sink; a navigation binding on a bare printable would be suppressed
+  inside a field, which is correct.
+- **#14's help query is unaffected by the flag.** A binding suppressed for a key press is
+  still declared, and help lists what a surface declares. If help should say that typing
+  wins here, that is a presentation decision the query makes from the metadata, not
+  something resolution records.
+- **A layout may be the application's.** The example implements `froth.Layout` itself and
+  delegates the remaining space to `layout.Row`, which is the first thing in the repo to
+  show that composing stock layouts needs no support from froth.
+
+**Documents corrected in this change.** The sketch's status note and its Create-options
+block, which said `TextSink` was stored and read by nobody.
