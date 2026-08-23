@@ -124,6 +124,7 @@ func (f *Froth) place(screen Rect) []placement {
 
 	var out []placement
 	f.placeSubtree(token, f.root, screen, &out)
+	f.renderedFrame = out
 	return out
 }
 

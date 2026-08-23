@@ -24,3 +24,11 @@ func (r Rect) Size() Size { return Size{W: r.W, H: r.H} }
 
 // Empty reports whether r has no cells.
 func (r Rect) Empty() bool { return r.W <= 0 || r.H <= 0 }
+
+// The far edges and centres, in the same screen coordinates as X and Y. A rect
+// is a position and an extent rather than two corners, so the arithmetic is
+// written once here instead of at every comparison.
+func (r Rect) right() int  { return r.X + r.W }
+func (r Rect) bottom() int { return r.Y + r.H }
+func (r Rect) midX() int   { return r.X + r.W/2 }
+func (r Rect) midY() int   { return r.Y + r.H/2 }

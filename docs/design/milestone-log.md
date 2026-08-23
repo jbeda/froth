@@ -617,3 +617,107 @@ surface always finds itself on the chain.
 
 **Whether froth has a default opinion about which containers draw active is still open.**
 This is the tool, not the policy. The example applies it to its scope pane's border.
+
+### #13 — Directional focus movement
+
+**Shipped.** `ActionFocusLeft`, `ActionFocusRight`, `ActionFocusUp` and `ActionFocusDown`,
+froth-owned and serviced beside `ActionFocusNext`/`ActionFocusPrev`, bound to `alt+left`,
+`alt+right`, `alt+up` and `alt+down`. Resolution is in `direction.go`; the premise is
+[ADR 0013](../adr/0013-direction-is-resolved-geometrically.md) and the scope bound is a
+second amendment to [ADR 0011](../adr/0011-a-focus-scope-is-closed-to-traversal.md).
+
+**How a direction resolves to a surface.** A candidate is a tab stop in the source's scope
+with both of its edges moved the way the key points. Among candidates, these tests are
+applied in order and the first that separates two of them decides:
+
+1. A candidate whose perpendicular extent overlaps the source's beats one whose does not,
+   outright.
+2. Least distance along the direction of travel, source's leading edge to the candidate's
+   nearest one — clamped at zero, so a candidate that overlaps the source scores the same
+   as one sitting flush against it rather than better for reaching further in.
+3. Least distance between perpendicular centres.
+4. Reading order: topmost, then leftmost.
+5. Drawn last, and so on top.
+
+**The fifth test exists because the order has to be total, and the first four are not.** A container
+that never calls `SetLayout` gets its children its own whole rect, so two stops at
+identical rects are ordinary rather than contrived — and they tie on every geometric test.
+Without a final test the winner would be whichever `scopeOrder` yielded first, which is
+declaration order: the tree structure deciding a geometric move, which is the one input
+this rule refuses. Paint order ends it, because two surfaces cannot share a place in the
+frame and the one drawn over the other is the one the user is looking at. This is not
+occlusion — nothing computes whether a candidate is covered — it is only which of two
+surfaces in the same place is on top.
+
+**Reading order is the test that matters most, and it is why neither reference algorithm
+was imported.** Android's `FocusFinder` ends on `13 * major² + minor²` and CSS's `css-nav-1`
+on `euclidean + displacement − alignment − sqrt(overlap)`; both are tuned for pixel
+geometry, where exact ties essentially never occur, and both therefore treat the final
+tie-break as an afterthought. froth's rects are **integer cells produced by tiling
+layouts**, so a row of equal panes ties on every geometric test. A formula borrowed from
+pixels would tie constantly and then resolve by whatever order the placement walk happened
+to produce — exactly the "fell out of the implementation" outcome the ticket forbade. The
+order must bottom out in something total, and it does.
+
+**Reading order rather than traversal order**, though "when geometry cannot decide, arrows
+agree with tab" was the tempting property. Traversal order is *declaration* order: a layout
+free to place children in any order it likes can already produce a tab sequence that
+visibly jumps around, and tie-breaking to it would import that jump into arrows at the
+moment the user is least able to explain what happened. Every input to the rule stays a
+rect. This test is a two-way door and is built as one — it lives here and in `direction.go`
+rather than in the ADR.
+
+**The candidate predicate is "both edges moved that way",** which is Android's `isCandidate`
+with a redundancy removed: its `LEFT` clause reads
+`(src.right > dst.right || src.left >= dst.right) && src.left > dst.left`, and the second
+disjunct cannot be true while the first is false for any source with width. The two forms
+diverge only for a zero-width source, which resolves to "nothing moves" anyway. Requiring
+no overlap at all was rejected — #12 made a scope a stop within itself, so a stop can
+contain another one, and a no-overlap predicate would silently strand every nested stop.
+
+**`shift` with the arrows, chosen from measurement rather than from reasoning.** Two
+earlier answers were picked by argument and both were wrong, so the keys were tested
+through a real chain — Ghostty on macOS, over mosh and ssh into tmux — with a program that
+prints what Bubble Tea actually receives. That program is now `examples/keys`, because the
+question recurs.
+
+What arrives, and what does not:
+
+| combination | result |
+| --- | --- |
+| `alt+left` / `alt+right` | **never arrives.** Ghostty binds them to `esc:b` / `esc:f` by default on macOS, [explicitly because Terminal.app does](https://ghostty.org/docs/config/keybind), and iTerm2's Natural Text Editing preset does the same. The program receives `alt+b` / `alt+f`. Unbinding it in the terminal is [reported not to reliably work](https://github.com/ghostty-org/ghostty/discussions/7740). |
+| `alt+up` / `alt+down` | arrives — only left and right carry word movement |
+| `ctrl+left` / `ctrl+right` | **never arrives.** macOS Mission Control takes them above the terminal, so no terminal setting can return them. |
+| `shift` with any arrow | arrives |
+| bare arrows | arrive |
+
+So `alt` is broken on one axis on macOS by default, and `ctrl` is broken at the OS level.
+`shift` is what is left. Its own collision is real — shift with an arrow is text selection
+by GUI convention — but froth has no selection concept, and a surface that grows one
+declares the keys and wins, which is the path that already exists.
+
+**Bare arrows were reconsidered and rejected on a better argument than the first one.**
+The obvious objection — that a list or text field wants them — is mostly answered by
+resolution order already: `resolve` walks the focus chain before it reaches
+`frothBindings`, so any surface declaring `up` beats froth's stock binding while it holds
+focus. The real objection is what that adds up to. In a rich TUI most focusable things
+want arrows, so bare-arrow focus movement would work only on the surfaces that do nothing
+with them — the gesture would be unavailable exactly where there is most to navigate
+between. A modifier keeps it meaning one thing everywhere. An application whose surfaces
+do not want arrows opts in with four declarations.
+
+**This is the decision most likely to change**, and #22 is where it gets felt out. That
+`examples/keys` has to be a separate program to see keys froth would otherwise resolve is
+its own gap, collected as #23.
+
+**Geometry is retained as `Froth.renderedFrame`,** the ordered `[]placement` that `place`
+already builds, written on every render. The name is `CONTEXT.md`'s — **Rendered frame** —
+and "last frame" is on its `_Avoid_` list. Ordered rather than a map because order is paint
+order, which answers both the last of those tests and, when mouse input arrives,
+hit-testing topmost-first. It can name surfaces destroyed since the frame was drawn;
+candidates come from `scopeOrder`, which walks the live tree, so the filtering is
+structural rather than defensive.
+
+**Reachability is best-effort and that is now written down** — in ADR 0013, and as
+candidate checks on #21: a warning for a focusable surface with no area, and a mode that
+asserts every stop is directionally reachable over an application's own layout.

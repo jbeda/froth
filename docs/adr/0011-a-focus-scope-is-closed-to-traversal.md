@@ -43,3 +43,26 @@ scope's first stop.
 
 Modality is a separate flag and arrives later. A modal will be a scope, but a scope is not
 a modal: this decides where the keyboard walks, not who receives input.
+
+## Amendment: the boundary bounds directional movement too
+
+A directional move is bounded by the focus scope exactly as traversal is, and by the same
+implementation: candidates come from `scopeOrder` of the source's scope, so a nested scope
+and everything under it are absent, and the scope surface itself is present. There is one
+answer to "where can the keyboard go" rather than two that can disagree.
+
+**When the geometrically obvious target is outside the scope, nothing moves.** This is the
+question traversal never had to answer, because tab's wall is invisible and nobody expects
+to cross it. A spatial wall is *visible*: the user is aiming at something they can see and
+pressing the key that points at it.
+
+The alternative — clamp to the nearest candidate inside the scope — was rejected. It is
+never silent, which is its whole appeal, but it can move focus away from the direction
+pressed, and moving left when the user pressed right teaches that the rule is
+unpredictable. Nothing-moved teaches that there is a wall, which is true, and is re-learned
+consistently at every edge of every scope.
+
+Precedent agrees on the bound: Android's `FocusFinder` and the WICG spatial-navigation
+proposal both search within a container rather than the whole screen. Neither has a
+satisfying answer to what happens at the edge, which is why this one is chosen on purpose
+rather than left to fall out.

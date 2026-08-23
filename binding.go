@@ -37,6 +37,19 @@ const (
 	// binds shift+tab to it.
 	ActionFocusPrev Action = "froth.focus.prev"
 
+	// ActionFocusLeft, ActionFocusRight, ActionFocusUp and ActionFocusDown move
+	// focus geometrically, to the surface that way in the frame last drawn.
+	// froth services them and binds shift with the arrow keys. Bare arrows
+	// belong to whatever holds focus — a list's selection, a table's row — and
+	// a surface declaring them already wins over these, so froth taking them
+	// would leave the gesture working only where there is least to navigate.
+	// An application that wants the bare keys declares these actions with them,
+	// the same way it rebinds tab.
+	ActionFocusLeft  Action = "froth.focus.left"
+	ActionFocusRight Action = "froth.focus.right"
+	ActionFocusUp    Action = "froth.focus.up"
+	ActionFocusDown  Action = "froth.focus.down"
+
 	// ActionCancel asks whatever is in front to back out — dismiss a dialog,
 	// abandon an edit. froth owns the identity so surfaces and applications
 	// agree on one spelling, and binds no key to it: nothing froth implements
@@ -55,6 +68,10 @@ const (
 var frothBindings = []Binding{
 	{Action: ActionFocusNext, Keys: []string{"tab"}, Help: "move focus to the next surface"},
 	{Action: ActionFocusPrev, Keys: []string{"shift+tab"}, Help: "move focus to the previous surface"},
+	{Action: ActionFocusLeft, Keys: []string{"shift+left"}, Help: "move focus left"},
+	{Action: ActionFocusRight, Keys: []string{"shift+right"}, Help: "move focus right"},
+	{Action: ActionFocusUp, Keys: []string{"shift+up"}, Help: "move focus up"},
+	{Action: ActionFocusDown, Keys: []string{"shift+down"}, Help: "move focus down"},
 	{Action: ActionCancel, Help: "back out of what is in front"},
 }
 
@@ -77,16 +94,26 @@ func frothOwned(a Action) bool {
 // and a tree with nowhere to tab to is not a key the application should start
 // seeing raw.
 func (f *Froth) service(a Action) bool {
-	var delta int
+	from := f.stepFrom()
+	var to Handle
+	var moved bool
 	switch a {
 	case ActionFocusNext:
-		delta = 1
+		to, moved = f.stepFocus(from, 1)
 	case ActionFocusPrev:
-		delta = -1
+		to, moved = f.stepFocus(from, -1)
+	case ActionFocusLeft:
+		to, moved = f.stepDirection(from, dirLeft)
+	case ActionFocusRight:
+		to, moved = f.stepDirection(from, dirRight)
+	case ActionFocusUp:
+		to, moved = f.stepDirection(from, dirUp)
+	case ActionFocusDown:
+		to, moved = f.stepDirection(from, dirDown)
 	default:
 		return false
 	}
-	if to, ok := f.stepFocus(f.stepFrom(), delta); ok {
+	if moved {
 		f.pendingFocus, f.focusPending = to, true
 	}
 	return true

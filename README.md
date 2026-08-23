@@ -10,7 +10,10 @@ reconcile and destroy, modals and mouse, async, environment and chrome, tiling a
 scrolling, bubbles adapters — is still design.
 
 [`examples/panes`](./examples/panes) is the fastest way to understand the API: it is
-real, current code, and it grows with each milestone. The design is written down:
+real, current code, and it grows with each milestone. [`examples/keys`](./examples/keys)
+is a tool rather than a demonstration: it prints what a key press actually arrives as, so
+a binding is written from what the terminal sends rather than from what the keyboard
+says. The design is written down:
 [`CONTEXT.md`](./CONTEXT.md) defines the vocabulary,
 [`docs/adr/`](./docs/adr/) records the decisions that were hard to reverse,
 [`docs/research/`](./docs/research/) holds the primary-source findings those

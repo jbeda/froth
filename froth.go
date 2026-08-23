@@ -37,6 +37,11 @@ type Froth struct {
 	pendingFocus Handle
 	focusPending bool
 
+	// renderedFrame is where every surface was when the frame was last drawn,
+	// in paint order. It is the only geometry outside Render, and it can name
+	// surfaces destroyed since. See ADR 0013.
+	renderedFrame []placement
+
 	onDiagnostic func(Diagnostic)
 	// flushing says the hook is being called from the stack below, so a hook
 	// that drives froth queues its diagnostics for the pass already running

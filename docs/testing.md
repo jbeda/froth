@@ -29,12 +29,42 @@ restoration, intent routing and unclaimed-intent reporting, modality, capture an
 loss, command tagging and dead-handle drops, runtime phase violations, chrome, and Z
 ordering.
 
-## Layout, tested directly
+## Self-contained algorithms, tested directly
 
-A `Layout` is an interface users implement, so its space-and-measures to rects mapping is
-published API rather than an internal detail. Testing it directly as a pure function is
-testing a contract, not reaching inside. This is the only sanctioned second attachment
-point.
+Some of what froth does is a **self-contained algorithm**: a pure function from values to
+values, deciding something froth has written down as a rule, reaching for no tree, no
+focus and no phase. Those are tested as the functions they are. This is the one sanctioned
+departure from the single seam, and it is narrow on purpose.
+
+Three things have to hold, or it is reaching inside:
+
+- **Pure.** Values in, values out. No froth instance, no handles resolved against a
+  registry, no state that a test has to arrange by driving froth first.
+- **A written-down rule.** The behaviour is specified somewhere a reader can find — an
+  ADR, the milestone log, a doc comment carrying the whole contract. A test asserting on
+  something whose only specification is the code is a test of the code's current shape.
+- **The wiring is still tested through the seam.** A direct test says the algorithm is
+  right. It never says froth *calls* it, calls it with the right inputs, or does anything
+  with the answer.
+
+Two qualify so far:
+
+- **`Layout`** — an interface users implement, so its space-and-measures to rects mapping
+  is published API rather than an internal detail. Testing it directly is testing a
+  contract.
+- **Resolving a direction to a surface** — `pick` in `direction.go` takes candidate rects
+  and returns the winner, and the tests it has to satisfy are the awkward geometric cases:
+  exact ties, partial overlap, a candidate that grew around the source. Driving those
+  through a surface tree means building a layout to produce each one and reading the
+  answer back out of a composited string, which is a lot of fixture between the assertion
+  and the thing asserted. The rule is in ADR 0013 and the milestone log; which surfaces
+  are candidates at all, and what a key press does, stay at the seam.
+
+What still does not qualify, and the test to apply: if the assertion would break when an
+internal representation changed but froth's behaviour did not, it belongs at the seam
+however pure the function looks. The registry, the message queue, phase bookkeeping and
+the focus chain are all reachable as functions and none of them is a rule — they are how
+froth happens to be built.
 
 ## Producers: two levels and a fidelity check
 

@@ -21,6 +21,24 @@
 // surface, and asking whether it is would say no, so it asks the other
 // question — whether focus is at or below it.
 //
+// shift with an arrow key moves focus geometrically, against where the surfaces
+// actually ended up: shift+left and shift+right between the panes, shift+up from
+// a pane to the filter field, shift+down back. No layout implements any of it,
+// and a direction with nothing that way leaves focus alone rather than
+// complaining.
+//
+// The modifier is there because bare arrows belong to whatever holds focus — a
+// list's selection, a table's row. A TUI that wants them for focus instead
+// declares froth's actions with the keys it wants, which takes them over
+// entirely:
+//
+//	func (rt *root) Bindings() []froth.Binding {
+//		return []froth.Binding{
+//			{Action: froth.ActionFocusLeft, Keys: []string{"left"}, Help: "focus left"},
+//			{Action: froth.ActionFocusRight, Keys: []string{"right"}, Help: "focus right"},
+//		}
+//	}
+//
 // One keystroke shows what the update loop buys: the focused pane posts what it
 // saw to its sibling, and both have handled it before anything is drawn.
 // Pressing "d" posts a message that comes straight back, which is a cycle;
