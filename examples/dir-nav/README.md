@@ -103,6 +103,14 @@ root which divider the size keys should move.
 An application does not need this and should not copy it. A tool does, and it is collected on
 **#24** (`froth/inspect`) rather than being worked around twice.
 
+## Where the rule stands
+
+#22 closed on this board with the tie-break order intact: beam, nearest ahead, straightest,
+reading order, drawn last — probably as good as a purely geometric rule gets. What is
+missing is not a better ordering but the systems beside it, filed as #29 and #28.
+
+`shift`+arrow stays the default and stays provisional, which is why `m` is still here.
+
 ## What is not here
 
 No tests, deliberately: a test pinning which surface a press lands on would pin a board that

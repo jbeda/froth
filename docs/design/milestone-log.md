@@ -30,6 +30,13 @@ rather than quietly working around.
   non-uniform; the assumption is that the glue absorbs it without per-component
   surprises. Supports the adapter strategy in
   [finding 4](./kitchen-sink-sketch.md). *Tested by M8.*
+- **`shift+arrow` is the right default for directional movement.** Driven on
+  `examples/dir-nav` in M2. Nothing about it felt wrong and nothing about it is settled:
+  the board carries a key that swaps it for the bare arrows, and swapping produced a
+  usable argument against them — a text sink can never have a cursor, and the swap key
+  cannot swap back while the field holds focus. That is an argument, not a conclusion.
+  Supports [ADR 0013](../adr/0013-direction-is-resolved-geometrically.md). *Tested by
+  continued use of the board through M3 and M4.*
 - **Bindings declared on the focus chain are sufficient to express real shortcut
   schemes.** No remapping layer exists yet, and context-sensitivity is structural rather
   than predicate-based. Supports
@@ -785,3 +792,14 @@ reversibility is wasted effort; the answers are an explicit override or a memory
 press lands on would pin a board that is supposed to keep changing through M3 and M4, and
 would turn every layout tweak into a failure. The rule itself is tested in
 `direction_test.go`, where the board's geometry cannot reach it.
+
+**The verdict, and it closes #22 rather than #13.** `better()`'s ordering stands: beam,
+then nearest ahead, then straightest, then reading order, then drawn last — probably as
+good as a purely geometric rule gets. What the board found wanting is not the order of the
+tests but the absence of anything besides them, and that is filed rather than tuned: #29
+(reversal, which no geometric rule can deliver) and #28 (a container that remembers your
+place). The keys stay `shift+arrow` and stay provisional; the assumption is recorded at
+the top of this file rather than retired.
+
+The board stays on `main` and grows through M3 and M4, which is what it was built as a
+second example for.
