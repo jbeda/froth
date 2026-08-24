@@ -113,9 +113,16 @@ never surface state.
 
 **Query**:
 A read-only walk over the surface tree collecting from surfaces that implement
-a given capability — help bindings being the first. Queries and shortcut
-resolution are the only synchronous calls into a surface, and both read the same
-declarations.
+a given capability — help bindings being the first — and also the value an
+application or a surface asks one through, which can change nothing. Queries and
+shortcut resolution are the only synchronous calls into a surface, and both read
+the same declarations by walking together rather than alike.
+
+**Stock binding**:
+A binding froth declares for an action it services itself, matched after every
+surface on the focus chain. Declaring the same action anywhere on the chain
+replaces it; there is no second override table.
+_Avoid_: default binding, built-in, global
 
 **Capture**:
 A claim on all mouse input regardless of what lies under the cursor. Held by at

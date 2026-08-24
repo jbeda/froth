@@ -803,3 +803,64 @@ the top of this file rather than retired.
 
 The board stays on `main` and grows through M3 and M4, which is what it was built as a
 second example for.
+
+### #14 — The help query
+
+**Shipped.** `Query`, a read-only value with `Focus` and `LiveBindings`, handed out by
+`Froth.Query` and by all three contexts; `StockBindings` at package level; and the walk
+underneath both, in `binding.go`. The example grows a help bar built entirely from the
+query. M2 closes here.
+
+**Resolution and help are one walk, not two that agree.** `liveBindings` collects the
+chain deepest-first and `resolve` consumes it, so "help cannot describe something other
+than what the key does" is a property of the code rather than of a test. `resolve` no
+longer early-exits on the first match; the chain is short and this runs once per press.
+**Modal truncation attaches in that one function**, and M4 should cut there rather than
+anywhere else.
+
+**Shadowing is per key, not per binding.** A binding whose key something closer to focus
+answers to keeps its other keys and loses that one; left with none, it is dropped rather
+than reported empty. That is what makes a `[]Binding` enough — no `Shadowed` flag, and a
+bar printing `Keys` cannot misreport. The cost: a `KeyHelp` of "↑/k" can disagree with a
+filtered `Keys`, and froth cannot fix that.
+
+**A text sink filters the query, and this was nearly missed.** While one holds focus a
+bare printable matches nothing anywhere, so a quit on `q` and `ctrl+c` must report only
+`ctrl+c` — otherwise pressing the key the bar offers types a letter. The example shows it
+without the bar knowing what a text sink is.
+
+**The filter reads the key's spelling, which resolution does not.** Help is asked about
+keys nobody has pressed, so `keyIsTyping` decides from the string where `isTyping` decided
+from the press; `isTyping` is gone. The two agree for everything a declaration realistically
+contains — they part only for a multi-rune `Text` press, which nothing can bind without
+spelling it out.
+
+**A disabled binding is reported marked, not dropped**, and keeps its keys so an
+application can grey it. Story 39 in the spec says "neither fires nor shows in help"; ADR
+0008 says "greying out". The ADR wins, because returning it marked is strictly more
+capable and the application is the one that knows whether its bar has room. It also claims
+no keys while shadowing, since it does not stop the key resolving further up either.
+
+**`Query` is a struct with an unexported field, not an interface.** Unconstructible,
+uncastable, and extensible without breaking implementors. It is what makes the threading
+problem disappear: the help bar asks `rc.Query()` and no surface holds a `*Froth`.
+
+**Next milestones should know.**
+
+- **Bindings are still pulled, and M3 should invert them.** `Bindings()` is answered fresh
+  on every press and every query, which is what makes drift impossible. Pushing them during
+  `Reconcile` and storing them on the node would make resolution and help both reads of
+  froth's own state — taking the count of synchronous calls into a surface from two to
+  zero, and the re-entrancy guard with it. It cannot be built before M3: `Mount` runs once
+  and an existing surface never sees another `ApplyCtx`. The cost to answer there is the
+  drift pull makes impossible.
+- **The re-entrancy guard is deliberately minimal** — one flag, one diagnostic, an empty
+  answer — because it is expected to be deleted rather than grown.
+- **Core now hands out a handle the caller did not create**, via `Query.Focus`. See ADR
+  0012's amendment. Reading *about* a handle is deliberately absent: addressing is the same
+  question for reads and writes, and the ownership table settles both.
+- **A superroot surface is tabled, not rejected.** froth's own bindings come from nowhere
+  in the tree, which is honest but uncomfortable; `StockBindings` gives them somewhere to
+  be asked for without inventing a node. ADR 0009 is what any such change has to answer.
+- **The query is hard-coded to `Binder`.** `CONTEXT.md` describes a genus with one member;
+  the second capability earns the mechanism.

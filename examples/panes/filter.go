@@ -32,9 +32,31 @@ func (fl *filter) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Render(body)
 }
 
+// The clear binding is disabled while there is nothing to clear, so the help bar
+// greys it out and pressing it does nothing. Enabling is recomputed here rather
+// than remembered anywhere: froth asks every time it needs the answer.
+//
+// It is a chord because the field is a text sink. A bare letter would be typing
+// while this field holds focus, so it would never reach a binding — and the help
+// bar would rightly refuse to offer it.
+func (fl *filter) Bindings() []froth.Binding {
+	return []froth.Binding{{
+		Action:   actionClear,
+		Keys:     []string{"ctrl+u"},
+		Help:     "clear the filter",
+		Disabled: fl.text == "",
+	}}
+}
+
 // Only a press is typing: a release is the same key arriving a second time, and
 // answering both would put every character in twice.
 func (fl *filter) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	if m, ok := msg.(froth.ActionMsg); ok {
+		if m.Action == actionClear {
+			fl.text = ""
+		}
+		return
+	}
 	k, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return

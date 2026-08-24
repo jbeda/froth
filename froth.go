@@ -42,6 +42,11 @@ type Froth struct {
 	// surfaces destroyed since. See ADR 0013.
 	renderedFrame []placement
 
+	// querying says a query is already walking the tree, so a surface that
+	// answers Bindings() by asking froth one gets nothing back rather than
+	// recursion. See DiagReentrantQuery.
+	querying bool
+
 	onDiagnostic func(Diagnostic)
 	// flushing says the hook is being called from the stack below, so a hook
 	// that drives froth queues its diagnostics for the pass already running

@@ -24,6 +24,11 @@ A test that breaks when the registry's internal representation changes is testin
 wrong thing. A test that breaks when a modal stops receiving focus is testing the right
 one.
 
+The exception is a handle froth itself publishes as an answer: `Query.Focus` returns one,
+so comparing it against a handle the test created asserts on documented behaviour rather
+than on internals. What stays out of bounds is a handle's *contents* and any handle a test
+reached rather than was given.
+
 Almost everything is observable through the seam: shortcut precedence, focus movement and
 restoration, intent routing and unclaimed-intent reporting, modality, capture and capture
 loss, command tagging and dead-handle drops, runtime phase violations, chrome, and Z

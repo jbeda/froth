@@ -59,6 +59,7 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	}
 
 	ac.Create(&filter{}, froth.TabStop(), froth.TextSink())
+	ac.Create(helpBar{})
 	leftH, rightH := ac.Create(left, froth.TabStop()), ac.Create(right, froth.TabStop())
 	ac.Create(notes)
 
@@ -69,7 +70,7 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	rt.scope = ac.Create(&scopePane{out: leftH}, froth.FocusScope())
 
 	left.sibling, right.sibling = rightH, leftH
-	ac.SetLayout(filterOnTop{rest: layout.Row(layout.Gap(1))})
+	ac.SetLayout(fieldAndBar{rest: layout.Row(layout.Gap(1))})
 	ac.Focus(leftH)
 }
 
@@ -124,16 +125,23 @@ func (rt *root) onDiagnostic(d froth.Diagnostic) {
 	rt.report.text = d.String()
 }
 
-// filterOnTop gives the first child a strip along the top of the space and
-// hands what is left to another layout. A layout is an interface the
-// application may implement, and this one is the application's.
-type filterOnTop struct{ rest froth.Layout }
+// fieldAndBar gives the first child a strip along the top of the space, the
+// second a single row along the bottom, and hands what is left to another
+// layout. A layout is an interface the application may implement, and this one
+// is the application's.
+type fieldAndBar struct{ rest froth.Layout }
 
-func (l filterOnTop) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
-	if len(children) == 0 {
-		return nil
+func (l fieldAndBar) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
+	if len(children) < 2 {
+		return make([]froth.Rect, len(children))
 	}
 	top := froth.Rect{X: space.X, Y: space.Y, W: space.W, H: min(3, space.H)}
-	below := froth.Rect{X: space.X, Y: space.Y + top.H, W: space.W, H: space.H - top.H}
-	return append([]froth.Rect{top}, l.rest.Arrange(below, children[1:])...)
+	bar := froth.Rect{X: space.X, Y: space.Y + space.H - 1, W: space.W, H: 1}
+	middle := froth.Rect{
+		X: space.X,
+		Y: space.Y + top.H,
+		W: space.W,
+		H: space.H - top.H - bar.H,
+	}
+	return append([]froth.Rect{top, bar}, l.rest.Arrange(middle, children[2:])...)
 }

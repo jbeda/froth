@@ -77,3 +77,30 @@ mitigation, and it only works if it is enforced when the pull request arrives.
 parented on a caller's behalf — modals and floats — or shows the tree honestly. That
 belongs to the milestone that builds it, once there is a real consumer to argue from. This
 ADR sets the shape, not the contents.
+
+## Amendment: core hands out a handle the caller did not create
+
+Settled while building the help query, which is the first real consumer of reading the
+tree — and an application, not a tool. This ADR's own rule decides where it goes: *an
+application reaching for `inspect` is a missing feature in core*. So it is core API, and
+`inspect` keeps the downward walk a debugger needs.
+
+`Query.Focus()` is therefore the first place froth hands out a handle to a surface the
+caller did not create. That is a real widening, because a handle is authority: routing does
+no ownership check, so anything holding one can post to that surface and move focus to it.
+The threat model above is what licenses it — **accident, not malice** — and nothing posts
+to a stranger by reflex. The guard that matters is the one this ADR already prefers:
+`Query` is a **type with no way to change anything**, rather than `*Froth` handed out with
+runtime refusals, which is the `allowDangerous` boolean rejected above wearing a different
+hat.
+
+This also answers a question the `froth/inspect` bucket was holding open — whether a
+status bar reading "focused: Inbox" is an application need. It is, and it does not belong
+behind the hatch.
+
+**What core does not get.** Reading *about* a handle — its parent, its declarations, its
+metadata — is deliberately absent, because how a handle is addressed for reads is the same
+question as how it is addressed for writes, and neither is answered yet. Enforcing the
+ownership rule on structural mutation, and the table of who may do what and when, is
+scheduled ahead of that. Until it lands, core hands out one handle and nothing to ask
+about it.

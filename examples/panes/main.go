@@ -54,6 +54,15 @@
 // what the two halves of that quit binding are for. While it holds focus, "q"
 // is ordinary typing and lands in the field; "ctrl+c" is a chord, so it still
 // resolves to the root and quits. Tab it away and "q" is a shortcut again.
+//
+// The bar along the bottom is the same story told forwards. It is built entirely
+// from a query — it asks froth what a key press would currently do and prints the
+// answer — so it knows no keys and no actions of its own and cannot describe
+// anything other than what happens. Watch it as focus moves: "q/ctrl+c quit"
+// loses the "q" the moment the filter field takes focus, because there it is
+// typing, and the field's own "ctrl+u clear the filter" appears greyed until
+// there is something to clear. Nothing in the bar knows what a text sink is or
+// when clearing applies.
 package main
 
 import (
@@ -73,6 +82,7 @@ const (
 	actionCycle      froth.Action = "cycle"
 	actionEnterScope froth.Action = "enter scope"
 	actionLeaveScope froth.Action = "leave scope"
+	actionClear      froth.Action = "clear filter"
 )
 
 // model is the application root. It owns froth by pointer and forwards Bubble

@@ -5,7 +5,10 @@
 package froth
 
 import (
+	"slices"
+	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -162,57 +165,63 @@ type Binding struct {
 }
 
 // A Binder declares the shortcuts a surface answers to. froth asks for them
-// while resolving a key press, which is a synchronous call into a surface —
-// rare enough in froth to be worth naming.
+// while resolving a key press and while answering a query, which is a
+// synchronous call into a surface — rare enough in froth to be worth naming.
 //
 // Bindings must therefore be a read-only answer about the surface as it stands.
-// It is called outside every phase, with no context to reach froth through, and
-// may be called more than once for one key press.
+// It may be called from any phase, more than once, and about a surface other
+// than the one froth is currently talking to.
 type Binder interface {
 	Bindings() []Binding
 }
 
-// matches reports whether k is one of the binding's keys and the binding is in
-// play.
-func (b *Binding) matches(k string) bool {
-	if b.Disabled {
-		return false
-	}
-	for _, want := range b.Keys {
-		if want == k {
-			return true
-		}
-	}
-	return false
+// A liveBinding is one entry of the collected chain: a binding as it will
+// actually be seen, and the surface that declared it. A zero handle is froth's
+// own declaration, which no surface made.
+type liveBinding struct {
+	Binding
+	from Handle
 }
 
-// resolve matches a key press against the focus chain, deepest first, and
-// reports the surface that declared the winning binding along with its action.
-// Within one surface, declaration order decides: the first binding listing the
-// key wins, so binding a key twice gets the answer written first rather than an
-// arbitrary one.
+// liveBindings walks the focus chain deepest first and collects the bindings
+// currently in effect, in the order resolution consults them. Resolution and the
+// help query are both consumers of it, which is what makes it impossible for
+// help to describe something other than what a key press does.
 //
 // The chain is walked from the focused surface rather than from f.focus, so
 // resolution and a raw key agree about where the deep end is when focus names
-// nothing.
+// nothing. froth's own bindings come last, and only for actions no surface on
+// the chain declared: declaring one is how an application rebinds or disables a
+// froth key, through the machinery it already uses for its own.
 //
-// A focused text sink is asked first: it takes typing as characters, so a bare
-// printable matches nothing anywhere on the chain, its own bindings included.
-//
-// froth's own stock bindings are matched last, and only for actions no surface
-// on the chain declared. Declaring one is therefore how an application rebinds
-// or disables a froth key, through the machinery it already uses for its own.
-func (f *Froth) resolve(k tea.KeyPressMsg) (Handle, Action, bool) {
+// This is the only place the chain is decided. Anything that narrows it — a
+// surface taking input for a whole subtree, so that what is above it stops
+// contributing — narrows it here, or the two consumers stop agreeing.
+func (f *Froth) liveBindings() []liveBinding {
+	if f.querying {
+		f.report(Diagnostic{
+			Kind: DiagReentrantQuery,
+			Detail: "a query was asked from inside one, which would not " +
+				"terminate; the nested query answered nothing. A surface " +
+				"must answer Bindings() from its own state rather than by " +
+				"asking froth",
+		})
+		return nil
+	}
+	f.querying = true
+	defer func() { f.querying = false }()
+
 	focused := f.focused()
-	if isTyping(k) {
-		if n := f.reg.get(focused); n != nil && n.meta.textSink {
-			return Handle{}, "", false
-		}
+	var sink bool
+	if n := f.reg.get(focused); n != nil {
+		sink = n.meta.textSink
 	}
 
-	pressed := k.String()
-	chain := f.chainTo(focused)
+	claimed := make(map[string]bool)
+	var out []liveBinding
 	var taken map[Action]bool
+
+	chain := f.chainTo(focused)
 	for i := len(chain) - 1; i >= 0; i-- {
 		n := f.reg.get(chain[i])
 		if n == nil {
@@ -222,19 +231,19 @@ func (f *Froth) resolve(k tea.KeyPressMsg) (Handle, Action, bool) {
 		if !ok {
 			continue
 		}
-		declared := b.Bindings()
-		for j := range declared {
-			if declared[j].matches(pressed) {
-				return chain[i], declared[j].Action, true
-			}
+		for _, d := range b.Bindings() {
 			// Any declaration of a froth action takes it over, a disabled one
 			// included — which is what makes disabling a froth binding as inert
-			// as disabling an application one.
-			if frothOwned(declared[j].Action) {
+			// as disabling an application one. It counts even when the
+			// declaration keeps no live key of its own.
+			if frothOwned(d.Action) {
 				if taken == nil {
 					taken = make(map[Action]bool)
 				}
-				taken[declared[j].Action] = true
+				taken[d.Action] = true
+			}
+			if lb, ok := claim(&d, chain[i], claimed, sink); ok {
+				out = append(out, lb)
 			}
 		}
 	}
@@ -243,25 +252,103 @@ func (f *Froth) resolve(k tea.KeyPressMsg) (Handle, Action, bool) {
 		if taken[frothBindings[i].Action] {
 			continue
 		}
-		if frothBindings[i].matches(pressed) {
-			return Handle{}, frothBindings[i].Action, true
+		if lb, ok := claim(&frothBindings[i], Handle{}, claimed, sink); ok {
+			out = append(out, lb)
+		}
+	}
+	return out
+}
+
+// claim narrows a declaration to the keys that would actually arrive at it,
+// takes those keys out of play for everything behind it, and reports whether any
+// survived. Two things take a key away: one closer to
+// focus already answers to it, and ordinary typing while a text sink holds focus,
+// which is never matched as a shortcut anywhere on the chain.
+//
+// An enabled binding claims the keys it keeps, which is what shadows the ones
+// behind it. A disabled one claims nothing, because it does not stop the key
+// resolving further up either — it is reported with its keys intact so help can
+// grey it rather than lose it.
+//
+// A binding left with no keys is dropped rather than reported empty, so nothing
+// that cannot fire is ever offered. That is also what drops the froth actions
+// bound to no key at all.
+func claim(d *Binding, from Handle, claimed map[string]bool, sink bool) (liveBinding, bool) {
+	var keys []string
+	for _, k := range d.Keys {
+		if claimed[k] || (sink && keyIsTyping(k)) {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	if len(keys) == 0 {
+		return liveBinding{}, false
+	}
+	if !d.Disabled {
+		for _, k := range keys {
+			claimed[k] = true
+		}
+	}
+	out := *d
+	out.Keys = keys
+	return liveBinding{Binding: out, from: from}, true
+}
+
+// resolve matches a key press against the bindings currently in effect and
+// reports the surface that declared the winning one along with its action.
+// Shadowing has already been settled by the walk, so the first entry listing the
+// key is the winner by construction.
+func (f *Froth) resolve(k tea.KeyPressMsg) (Handle, Action, bool) {
+	pressed := k.String()
+	for _, lb := range f.liveBindings() {
+		if lb.Disabled {
+			continue
+		}
+		if slices.Contains(lb.Keys, pressed) {
+			return lb.from, lb.Action, true
 		}
 	}
 	return Handle{}, "", false
 }
 
-// chordMods are the modifiers that make a press a chord rather than typing.
-// Shift and the lock keys are not among them: they decide which character the
-// key produces, not whether it produced one, so a capital and a "?" are typing
-// as much as a lower-case letter is.
-const chordMods = tea.ModCtrl | tea.ModAlt | tea.ModMeta | tea.ModHyper | tea.ModSuper
+// keyMods are the modifier spellings a key can carry, in the order Bubble Tea
+// writes them. Shift and the lock keys are not chords: they decide which
+// character the key produces, not whether it produced one, so a capital and a
+// "?" are typing as much as a lower-case letter is.
+var keyMods = []struct {
+	prefix string
+	chord  bool
+}{
+	{"ctrl+", true},
+	{"alt+", true},
+	{"shift+", false},
+	{"meta+", true},
+	{"hyper+", true},
+	{"super+", true},
+}
 
-// isTyping reports whether a press is a bare printable key: it produced a
-// character and no chord modifier was held.
+// keyIsTyping reports whether a key, spelled the way a Binding spells it, is one
+// a press produces by typing a character rather than by striking a chord. A text
+// sink takes those as text, so they match no shortcut while it holds focus.
 //
-// Text is the terminal's answer and is empty for keys that print nothing, so
-// enter, tab, escape and the arrows are never typing. Code covers a press froth
-// was handed rather than decoded from a terminal, which carries no text.
-func isTyping(k tea.KeyPressMsg) bool {
-	return k.Mod&chordMods == 0 && (k.Text != "" || unicode.IsPrint(k.Code))
+// It reads the spelling because that is all a declaration has: help is asked
+// about keys nobody has pressed. Bubble Tea renders a typing press as its text,
+// so what is left after the modifiers is a single printable rune — or the word
+// "space", the one invisible character it spells out.
+func keyIsTyping(key string) bool {
+	for _, m := range keyMods {
+		rest, ok := strings.CutPrefix(key, m.prefix)
+		if !ok {
+			continue
+		}
+		if m.chord {
+			return false
+		}
+		key = rest
+	}
+	if key == "space" {
+		return true
+	}
+	r, n := utf8.DecodeRuneInString(key)
+	return n == len(key) && unicode.IsPrint(r)
 }
