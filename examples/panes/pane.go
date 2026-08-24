@@ -41,7 +41,7 @@ type pane struct {
 	sibling froth.Handle
 	report  *report // nil for a pane that does not draw diagnostics
 	note    *report // nil for a pane that does not draw what rose to the root
-	left    *report // where this pane says it was torn down
+	torn    *report // every pane writes here on the way out; the notes pane draws it
 }
 
 // Unmount is where a surface releases what froth does not own. This one owns
@@ -49,8 +49,8 @@ type pane struct {
 // when the pane is closed, and again for every pane still standing when the
 // program shuts froth down.
 func (p *pane) Unmount(*froth.ApplyCtx) {
-	if p.left != nil {
-		p.left.text = "the " + p.title + " pane unmounted"
+	if p.torn != nil {
+		p.torn.text = "the " + p.title + " pane unmounted"
 	}
 }
 
@@ -81,8 +81,10 @@ func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
 	if p.note != nil && p.note.text != "" {
 		status += "\n\n" + p.note.text
 	}
-	if p.left != nil && p.left.text != "" && p.report != nil {
-		status += "\n\n" + p.left.text
+	// Every pane writes what it says on the way out; the pane that draws
+	// diagnostics is the one that draws this too.
+	if p.report != nil && p.torn != nil && p.torn.text != "" {
+		status += "\n\n" + p.torn.text
 	}
 
 	// The status sits under the title rather than under the body, so it stays

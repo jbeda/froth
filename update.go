@@ -259,7 +259,7 @@ func (f *Froth) deliver(n *node, h Handle, msg tea.Msg, rising bool) (tea.Cmd, b
 // one, so a rising message carries on to its parent exactly as it would past a
 // surface that ignored it.
 func (f *Froth) callUpdate(uc *UpdateCtx, n *node, h Handle, msg tea.Msg) {
-	defer f.quarantine(uc.phaseToken, h, "Update")
+	defer f.quarantine(h, "Update")
 	n.surface.Update(uc, msg)
 }
 
@@ -284,7 +284,7 @@ func (f *Froth) apply(b *budget) {
 	token := f.enter(phaseApply)
 	defer f.leave()
 
-	f.applyDestroys(token)
+	f.applyDestroys()
 	f.applyFocus()
 	f.mountEntered(b, token)
 }
@@ -331,7 +331,7 @@ func (f *Froth) mountEntered(b *budget, token phaseToken) {
 }
 
 func (f *Froth) callMount(token phaseToken, m Mounter, h Handle) {
-	defer f.quarantine(token, h, "Mount")
+	defer f.quarantine(h, "Mount")
 	m.Mount(&ApplyCtx{phaseToken: token, self: h})
 }
 

@@ -39,21 +39,17 @@ func (r router) destroy() {
 		bug("froth: the root surface cannot be destroyed; nobody created it, " +
 			"and the tree it heads is the instance")
 	}
-	r.f.recordDestroy(r.phaseToken, r.h)
+	r.f.recordDestroy(r.h)
 }
 
 // recordDestroy is destroy without the accessor, which is what quarantine needs:
-// a panicking surface has to leave from wherever it panicked, including the root.
-//
-// token is the one the caller is already holding, and is used only on the
-// immediate path. A caller in no phase at all — froth asks a surface for its
-// Bindings outside every phase — holds none, and records.
-func (f *Froth) recordDestroy(token phaseToken, h Handle) {
+// a panicking surface has to leave from wherever it panicked.
+func (f *Froth) recordDestroy(h Handle) {
 	if f.reg.get(h) == nil {
 		return
 	}
 	if f.phase == phaseApply {
-		f.removeSubtree(token, h)
+		f.removeSubtree(h)
 		return
 	}
 	f.pendingDestroy = append(f.pendingDestroy, h)
@@ -67,12 +63,12 @@ func (f *Froth) recordDestroy(token phaseToken, h Handle) {
 // It loops because an Unmount may destroy something else. A destroy asked for
 // during Apply is immediate, so that one is already done by the time this looks
 // again; the loop is what makes that true rather than something to rely on.
-func (f *Froth) applyDestroys(token phaseToken) {
+func (f *Froth) applyDestroys() {
 	for len(f.pendingDestroy) > 0 {
 		pending := f.pendingDestroy
 		f.pendingDestroy = nil
 		for _, h := range pending {
-			f.removeSubtree(token, h)
+			f.removeSubtree(h)
 		}
 	}
 }
@@ -83,7 +79,7 @@ func (f *Froth) applyDestroys(token phaseToken) {
 // Nothing is deleted until every Unmount has run. That is what lets a child
 // reach its parent while tearing down, which is the entire reason the walk is
 // leaf-up rather than the mirror of the mount order.
-func (f *Froth) removeSubtree(token phaseToken, h Handle) {
+func (f *Froth) removeSubtree(h Handle) {
 	n := f.reg.get(h)
 	if n == nil || n.leaving {
 		return
@@ -96,7 +92,7 @@ func (f *Froth) removeSubtree(token phaseToken, h Handle) {
 	}
 
 	for _, g := range order {
-		f.unmount(token, g)
+		f.unmount(g)
 	}
 
 	// Where focus goes is decided before the tree is cut, because afterwards
@@ -128,7 +124,7 @@ func (f *Froth) collectLeafUp(h Handle, out *[]Handle) {
 // unmount runs one surface's teardown. A surface that never reached its mount
 // step has nothing to undo, and one froth has quarantined is not asked again —
 // its Unmount is code from the same surface that has already failed once.
-func (f *Froth) unmount(token phaseToken, h Handle) {
+func (f *Froth) unmount(h Handle) {
 	n := f.reg.get(h)
 	if n == nil || !n.mounted || n.panicked {
 		return
@@ -137,8 +133,8 @@ func (f *Froth) unmount(token phaseToken, h Handle) {
 	if !ok {
 		return
 	}
-	defer f.quarantine(token, h, "Unmount")
-	u.Unmount(&ApplyCtx{phaseToken: token, self: h})
+	defer f.quarantine(h, "Unmount")
+	u.Unmount(&ApplyCtx{phaseToken: f.current(), self: h})
 }
 
 // rehome puts focus somewhere real after the surface holding it left the tree.
@@ -180,8 +176,8 @@ func (f *Froth) Shutdown() {
 	f.shutdown = true
 
 	if f.reg.get(f.root) != nil {
-		token := f.enter(phaseApply)
-		f.removeSubtree(token, f.root)
+		f.enter(phaseApply)
+		f.removeSubtree(f.root)
 		f.leave()
 	}
 	f.pendingDestroy = nil
@@ -201,7 +197,7 @@ func (f *Froth) Shutdown() {
 //
 // It is deferred, so it must be called as the deferred function itself; recover
 // answers nothing a frame further down.
-func (f *Froth) quarantine(token phaseToken, h Handle, what string) {
+func (f *Froth) quarantine(h Handle, what string) {
 	r := recover()
 	if r == nil {
 		return
@@ -222,5 +218,5 @@ func (f *Froth) quarantine(token phaseToken, h Handle, what string) {
 		Detail: fmt.Sprintf("%s panicked in %s: %v; it has been taken out of "+
 			"the tree and will not be called again", h, what, r),
 	})
-	f.recordDestroy(token, h)
+	f.recordDestroy(h)
 }

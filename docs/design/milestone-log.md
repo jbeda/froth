@@ -1105,9 +1105,14 @@ the next Apply, so without the mark the surface would be delivered to, drawn and
 bindings in between — and "not called again" would be false for exactly one turn. The mark
 is what the criterion rests on; the removal is what it means afterwards.
 
-**`Bindings` is asked outside every phase**, so a panic there records a destroy rather than
-committing one, and it is only reachable while the surface is on the focus chain. That is
-the one quarantine site with no phase token to hand.
+**No quarantine site is handed a phase token; every one of them reads the phase.** The first
+shape passed the caller's token through, and `Bindings` — the one callback froth makes from
+whatever phase it happens to be in — had none to pass, so it passed a zero one. A query
+asked from Apply then removed the panicking surface on the spot and handed that zero token
+to a surviving descendant's `Unmount`, whose first context use raised a froth panic that
+quarantine correctly re-raised: the program died. `f.current()` mints the token for the
+phase froth is in, and destroy no longer threads one at all. Found by the spec review;
+`TestASurfaceThatPanicsAnsweringAQueryDuringApplyIsRemoved` pins it.
 
 **Next tickets should know.** Destroying an *already-mounted* surface immediately during
 Apply is not reachable from anything M3 has shipped: a surface's `Mount` runs before its own
@@ -1118,7 +1123,7 @@ path — what is pinned today is the record-and-commit path and the Apply-time p
 `ActionCancel` by closing one, and destroy-then-create-a-replacement ordering in one Update
 callback.
 
-**Thirty-one mutations, thirty caught.** Three real gaps came out of the first sweep and
+**Thirty-four mutations, thirty-three caught.** Three real gaps came out of the first sweep and
 all three are now pinned: nothing destroyed anything from inside an `Unmount`, nothing
 asserted that a surface panicking while drawing takes its subtree off the frame, and
 nothing rehomed focus that a flat mutation could not survive. The surviving mutant is
@@ -1126,16 +1131,24 @@ equivalent — the idempotence guard at the top of `Shutdown` cannot be observed
 first call empties the registry and the second finds no root to walk. It stays as the
 stated contract rather than as load-bearing code.
 
+**Quarantine takes the root out, and nothing else can.** A surface asking to destroy the
+root panics; quarantine is not a surface asking, and the alternative is to go on calling
+something that has already failed. What is left is an instance with an empty tree, which
+draws nothing and delivers nothing — the same end state `Shutdown` reaches. Marking it shut
+down as well was written and then deleted: no test could observe the difference, because an
+empty registry already makes every entry point inert.
+
 **A defect the render mutation found, older than this ticket.** `Composite` flushed
 diagnostics through `applyPending` and then drew, so anything *drawing* reported — a dead
 handle minted from a `RenderCtx`, a reentrant query, and now a surface that panicked — waited
 for whatever drove froth next. `Composite`'s own doc comment claimed otherwise. It flushes
 after the frame is built.
 
-**One guard was deleted for being unreachable.** `placeSubtree` skipped a quarantined
-surface, and nothing could reach it: `Composite` applies pending structure before it draws,
-so a surface marked in an earlier phase has already left the tree. The two skips that are
-reachable — delivery and the binding walk — are pinned by tests.
+**The guard against drawing a quarantined surface looked unreachable and is not.** It was
+deleted on that reading — `Composite` applies pending structure before it draws — and the
+`Bindings` case above put it back: a surface drawn early in a frame can ask a query, a query
+walks the focus chain, and a surface further along the chain has not been drawn yet. All
+four skips are pinned by tests now.
 
 **The example gained `x`.** The focused pane removes itself, its `Unmount` says so in the
 notes pane, and focus moves to the nearest survivor rather than back to the root. `main`

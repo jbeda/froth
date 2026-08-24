@@ -310,11 +310,12 @@ func (f *Froth) chainBindings() []chainEntry {
 	return out
 }
 
-// callBindings asks one surface for its declarations under quarantine. It is
-// asked outside every phase, so a surface that panics here is recorded and
-// removed at the next Apply.
+// callBindings asks one surface for its declarations under quarantine. This is
+// the one callback froth makes from whatever phase it happens to be in — a key
+// press resolves from no phase at all, and a query can be asked from any of
+// them — which is why quarantine reads the phase rather than being handed it.
 func (f *Froth) callBindings(b Binder, h Handle) []Binding {
-	defer f.quarantine(phaseToken{}, h, "Bindings")
+	defer f.quarantine(h, "Bindings")
 	return b.Bindings()
 }
 

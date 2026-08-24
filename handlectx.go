@@ -124,10 +124,10 @@ type ReadCtx struct{ reader }
 // itself without restructuring anything.
 type SelfUpdateCtx struct{ router }
 
-// Destroy removes this surface and everything below it. The removal is recorded
-// and commits at the next Apply, so the surface stays live for the rest of this
-// update: messages already queued to it are still delivered, and a rising walk
-// passing through it still completes.
+// Destroy takes this surface out of the tree, along with everything below it.
+// It is recorded and commits at the next Apply, so the surface stays live for
+// the rest of this update: messages already queued to it are still delivered,
+// and a rising walk passing through it still completes.
 func (sc SelfUpdateCtx) Destroy() { sc.destroy() }
 
 // A SelfApplyCtx is what a surface holds on itself during Apply, and the only
@@ -140,10 +140,10 @@ type SelfApplyCtx struct{ router }
 // parentage was checked at the mint, so nothing here rechecks it.
 type ChildCtx struct{ router }
 
-// Destroy removes this child and everything below it. Removing a deep branch
-// means destroying your own child and letting the cascade do the rest — which
-// is the ownership rule holding rather than a limitation, since the surfaces
-// down there are not yours to name.
+// Destroy takes this child out of the tree, along with everything below it. A
+// deep branch goes by destroying your own child and letting the cascade reach
+// the rest — which is the ownership rule holding rather than a limitation,
+// since the surfaces down there are not yours to name.
 //
 // It takes effect at once when called during Apply, and is recorded and commits
 // at the next Apply when called during Deliver.
@@ -172,8 +172,9 @@ func (sc SelfApplyCtx) Create(s Surface, opts ...CreateOption) Handle {
 	return sc.f.reg.add(sc.h, s, opts...)
 }
 
-// Destroy removes this surface and everything below it, at once: Apply is where
-// structural change commits, so there is nothing to record.
+// Destroy takes this surface out of the tree, along with everything below it,
+// at once: Apply is where structural change commits, so there is nothing to
+// record.
 func (sc SelfApplyCtx) Destroy() { sc.destroy() }
 
 // SetLayout attaches a layout to this surface, which places its children from

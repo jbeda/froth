@@ -139,6 +139,12 @@ func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placemen
 	if n == nil {
 		return
 	}
+	// Quarantined earlier in this same frame: a surface drawn before this one
+	// can ask a query, and a query walks the focus chain through surfaces that
+	// have not been drawn yet.
+	if n.panicked {
+		return
+	}
 	content, ok := f.callRender(token, n, h, r)
 	if !ok {
 		// It drew nothing and its subtree is not reachable through it. The
@@ -167,7 +173,7 @@ func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placemen
 
 // callRender draws one surface under quarantine, reporting whether it returned.
 func (f *Froth) callRender(token phaseToken, n *node, h Handle, r Rect) (content string, ok bool) {
-	defer f.quarantine(token, h, "Render")
+	defer f.quarantine(h, "Render")
 	return clip(n.surface.Render(&RenderCtx{phaseToken: token, self: h, rect: r}, r), r.Size()), true
 }
 

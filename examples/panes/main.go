@@ -132,7 +132,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func main() {
-	rt := &root{report: &report{}, note: &report{}, left: &report{}}
+	rt := &root{report: &report{}, note: &report{}, torn: &report{}}
 	m := model{f: froth.New(context.Background(), rt, froth.OnDiagnostic(rt.onDiagnostic))}
 
 	_, err := tea.NewProgram(m).Run()

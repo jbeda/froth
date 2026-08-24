@@ -20,6 +20,7 @@ type leaver struct {
 
 	noStop    bool
 	panicIn   string
+	onDraw    func(rc *froth.RenderCtx)
 	onMsg     func(uc *froth.UpdateCtx, msg tea.Msg)
 	onMount   func(ac *froth.ApplyCtx)
 	onUnmount func(ac *froth.ApplyCtx)
@@ -37,6 +38,9 @@ func (l *leaver) Render(rc *froth.RenderCtx, r froth.Rect) string {
 	l.renders++
 	if l.panicIn == "Render" {
 		panic("render broke")
+	}
+	if l.onDraw != nil {
+		l.onDraw(rc)
 	}
 	return "."
 }
@@ -441,11 +445,9 @@ type checkMsg struct{}
 // removed by the ordinary destroy path, and never called again — including its
 // own teardown, which is code from the same surface that has already failed.
 func TestASurfaceThatPanicsIsReportedAndRemoved(t *testing.T) {
-	for _, tc := range []struct{ in string }{
-		{"Update"}, {"Render"}, {"Mount"}, {"Bindings"},
-	} {
-		t.Run(tc.in, func(t *testing.T) {
-			kid := &leaver{name: "kid", panicIn: tc.in}
+	for _, in := range []string{"Update", "Render", "Mount", "Bindings"} {
+		t.Run(in, func(t *testing.T) {
+			kid := &leaver{name: "kid", panicIn: in}
 			root := &leaver{name: "root", kids: []froth.Surface{kid}}
 			root.onMsg = func(uc *froth.UpdateCtx, msg tea.Msg) {
 				uc.At(kid.self).Focus()
@@ -458,7 +460,7 @@ func TestASurfaceThatPanicsIsReportedAndRemoved(t *testing.T) {
 			f.View()
 
 			if !hasKind(*diags, froth.DiagSurfacePanic) {
-				t.Fatalf("a panic in %s reported %v, want a surface panic", tc.in, kinds(*diags))
+				t.Fatalf("a panic in %s reported %v, want a surface panic", in, kinds(*diags))
 			}
 			var kids []froth.Handle
 			root.onMsg = func(uc *froth.UpdateCtx, msg tea.Msg) { kids = uc.Self().Children() }
@@ -605,5 +607,77 @@ func TestDestroyingFromInsideUnmountDoesNotTearDownTwice(t *testing.T) {
 
 	if grandkid.unmounts != 1 {
 		t.Errorf("the grandchild unmounted %d times, want 1", grandkid.unmounts)
+	}
+}
+
+// The one callback froth makes from whatever phase it is in. A query can be
+// asked from Apply, so a surface that panics answering it is removed on the
+// spot — and the teardown that removal runs is handed a real context.
+func TestASurfaceThatPanicsAnsweringAQueryDuringApplyIsRemoved(t *testing.T) {
+	grandkid := &leaver{name: "g"}
+	broken := &leaver{name: "broken", panicIn: "Bindings", kids: []froth.Surface{grandkid}}
+	asking := &leaver{name: "asking"}
+	root := &leaver{name: "root", kids: []froth.Surface{broken, asking}}
+	asking.onUnmount = func(ac *froth.ApplyCtx) { ac.Query().LiveBindings() }
+	root.onMount = func(ac *froth.ApplyCtx) { ac.Child(root.kidHs[0]).Focus() }
+	root.onMsg = func(uc *froth.UpdateCtx, msg tea.Msg) { uc.Child(asking.self).Destroy() }
+	f, diags := newWatched(t, root, 4, 1)
+
+	f.Update(startMsg{})
+
+	if !hasKind(*diags, froth.DiagSurfacePanic) {
+		t.Fatalf("a panic answering a query reported %v, want a surface panic", kinds(*diags))
+	}
+	if grandkid.unmounts != 1 {
+		t.Errorf("the child of the surface that panicked unmounted %d times, want 1",
+			grandkid.unmounts)
+	}
+}
+
+// A query walks the focus chain, so a surface drawn early in a frame can
+// quarantine one that has not been drawn yet.
+func TestASurfaceQuarantinedMidFrameIsNotDrawnInIt(t *testing.T) {
+	broken := &leaver{name: "broken", panicIn: "Bindings"}
+	asking := &leaver{name: "asking"}
+	root := &leaver{name: "root", kids: []froth.Surface{asking, broken}}
+	asking.onDraw = func(rc *froth.RenderCtx) { rc.Query().LiveBindings() }
+	root.onMount = func(ac *froth.ApplyCtx) { ac.Child(root.kidHs[1]).Focus() }
+	f, diags := newWatched(t, root, 4, 1)
+
+	f.View()
+
+	if !hasKind(*diags, froth.DiagSurfacePanic) {
+		t.Fatalf("reported %v, want a surface panic", kinds(*diags))
+	}
+	if broken.renders != 0 {
+		t.Errorf("a surface quarantined earlier in the frame was drawn %d times",
+			broken.renders)
+	}
+}
+
+// Nothing destroys the root — no surface can name it. Quarantine is not a
+// surface asking, and it has to take the root out or go on calling something
+// that has already failed. What is left is an instance with an empty tree,
+// which draws nothing and delivers nothing to anybody.
+func TestARootThatPanicsEndsTheInstance(t *testing.T) {
+	kid := &leaver{name: "kid"}
+	root := &leaver{name: "root", panicIn: "Update", kids: []froth.Surface{kid}}
+	f, diags := newWatched(t, root, 4, 1)
+
+	f.Update(startMsg{})
+
+	if !hasKind(*diags, froth.DiagSurfacePanic) {
+		t.Fatalf("a panicking root reported %v, want a surface panic", kinds(*diags))
+	}
+	if kid.unmounts != 1 {
+		t.Errorf("the root's child unmounted %d times, want 1", kid.unmounts)
+	}
+	before := root.updates
+	f.Update(startMsg{})
+	if root.updates != before {
+		t.Error("a quarantined root was asked again")
+	}
+	if got := f.View().Content; got != "" {
+		t.Errorf("an instance whose root panicked drew %q, want nothing", got)
 	}
 }

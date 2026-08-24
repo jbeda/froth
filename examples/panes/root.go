@@ -16,14 +16,14 @@ import (
 type root struct {
 	report *report
 	note   *report
-	left   *report
+	torn   *report
 	scope  froth.Handle
 }
 
 func (rt *root) Mount(ac *froth.ApplyCtx) {
 	left := &pane{
 		title: "left",
-		left:  rt.left,
+		torn:  rt.torn,
 		body: "Every key you press arrives here while this pane has focus, " +
 			"and at no other surface.\n\n" +
 			"Neither pane knows where focus is except by asking about itself, " +
@@ -35,7 +35,7 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	}
 	right := &pane{
 		title: "right",
-		left:  rt.left,
+		torn:  rt.torn,
 		body: "froth: focus is one handle, raw keys go to it, and froth " +
 			"walks it.\n\n" +
 			"tab and shift-tab are froth's own bindings. The action rises " +
@@ -57,7 +57,7 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 		title:  "notes",
 		report: rt.report,
 		note:   rt.note,
-		left:   rt.left,
+		torn:   rt.torn,
 		body: "This pane was created without froth.TabStop(), so tab never " +
 			"lands here — but it still sits third in the row, still gets its " +
 			"share of the space, and could still be given focus by name. " +

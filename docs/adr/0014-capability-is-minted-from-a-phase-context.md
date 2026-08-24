@@ -186,6 +186,11 @@ tier. It is not true of the self tier: the root's own `Self()` is mintable like 
 else's. So the rule needed a mechanism after all, and it is a panic — a surface asking to
 destroy the tree it heads is a programming error, not a condition.
 
+**Quarantine is the one route out that the root has.** A surface asking to destroy the root
+panics, as above. Quarantine is not a surface asking: a root that failed has to leave, or
+froth goes on calling it. The tree empties and the instance is inert, which is where
+`Shutdown` also ends up.
+
 **A panic quarantine has to tell a surface's failure from froth's own.** Panic quarantine
 recovers a panic out of `Update`, `Render`, `Mount`, `Unmount` or `Bindings`, reports it and
 takes the surface out of the tree. Every contract this ADR puts teeth on is enforced by a
