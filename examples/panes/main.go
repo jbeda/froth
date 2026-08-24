@@ -74,6 +74,14 @@
 // reported through the same hook the cycle uses — which is what a forgotten
 // case looks like from the outside.
 //
+// Pressing "x" closes the focused pane. The pane removes itself and nothing
+// else is involved: no parent is told, no list is edited, and the layout gives
+// the space to whatever is left. Focus was on the pane that just left, so froth
+// puts it on the nearest surface that survives rather than sending the keyboard
+// back to the root — close the left pane and the right one has focus. The pane's
+// Unmount runs on the way out and says so in the notes pane, and the same walk
+// runs for every surface still standing when the program quits.
+//
 // The bar along the bottom is the same story told forwards. It is built entirely
 // from a query — it asks froth what a key press would currently do and prints the
 // answer — so it knows no keys and no actions of its own and cannot describe
@@ -103,6 +111,7 @@ const (
 	actionLeaveScope froth.Action = "leave scope"
 	actionClear      froth.Action = "clear filter"
 	actionNote       froth.Action = "note this"
+	actionClose      froth.Action = "close this pane"
 )
 
 // model is the application root. It owns froth by pointer and forwards Bubble
@@ -123,10 +132,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func main() {
-	rt := &root{report: &report{}, note: &report{}}
+	rt := &root{report: &report{}, note: &report{}, left: &report{}}
 	m := model{f: froth.New(context.Background(), rt, froth.OnDiagnostic(rt.onDiagnostic))}
 
-	if _, err := tea.NewProgram(m).Run(); err != nil {
+	_, err := tea.NewProgram(m).Run()
+
+	// Shutting froth down runs the same leaf-up unmount walk a destroy runs,
+	// once from the root, so a surface holding something froth does not own
+	// gets to release it when the program quits rather than only when it is
+	// closed. Nothing here holds anything, and it still has to be called: the
+	// walk is the guarantee, and an application that only calls it sometimes
+	// does not have one.
+	m.f.Shutdown()
+
+	if err != nil {
 		log.Fatal(fmt.Errorf("running panes: %w", err))
 	}
 }

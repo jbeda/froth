@@ -251,7 +251,7 @@ func TestStopRisingPanicsForAMessageThatDoesNotRise(t *testing.T) {
 		if r == nil {
 			t.Fatal("StopRising did not panic for a message with no walk to end")
 		}
-		if got, ok := r.(string); !ok || !strings.Contains(got, "plainMsg") {
+		if !strings.Contains(panicText(r), "plainMsg") {
 			t.Errorf("the panic was %v; it should name the message it was "+
 				"called for", r)
 		}

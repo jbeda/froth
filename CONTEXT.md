@@ -208,6 +208,35 @@ whose type is Rising is posted the same way and continues past its destination,
 which is why the queue drains completely before structure changes again.
 _Avoid_: send, dispatch, emit
 
+**Destroy**:
+To take a surface out of the tree, along with everything below it. A surface may
+destroy itself or one of its immediate children and no one else; removing a deep
+branch means destroying your own child and letting the cascade reach the rest.
+The root cannot be destroyed. Recorded during Deliver and committed at the next
+Apply, immediate during Apply.
+_Avoid_: remove, delete, close, dispose
+
+**Unmount**:
+A surface's chance to release what froth does not own, run once when it leaves
+the tree by any route. It runs leaf-up, so a child tears down before its parent
+and can still reach it while doing so. The mirror of Mount, and a surface that
+never mounted is never unmounted.
+_Avoid_: teardown, dispose, cleanup, destructor
+
+**Shutdown**:
+Tearing the instance down: the unmount walk run once from the root, when the
+program is quitting. Afterwards the tree is empty and the instance is spent. It
+exists because a teardown hook that only ran on destroy would not run at the one
+moment every application expects it to.
+_Avoid_: close, dispose, quit
+
+**Quarantine**:
+What froth does with a surface that panics inside one of its callbacks: report
+it, take it out of the tree by the ordinary destroy path, and never call it
+again. A panic froth raised itself is not quarantined — that says the program
+violated froth's contract, and burying it would leave the bug in place.
+_Avoid_: recover, catch, isolate
+
 **Diagnostic**:
 Something froth detected and should not decide about — a message cycle, a rising
 message nothing took, a surface that panicked. All of them go to one hook

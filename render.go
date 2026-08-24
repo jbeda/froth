@@ -8,7 +8,6 @@
 package froth
 
 import (
-	"fmt"
 	"slices"
 
 	tea "charm.land/bubbletea/v2"
@@ -135,8 +134,17 @@ func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placemen
 	if n == nil {
 		return
 	}
-	rc := &RenderCtx{phaseToken: token, self: h, rect: r}
-	content := clip(n.surface.Render(rc, r), r.Size())
+	if n.panicked {
+		return
+	}
+	content, ok := f.callRender(token, n, h, r)
+	if !ok {
+		// It drew nothing and its subtree is not reachable through it. The
+		// destroy quarantine recorded commits at the next Apply; Render cannot
+		// change structure, so this frame is drawn from the tree as it stands
+		// with a hole where the surface was.
+		return
+	}
 	*out = append(*out, placement{h: h, rect: r, content: content, z: len(*out) + 1})
 
 	// A container with no layout stacks its children at its own whole rect,
@@ -155,6 +163,12 @@ func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placemen
 	}
 }
 
+// callRender draws one surface under quarantine, reporting whether it returned.
+func (f *Froth) callRender(token phaseToken, n *node, h Handle, r Rect) (content string, ok bool) {
+	defer f.quarantine(token, h, "Render")
+	return clip(n.surface.Render(&RenderCtx{phaseToken: token, self: h, rect: r}, r), r.Size()), true
+}
+
 // arrange asks a container's layout where its children go. It is only called
 // for a container that has one; placeSubtree handles the layout-less case,
 // where every child takes the container's whole rect.
@@ -171,9 +185,9 @@ func (f *Froth) arrange(n *node, r Rect) []Rect {
 
 	rects := n.layout.Arrange(r, children)
 	if len(rects) != len(children) {
-		panic(fmt.Sprintf("froth: a layout returned %d rects for %d children; "+
+		bug("froth: a layout returned %d rects for %d children; "+
 			"a layout must return exactly one rect per child, in order",
-			len(rects), len(children)))
+			len(rects), len(children))
 	}
 	return rects
 }

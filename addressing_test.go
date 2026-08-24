@@ -177,7 +177,7 @@ func TestMintingAChildContextForASurfaceThatIsNotOnePanics(t *testing.T) {
 		f.Update(bumpMsg{})
 	}()
 
-	msg, _ := got.(string)
+	msg := panicText(got)
 	if !strings.Contains(msg, "not an immediate child") {
 		t.Errorf("panic was %v, want one naming the ownership rule", got)
 	}
@@ -249,7 +249,7 @@ func TestARetainedHandleContextPanicsWhenUsedInALaterPhase(t *testing.T) {
 	f.Update(bumpMsg{})
 	f.View()
 
-	msg, _ := got.(string)
+	msg := panicText(got)
 	if !strings.Contains(msg, "must not be retained") {
 		t.Errorf("panic was %v, want one naming the retained context", got)
 	}
@@ -264,7 +264,7 @@ func TestAConstructedHandleContextPanicsWithADiagnostic(t *testing.T) {
 		froth.AnyCtx{}.Parent()
 	}()
 
-	msg, _ := got.(string)
+	msg := panicText(got)
 	if !strings.Contains(msg, "not handed out by froth") {
 		t.Errorf("panic was %v, want one naming the constructed context", got)
 	}

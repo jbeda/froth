@@ -2,6 +2,7 @@ package froth_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -61,4 +62,15 @@ func (m appModel) Init() tea.Cmd  { return m.f.Init() }
 func (m appModel) View() tea.View { return m.f.View() }
 func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, m.f.Update(msg)
+}
+
+// panicText renders a recovered panic value as the text it would print. froth
+// raises its own panics as an unexported error type, so that quarantine can
+// tell a contract violation from a surface that failed and re-raise it; a test
+// asserting on the message asks for the message rather than for the type.
+func panicText(r any) string {
+	if r == nil {
+		return ""
+	}
+	return fmt.Sprint(r)
 }

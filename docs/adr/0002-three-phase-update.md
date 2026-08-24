@@ -124,3 +124,26 @@ and [ADR 0016](./0016-a-message-rises-until-something-takes-it.md).
 it started, nearest ancestor first, and a message nobody takes reported through the diagnostic
 hook rather than dropped, because it is nearly always a missing case. An ancestor may post
 while handling, and that queues rather than recursing, under the same cap.
+
+## Amendment: Apply's internal order is destroy, focus, mount
+
+Settled while building the operation that leaves the tree. Apply had two steps, focus then
+mount; destroy makes three, and the order between them is a decision rather than an
+arrangement.
+
+**Destroys commit first**, so the tree shrinks before anything is validated against it. A
+delivery that moves focus and destroys the surface it moved to then reports the move as
+invalid, which is what it is. Committing focus first instead would put focus on a surface
+about to leave and then silently repair it in the same Apply, and the diagnostic that exists
+for exactly this case would have no reachable path.
+
+**Focus still commits before mounting**, unchanged and for the reason already recorded: a
+surface that mounts a child and focuses it there is making the later of two requests, and
+the later one should stand.
+
+Where focus goes when its holder is destroyed is not a fourth step. It happens inside the
+destroy, because it is only answerable while the tree still says where the surface was:
+focus lands on the nearest surviving ancestor and then descends the way entering a focus
+scope does — onto what that surface remembers, or its first tab stop. That reuses ADR
+0011's rule rather than adding a second one, and it is not a requested move, so it reports
+nothing.

@@ -1057,3 +1057,68 @@ recorded in ADR 0008 and will be met or broken there.
 
 **Untouched and still open on #17's session-B comment:** nothing. Both catalog bugs and the
 dropped `liveBinding.from` are fixed here.
+
+### #40 — A surface leaves the tree: destroy, cascade, `Unmount`, shutdown and quarantine
+
+**Shipped.** `Destroy` on all three tiers that may have it — `Self().Destroy()` during
+Deliver or Apply, `Child(h).Destroy()`, nothing on `At(h)`. Destruction cascades to the
+whole subtree. `Unmounter` runs leaf-up, once per surface, whichever of the four routes out
+it leaves by. `Froth.Shutdown()` runs that same walk once from the root. A surface that
+panics inside `Update`, `Render`, `Mount`, `Unmount` or `Bindings` is reported and removed
+and the program continues.
+
+**One walk, four routes.** Everything above goes through `removeSubtree`. That was the whole
+argument for one ticket rather than four, and it held: nothing about shutdown is special
+except that it starts at the root and that posting from it is reported as pointless.
+
+**Nothing is deleted until every `Unmount` has run.** That is what lets a child reach its
+parent while tearing down, which is the entire reason the walk is leaf-up rather than the
+mirror of the mount order. Collecting the subtree, running teardown over it, and only then
+deleting is three passes where one would have been cheaper and wrong.
+
+**Apply gained a third step and the order is a decision.** Destroy, then focus, then mount —
+recorded in ADR 0002's amendment. Committing destroys first is what gives `DiagInvalidFocus`
+a reachable path again, which ADR 0014's amendment had flagged as owed to this ticket.
+
+**Focus rehoming reuses `enterScope` rather than inventing a rule.** When focus is inside
+what is going, it lands on the nearest surviving ancestor and then descends the way entering
+a focus scope does. It reports nothing: nobody asked for the move, froth is repairing a
+chain a destroy broke. Note the consequence a test caught — if the surviving ancestor is
+itself a tab stop, focus lands *on it* rather than descending past it, because that is what
+`enterScope` already means. The alternative would have been a second rule about where focus
+belongs, and froth has one.
+
+**froth's own panics are now an unexported error type.** Quarantine has to tell a surface
+that failed from a program that violated froth's contract, and both arrive as a panic out of
+the same five callbacks. Every deliberate panic inside froth goes through one `bug()`
+constructor and quarantine re-panics what it recognises. Reasoning in ADR 0014's amendment.
+The visible cost: a test recovering a froth panic gets an error rather than a string, so
+`panicText` in `helpers_test.go` renders one for assertions.
+
+**`Unmount` mirrors the mount step, so a surface that never mounted is never unmounted.** A
+surface created and destroyed inside one Apply, before the mount queue reached it, has
+nothing to undo. `node.mounted` records that the step ran, whether or not the surface
+implements `Mounter`.
+
+**A quarantined surface is marked before its destroy is recorded.** The destroy commits at
+the next Apply, so without the mark the surface would be delivered to, drawn and asked for
+bindings in between — and "not called again" would be false for exactly one turn. The mark
+is what the criterion rests on; the removal is what it means afterwards.
+
+**`Bindings` is asked outside every phase**, so a panic there records a destroy rather than
+committing one, and it is only reachable while the surface is on the focus chain. That is
+the one quarantine site with no phase token to hand.
+
+**Next tickets should know.** Destroying an *already-mounted* surface immediately during
+Apply is not reachable from anything M3 has shipped: a surface's `Mount` runs before its own
+children's, so no mounting surface can name a child that has already mounted. #41's
+`Reconcile` is the first callback that can, and it is the first real test of the immediate
+path — what is pinned today is the record-and-commit path and the Apply-time path through a
+`Mount` panic. Left for M4 with the rest of the modal work: whether froth services
+`ActionCancel` by closing one, and destroy-then-create-a-replacement ordering in one Update
+callback.
+
+**The example gained `x`.** The focused pane removes itself, its `Unmount` says so in the
+notes pane, and focus moves to the nearest survivor rather than back to the root. `main`
+calls `Shutdown` after `Run` returns, which is the demonstration that matters: the walk is
+the guarantee, and an application that only calls it sometimes does not have one.

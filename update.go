@@ -171,6 +171,15 @@ func (f *Froth) deliverEntry(e envelope, b *budget, cmds *[]tea.Cmd) bool {
 			// guess the rest of.
 			return true
 		}
+		if n.panicked {
+			// Quarantined and waiting for the Apply that removes it. A walk
+			// still climbs past it, because the surfaces above it are fine.
+			if !rising || n.parent == (Handle{}) {
+				return true
+			}
+			h = n.parent
+			continue
+		}
 		cmd, stopped := f.deliver(n, h, e.msg, rising)
 		if cmd != nil {
 			*cmds = append(*cmds, cmd)
@@ -241,24 +250,41 @@ func (f *Froth) deliver(n *node, h Handle, msg tea.Msg, rising bool) (tea.Cmd, b
 	}
 	defer f.leave()
 
-	n.surface.Update(uc, msg)
+	f.callUpdate(uc, n, h, msg)
 	return tea.Batch(uc.cmds...), uc.stopped
+}
+
+// callUpdate hands the message to the surface under quarantine. A surface that
+// panics has done nothing as far as the walk is concerned: it cannot have ended
+// one, so a rising message carries on to its parent exactly as it would past a
+// surface that ignored it.
+func (f *Froth) callUpdate(uc *UpdateCtx, n *node, h Handle, msg tea.Msg) {
+	defer f.quarantine(uc.phaseToken, h, "Update")
+	n.surface.Update(uc, msg)
 }
 
 // apply runs the Apply phase: everything structural that has been asked for
 // since the last one.
 //
-// Focus commits before mounting, so a surface that mounts a child and focuses it
-// there wins over a request made in the delivery before — the later of the two,
-// and so the one that should stand.
+// The order is destroy, focus, mount. Destroys go first so that a focus move
+// recorded in the same delivery is validated against the tree that will exist —
+// which is what makes a move onto a surface that has since left the tree a
+// reported refusal rather than a focus committed and immediately undone. Focus
+// commits before mounting, so a surface that mounts a child and focuses it there
+// wins over a request made in the delivery before: the later of the two, and so
+// the one that should stand.
 func (f *Froth) apply(b *budget) {
-	if !f.reg.hasEntered() && !f.focusPending {
+	if f.shutdown {
+		return
+	}
+	if !f.reg.hasEntered() && !f.focusPending && len(f.pendingDestroy) == 0 {
 		return
 	}
 
 	token := f.enter(phaseApply)
 	defer f.leave()
 
+	f.applyDestroys(token)
 	f.applyFocus()
 	f.mountEntered(b, token)
 }
@@ -294,10 +320,19 @@ func (f *Froth) mountEntered(b *budget, token phaseToken) {
 		if n == nil {
 			continue
 		}
+		if n.panicked {
+			continue
+		}
+		n.mounted = true
 		if m, ok := n.surface.(Mounter); ok {
-			m.Mount(&ApplyCtx{phaseToken: token, self: h})
+			f.callMount(token, m, h)
 		}
 	}
+}
+
+func (f *Froth) callMount(token phaseToken, m Mounter, h Handle) {
+	defer f.quarantine(token, h, "Mount")
+	m.Mount(&ApplyCtx{phaseToken: token, self: h})
 }
 
 // applyPending settles the structure before a frame that does not follow an

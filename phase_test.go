@@ -72,7 +72,7 @@ func TestAConstructedContextPanicsWithADiagnostic(t *testing.T) {
 		(&froth.RenderCtx{}).Rect()
 	}()
 
-	msg, _ := got.(string)
+	msg := panicText(got)
 	if !strings.Contains(msg, "not handed out by froth") {
 		t.Errorf("panic was %v, want one naming the constructed context", got)
 	}

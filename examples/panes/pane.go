@@ -41,6 +41,17 @@ type pane struct {
 	sibling froth.Handle
 	report  *report // nil for a pane that does not draw diagnostics
 	note    *report // nil for a pane that does not draw what rose to the root
+	left    *report // where this pane says it was torn down
+}
+
+// Unmount is where a surface releases what froth does not own. This one owns
+// nothing, so it only says it ran — which is the point worth seeing: it runs
+// when the pane is closed, and again for every pane still standing when the
+// program shuts froth down.
+func (p *pane) Unmount(*froth.ApplyCtx) {
+	if p.left != nil {
+		p.left.text = "the " + p.title + " pane unmounted"
+	}
 }
 
 func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
@@ -70,6 +81,9 @@ func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
 	if p.note != nil && p.note.text != "" {
 		status += "\n\n" + p.note.text
 	}
+	if p.left != nil && p.left.text != "" && p.report != nil {
+		status += "\n\n" + p.left.text
+	}
 
 	// The status sits under the title rather than under the body, so it stays
 	// on screen in a short terminal: the body is what the clip takes first.
@@ -95,16 +109,28 @@ func (p *pane) Bindings() []froth.Binding {
 		Action: actionCycle,
 		Keys:   []string{"d"},
 		Help:   "post a message that comes back",
+	}, {
+		Action: actionClose,
+		Keys:   []string{"x"},
+		Help:   "close this pane",
 	}}
 }
 
 func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	switch msg := msg.(type) {
 	case froth.ActionMsg:
-		if msg.Action == actionCycle {
+		switch msg.Action {
+		case actionCycle:
 			// Answering a message with the same message is the cycle the
 			// iteration cap is for.
 			uc.Self().Post(cycleMsg{})
+			uc.StopRising()
+		case actionClose:
+			// A surface removes itself. The removal commits at the next Apply,
+			// so this pane is still live for the rest of this update — and
+			// froth moves focus off it rather than leaving the keyboard
+			// pointing at nothing.
+			uc.Self().Destroy()
 			uc.StopRising()
 		}
 	case tea.KeyMsg:

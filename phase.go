@@ -1,7 +1,5 @@
 package froth
 
-import "fmt"
-
 // A phase is the part of an update froth is in, and therefore what a surface is
 // allowed to do. Each phase has its own context type, so most illegal
 // operations are compile errors; the runtime check exists for what types cannot
@@ -35,8 +33,8 @@ func (p phase) String() string {
 // itself as a retained context several frames from where the mistake is.
 func (f *Froth) enter(p phase) phaseToken {
 	if f.phase != phaseIdle {
-		panic(fmt.Sprintf("froth: Update or View called re-entrantly, during %s; "+
-			"nothing may call back into froth from a surface", f.phase))
+		bug("froth: Update or View called re-entrantly, during %s; "+
+			"nothing may call back into froth from a surface", f.phase)
 	}
 	f.phase = p
 	f.epoch++
@@ -56,12 +54,12 @@ type phaseToken struct {
 
 func (t phaseToken) check() {
 	if t.f == nil {
-		panic("froth: this context was not handed out by froth; a surface is " +
+		bug("froth: this context was not handed out by froth; a surface is " +
 			"called with the context for the phase it is in, and one cannot be " +
 			"constructed")
 	}
 	if t.f.phase != t.phase || t.f.epoch != t.epoch {
-		panic(fmt.Sprintf("froth: %s context used outside the phase it was "+
-			"handed out in; contexts must not be retained", t.phase))
+		bug("froth: %s context used outside the phase it was "+
+			"handed out in; contexts must not be retained", t.phase)
 	}
 }

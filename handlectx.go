@@ -82,6 +82,14 @@ type router struct{ reader }
 // re-entrantly, so a surface is never inside two of its own handlers.
 func (r router) Post(msg tea.Msg) {
 	r.check()
+	if r.f.shutdown {
+		r.f.report(Diagnostic{
+			Kind: DiagPostAfterShutdown,
+			Detail: fmt.Sprintf("a %T was posted to %s during shutdown; "+
+				"nothing will drain the queue, so it was dropped", msg, r.h),
+		})
+		return
+	}
 	r.f.queue = append(r.f.queue, envelope{to: r.h, msg: msg})
 }
 
@@ -116,6 +124,12 @@ type ReadCtx struct{ reader }
 // itself without restructuring anything.
 type SelfUpdateCtx struct{ router }
 
+// Destroy removes this surface and everything below it. The removal is recorded
+// and commits at the next Apply, so the surface stays live for the rest of this
+// update: messages already queued to it are still delivered, and a rising walk
+// passing through it still completes.
+func (sc SelfUpdateCtx) Destroy() { sc.destroy() }
+
 // A SelfApplyCtx is what a surface holds on itself during Apply, and the only
 // place structure a surface owns is assembled. Create and SetLayout name no
 // target, so creating a grandchild or arranging somebody else's children is not
@@ -125,6 +139,15 @@ type SelfApplyCtx struct{ router }
 // A ChildCtx names an immediate child of the surface that minted it. The
 // parentage was checked at the mint, so nothing here rechecks it.
 type ChildCtx struct{ router }
+
+// Destroy removes this child and everything below it. Removing a deep branch
+// means destroying your own child and letting the cascade do the rest — which
+// is the ownership rule holding rather than a limitation, since the surfaces
+// down there are not yours to name.
+//
+// It takes effect at once when called during Apply, and is recorded and commits
+// at the next Apply when called during Deliver.
+func (cc ChildCtx) Destroy() { cc.destroy() }
 
 // An AnyCtx names any live surface, whoever owns it. It carries what can be
 // done to a stranger — reaching it, not restructuring it — which is why
@@ -148,6 +171,10 @@ func (sc SelfApplyCtx) Create(s Surface, opts ...CreateOption) Handle {
 	sc.check()
 	return sc.f.reg.add(sc.h, s, opts...)
 }
+
+// Destroy removes this surface and everything below it, at once: Apply is where
+// structural change commits, so there is nothing to record.
+func (sc SelfApplyCtx) Destroy() { sc.destroy() }
 
 // SetLayout attaches a layout to this surface, which places its children from
 // then on. A surface with no layout stacks its children at its own whole rect.
@@ -183,10 +210,10 @@ func (t phaseToken) mintChild(self, h Handle) reader {
 	case n == nil:
 		t.reportDead("Child", h)
 	case n.parent != self:
-		panic(fmt.Sprintf("froth: Child was asked for %s, which is not an "+
+		bug("froth: Child was asked for %s, which is not an "+
 			"immediate child of %s; a surface owns itself and its immediate "+
 			"children, and reaching further is a bug rather than a condition",
-			h, self))
+			h, self)
 	}
 	return reader{phaseToken: t, h: h}
 }

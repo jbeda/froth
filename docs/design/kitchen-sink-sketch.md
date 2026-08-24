@@ -13,7 +13,7 @@
 > fields rather than bubbles' `key.Binding`, the text sink that keeps typing out of
 > them, keyboard traversal bounded by focus scopes, and froth's own `ActionFocusNext`
 > and `ActionFocusPrev` with `tab` and `shift+tab` bound to them. Everything concerning
-> intents, modals, the Environment, producers, reconcile, destroy and the bubbles
+> intents, modals, the Environment, producers, reconcile and the bubbles
 > adapter is still design.
 > [`milestone-log.md`](./milestone-log.md) records what shipped and where it diverged.
 >
@@ -56,6 +56,11 @@
 >   what can be invoked here, both as `[]ChainBinding`, which carries the declaring
 >   handle. An action can be asked for by identity with `uc.Invoke` and no key at all.
 >   See [ADR 0008](../adr/0008-shortcuts-resolve-to-actions.md)'s amendments.
+> - **`uc.Close()` does not exist.** A surface removes itself with
+>   `uc.Self().Destroy()`, which is the same operation the child tier spells
+>   `ac.Child(h).Destroy()`. `Unmount` runs for a surface that leaves by any route,
+>   shutdown included, and froth has a `Shutdown` to run that walk from the root. See
+>   [ADR 0014](../adr/0014-capability-is-minted-from-a-phase-context.md)'s amendment.
 > - **The dialog examples under-describe what froth supports.** A reply is a channel, not
 >   a single answer: a surface may reply repeatedly and close when it is done.
 

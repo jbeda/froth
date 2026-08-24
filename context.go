@@ -2,7 +2,6 @@ package froth
 
 import (
 	"context"
-	"fmt"
 	"slices"
 
 	tea "charm.land/bubbletea/v2"
@@ -97,9 +96,9 @@ func (uc *UpdateCtx) Rises() bool {
 func (uc *UpdateCtx) StopRising() {
 	uc.check()
 	if !uc.rising {
-		panic(fmt.Sprintf("froth: StopRising was called while handling a %T, "+
+		bug("froth: StopRising was called while handling a %T, "+
 			"which does not embed froth.Rising; only a rising message has a "+
-			"walk to end", uc.msg))
+			"walk to end", uc.msg)
 	}
 	uc.stopped = true
 }

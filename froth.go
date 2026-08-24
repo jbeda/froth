@@ -58,6 +58,12 @@ type Froth struct {
 	queue []envelope
 	diags []Diagnostic
 
+	// pendingDestroy holds the surfaces asked for during Deliver or Render and
+	// removed at the next Apply. shutdown says the instance has been torn down,
+	// after which posting is a reported drop and nothing else happens at all.
+	pendingDestroy []Handle
+	shutdown       bool
+
 	phase phase
 	epoch uint64
 }
@@ -74,7 +80,7 @@ func New(ctx context.Context, root Surface, opts ...Option) *Froth {
 		ctx = context.Background()
 	}
 	if root == nil {
-		panic("froth: New called with a nil root surface")
+		bug("froth: New called with a nil root surface")
 	}
 	var o options
 	for _, opt := range opts {
@@ -97,7 +103,8 @@ func (f *Froth) Init() tea.Cmd { return nil }
 
 // Update takes one message and settles: it delivers, applies, and repeats until
 // nothing is left to deliver, then returns the work the surfaces that saw the
-// message asked for. Forward it from the application model's Update.
+// message asked for. Forward it from the application model's Update. After
+// Shutdown it does nothing.
 //
 // Nothing is rendered here. A cascade of posted messages therefore resolves
 // entirely before the frame is drawn, so no half-settled state ever reaches the
@@ -106,6 +113,9 @@ func (f *Froth) Init() tea.Cmd { return nil }
 // The terminal size is froth's own business: a resize updates the rect surfaces
 // render into and is never delivered to a surface as a message.
 func (f *Froth) Update(msg tea.Msg) tea.Cmd {
+	if f.shutdown {
+		return nil
+	}
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		f.size = Size{W: ws.Width, H: ws.Height}
 		return f.settle()

@@ -283,10 +283,10 @@ func (f *Froth) chainBindings() []chainEntry {
 			continue
 		}
 		b, ok := n.surface.(Binder)
-		if !ok {
+		if !ok || n.panicked {
 			continue
 		}
-		for _, d := range b.Bindings() {
+		for _, d := range f.callBindings(b, chain[i]) {
 			// Any declaration of a froth action takes it over, a disabled one
 			// included — which is what makes disabling a froth binding as inert
 			// as disabling an application one. It counts even when the
@@ -308,6 +308,14 @@ func (f *Froth) chainBindings() []chainEntry {
 		add(frothBindings[i], Handle{})
 	}
 	return out
+}
+
+// callBindings asks one surface for its declarations under quarantine. It is
+// asked outside every phase, so a surface that panics here is recorded and
+// removed at the next Apply.
+func (f *Froth) callBindings(b Binder, h Handle) []Binding {
+	defer f.quarantine(phaseToken{}, h, "Bindings")
+	return b.Bindings()
 }
 
 // narrow reports the keys of a declaration that would actually arrive at it, and

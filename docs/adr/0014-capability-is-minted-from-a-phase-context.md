@@ -168,3 +168,40 @@ The rule shipped as written, so posting to a stored handle whose surface has gon
 reports `DiagDeadHandle` where it used to be silent. `DiagInvalidFocus` correspondingly
 has no reachable path until a surface can leave the tree between a recorded focus move and
 the Apply that commits it.
+
+## Amendment: what `Destroy` shipped as, and the panic that is not a surface's
+
+Settled while building the operation the tiers exist for.
+
+**`Destroy` is on all three tiers and takes no target.** `Self().Destroy()`,
+`Child(h).Destroy()`, and nothing on `At(h)` — so destroying a stranger does not compile,
+which is what the table above promised. The self tier carries it because a surface
+removing itself is ordinary; there is no `Close`, and the sketch's `uc.Close()` is
+superseded. One verb with one spelling was preferred to a second name for the same
+operation, per `CLAUDE.md` on building the explicit mechanism before sugaring it.
+
+**The root refuses by panicking, not by construction.** The ADR said root is undestroyable
+because nobody can mint an accessor naming it as a child, and that is true of the child
+tier. It is not true of the self tier: the root's own `Self()` is mintable like anyone
+else's. So the rule needed a mechanism after all, and it is a panic — a surface asking to
+destroy the tree it heads is a programming error, not a condition.
+
+**A panic quarantine has to tell a surface's failure from froth's own.** Panic quarantine
+recovers a panic out of `Update`, `Render`, `Mount`, `Unmount` or `Bindings`, reports it and
+takes the surface out of the tree. Every contract this ADR puts teeth on is enforced by a
+panic raised from inside one of those same callbacks, so a blanket `recover` would demote
+all of them to a diagnostic and a removal — the illegal call would be reported far from its
+cause and the program would carry on around it.
+
+froth therefore raises its own panics as an unexported error type and quarantine re-panics
+when it sees one. The rule: **a panic froth raised says the program is wrong, and a panic a
+surface raised says the surface is wrong.** The first must reach the developer; the second
+must not cost the terminal. The cost is that every panic site inside froth goes through one
+constructor, which is also the thing that makes the set greppable.
+
+**Considered and rejected: quarantining everything uniformly.** One code path, nothing to
+keep in sync, and every contract violation becomes survivable. Rejected because the
+guarantees this ADR spent a design on would then be advisory: an illegal call would produce
+a report and a missing surface rather than a stack trace at the call site. Reporting the two
+under different diagnostic kinds was rejected for the same reason — it distinguishes them in
+the hook while still not stopping the program.

@@ -2,6 +2,7 @@ package froth
 
 import (
 	"fmt"
+	"slices"
 	"sync/atomic"
 )
 
@@ -42,6 +43,18 @@ type node struct {
 	layout   Layout
 	meta     meta
 
+	// mounted says the mount step has reached this surface, and so that there
+	// is something for Unmount to undo. A surface created and destroyed within
+	// one Apply can leave without ever having been mounted.
+	//
+	// leaving says the surface is inside a removal already under way, so a
+	// destroy asked for from an Unmount running above it is a no-op rather than
+	// a second teardown. panicked says froth has quarantined it and will not
+	// call it again.
+	mounted  bool
+	leaving  bool
+	panicked bool
+
 	// lastActive is the child of this surface that most recently sat on the
 	// focus chain. It is restoration state — where focus lands when traversal
 	// re-enters this subtree — and is never consulted to answer where focus is:
@@ -76,7 +89,7 @@ type registry struct {
 // A root gets no options because New takes instance options, not create ones.
 func (r *registry) add(parent Handle, s Surface, opts ...CreateOption) Handle {
 	if s == nil {
-		panic("froth: a nil surface cannot enter the tree")
+		bug("froth: a nil surface cannot enter the tree")
 	}
 	if r.nodes == nil {
 		r.nodes = make(map[Handle]*node)
@@ -112,6 +125,23 @@ func (r *registry) nextEntered() (Handle, bool) {
 // registry and stay in the tree; they are simply never mounted, which is what
 // froth is left with when a mount cascade runs out of budget.
 func (r *registry) abandonEntered() { r.entered = nil }
+
+// remove takes h out of the tree and out of the registry. The handle stays
+// valid to hold and names nothing from here on, which is what makes a stored
+// handle safe rather than a pointer into freed state.
+//
+// It removes one node, not a subtree: the cascade is removeSubtree's, which has
+// to run every Unmount before anything is deleted.
+func (r *registry) remove(h Handle) {
+	n := r.nodes[h]
+	if n == nil {
+		return
+	}
+	if p := r.nodes[n.parent]; p != nil {
+		p.children = slices.DeleteFunc(p.children, func(c Handle) bool { return c == h })
+	}
+	delete(r.nodes, h)
+}
 
 // get returns the node h names, or nil if it names nothing.
 func (r *registry) get(h Handle) *node { return r.nodes[h] }

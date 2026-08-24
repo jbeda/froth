@@ -97,3 +97,32 @@ func (f *Froth) flush() {
 		}
 	}
 }
+
+// A frothPanic is a panic froth raised itself, as opposed to one that came out
+// of a surface. Panic quarantine recovers surface panics and takes the surface
+// out of the tree; it re-panics these, because a program that violates froth's
+// contract has a bug that a diagnostic would bury.
+//
+// It is an error so that a panic carrying one prints its message rather than a
+// struct dump, and it is unexported so nothing outside froth can raise one.
+type frothPanic struct{ msg string }
+
+func (p frothPanic) Error() string { return p.msg }
+
+// bug raises a panic attributed to froth. Every panic froth raises deliberately
+// goes through here.
+func bug(format string, args ...any) {
+	panic(frothPanic{fmt.Sprintf(format, args...)})
+}
+
+// DiagSurfacePanic is reported when a surface panics inside a froth callback.
+// froth recovers, takes the surface out of the tree by the ordinary destroy
+// path, and never calls it again — including its Unmount, which is code from
+// the same surface that has already failed once.
+const DiagSurfacePanic DiagnosticKind = "surface panic"
+
+// DiagPostAfterShutdown is reported when a surface posts a message during the
+// unmount walk Shutdown runs. Nothing will drain the queue, so the message is
+// dropped: it is pointless rather than illegal, and saying so is better than
+// refusing a call that reads as reasonable.
+const DiagPostAfterShutdown DiagnosticKind = "post after shutdown"

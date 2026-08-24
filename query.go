@@ -38,7 +38,7 @@ func (ac *ApplyCtx) Query() Query {
 
 func (q Query) check() {
 	if q.f == nil {
-		panic("froth: this Query was not handed out by froth; ask an instance " +
+		bug("froth: this Query was not handed out by froth; ask an instance " +
 			"or a context for one")
 	}
 }
