@@ -95,8 +95,8 @@ moved, which reads as a layout bug and is not one.
 ## How it knows where focus is
 
 It asks the surfaces. A surface learns it is focused during `Render` and froth tells nobody
-else — a directional move is serviced by froth and delivered nowhere, so no message announces
-it. Each surface records itself as it draws, into the board they share, and the banner —
+else — a directional move is a froth action nobody here takes, so the next frame is what
+announces it rather than a message. Each surface records itself as it draws, into the board they share, and the banner —
 created last, so it renders last — reports what they wrote. The same record is what tells the
 root which divider the size keys should move.
 

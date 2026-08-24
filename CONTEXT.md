@@ -169,13 +169,21 @@ absolute line. Lets a surface scroll unbounded content without ever measuring
 all of it.
 
 **Action**:
-What a shortcut resolves to: a stable identity a surface declares along with its
-default keys and help text. Surfaces handle actions rather than keys, so keys can
-be remapped without touching them. Resolution yields the identity and nothing else
-— who acts on it is decided by delivery, which rises from the active surface — so
-an action can also be invoked with no key pressed at all. It is a string because
-its identity has to survive in a settings file and in front of a user.
+The stable identity of something the application can be asked to do. A binding is
+one way to ask — a shortcut resolves to an action and nothing else, and who acts on
+it is decided by delivery, which rises from the active surface — but an action is
+not defined by having a key, and invoking one by identity is ordinary. It is a
+string because that identity has to survive in a settings file and in front of a
+user.
 _Avoid_: command, shortcut, hotkey
+
+**Action listing**:
+Every action the focus chain currently offers, each with the surface that declared
+it — what a command palette shows. It and the help view are two questions asked of
+one set of declarations, so neither can name an action the other does not: the
+listing keeps an action nobody bound a key to, and a text sink holding focus does
+not change it, because a palette's own filter field is one.
+_Avoid_: catalog, command list, registry
 
 **Text sink**:
 A surface that consumes ordinary typing. While one is focused, bare printable keys

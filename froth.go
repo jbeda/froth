@@ -110,8 +110,6 @@ func (f *Froth) Update(msg tea.Msg) tea.Cmd {
 		f.size = Size{W: ws.Width, H: ws.Height}
 		return f.settle()
 	}
-	if e, ok := f.route(msg); ok {
-		f.queue = append(f.queue, e)
-	}
+	f.queue = append(f.queue, f.route(msg))
 	return f.settle()
 }

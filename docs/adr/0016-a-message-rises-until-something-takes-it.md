@@ -264,6 +264,16 @@ condition. This is [ADR 0014](./0014-a-handle-confers-nothing.md)'s split applie
 second case — a stranger's handle where a child's belongs is a bug and panics, a surface
 that has gone is a condition and reports.
 
+## Amendment: the tail coalesces an untaken action per action, not per type
+
+Built as #39, which put froth's own handling at the tail of the walk and so made every
+action one message type. The amendment above coalesces the untaken diagnostic on `%T`,
+and its stated reason is that *"what is missing is a case, and a case belongs to a type"*.
+For an `ActionMsg` the case is a case in the inner switch, so coalescing on the type would
+report the first untaken action of a pass and hide every other one. The key is the type
+plus the action, and the reason is unchanged — it is the finding that is coalesced, and
+`untakenKind` is the one place that decides what the finding is.
+
 ## Parked: a check for a forgotten `StopRising`
 
 A `go vet`-style analyzer could find a surface that acts on a rising message and never ends

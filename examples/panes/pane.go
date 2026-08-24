@@ -105,6 +105,7 @@ func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 			// Answering a message with the same message is the cycle the
 			// iteration cap is for.
 			uc.Self().Post(cycleMsg{})
+			uc.StopRising()
 		}
 	case tea.KeyMsg:
 		key := msg.String()

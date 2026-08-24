@@ -35,9 +35,12 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 		title: "right",
 		body: "froth: focus is one handle, raw keys go to it, and froth " +
 			"walks it.\n\n" +
-			"tab and shift-tab are froth's own bindings, serviced by froth " +
-			"and delivered to nobody, so no pane implements the walk. The " +
-			"pane that sees a key posts it to its sibling, and the frame is " +
+			"tab and shift-tab are froth's own bindings. The action rises " +
+			"from whatever holds focus, nothing takes it, and froth moves " +
+			"focus at the end of the walk — so no pane implements it, and " +
+			"any surface on the way could have pre-empted froth simply by " +
+			"taking the message. The pane that sees a key posts it to its " +
+			"sibling, and the frame is " +
 			"drawn once, after both have handled it — you never see a " +
 			"half-settled screen.\n\n" +
 			"d posts a message that comes back to its sender, which is a " +
@@ -104,10 +107,10 @@ func (rt *root) Bindings() []froth.Binding {
 	}}
 }
 
-// The root sees no raw keys — those go to the focused pane — so what is
-// addressed to it is the action it declared. A rising message is the other
-// thing that arrives here: it was posted somewhere below and nothing on the way
-// up took it.
+// The root sees no raw keys — those go to the focused pane. What reaches it is
+// what rose: an action starts at whatever holds focus and climbs, whoever
+// declared it, and so does a message a control posted. Both stop here only
+// because this surface says so; anything it does not take carries on to froth.
 func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	switch m := msg.(type) {
 	case froth.ActionMsg:
@@ -118,7 +121,11 @@ func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 			// Moving focus to a scope enters it: froth lands on the control the
 			// scope last had focus on, or its first one.
 			uc.At(rt.scope).Focus()
+		default:
+			// Anything else keeps rising, which is how tab reaches froth.
+			return
 		}
+		uc.StopRising()
 	case noteMsg:
 		// The walk ends here rather than at the tail. Saying nothing would let
 		// it past the root to the instance, where froth would report that

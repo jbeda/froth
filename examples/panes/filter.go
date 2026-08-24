@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/jbeda/froth"
@@ -10,7 +12,31 @@ import (
 // key against anybody's bindings and delivers it here as a character instead.
 // It collects what it is given and draws it. It is not a text input — there is
 // no cursor, and nothing to move one with.
+//
+// It is also the smallest command palette there is. What it types is matched
+// against froth's list of the actions the focus chain currently offers, and
+// enter asks for the first match by identity, with no key pressed. Two things
+// that list does and the help bar's does not are the whole reason a palette can
+// be built on it: it keeps a keyless action, so froth.cancel is offerable at
+// all, and it is unmoved by a text sink holding focus — which this surface is,
+// so a list that stripped typing would empty itself the moment anyone used it.
 type filter struct{ text string }
+
+// match reports the first action whose help or identity contains what has been
+// typed. Nothing here knows an action by name.
+func match(actions []froth.ChainBinding, typed string) (froth.ChainBinding, bool) {
+	typed = strings.ToLower(strings.TrimSpace(typed))
+	if typed == "" {
+		return froth.ChainBinding{}, false
+	}
+	for _, a := range actions {
+		hay := strings.ToLower(a.Help + " " + string(a.Action))
+		if strings.Contains(hay, typed) {
+			return a, true
+		}
+	}
+	return froth.ChainBinding{}, false
+}
 
 func (fl *filter) Render(rc *froth.RenderCtx, r froth.Rect) string {
 	focused := rc.Focused()
@@ -20,6 +46,9 @@ func (fl *filter) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		border = lipgloss.Color("212")
 	}
 	body := "filter: " + fl.text
+	if a, ok := match(rc.Query().Actions(), fl.text); ok {
+		body += "  ⏎ " + a.Help
+	}
 	if !focused && fl.text == "" {
 		body = "tab here and type — q lands in the field, ctrl+c still quits"
 	}
@@ -54,7 +83,10 @@ func (fl *filter) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	if m, ok := msg.(froth.ActionMsg); ok {
 		if m.Action == actionClear {
 			fl.text = ""
+			uc.StopRising()
 		}
+		// Everything else keeps rising: this surface holds focus, so every
+		// action starts here whoever declared it and whoever will act on it.
 		return
 	}
 	k, ok := msg.(tea.KeyPressMsg)
@@ -62,6 +94,14 @@ func (fl *filter) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 		return
 	}
 	switch k.String() {
+	case "enter":
+		// Invoking is the same walk a key press gets, minus the resolving. The
+		// action goes to whatever holds focus — this field — and rises from
+		// there, so quit typed here quits exactly as ctrl+c does.
+		if a, ok := match(uc.Query().Actions(), fl.text); ok {
+			fl.text = ""
+			uc.Invoke(a.Action)
+		}
 	case "backspace":
 		if r := []rune(fl.text); len(r) > 0 {
 			fl.text = string(r[:len(r)-1])

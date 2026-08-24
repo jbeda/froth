@@ -31,8 +31,8 @@ type spot struct {
 // board is what the surfaces share. It carries the splits the layouts read, and
 // it is how the rest of the program finds out where focus is: a surface learns
 // it is focused during Render, and froth tells nobody else — a directional move
-// is serviced by froth and delivered nowhere, so no message announces it. Each
-// surface records itself as it draws.
+// is a froth action nobody here takes, so what announces it is the next frame
+// rather than a message. Each surface records itself as it draws.
 //
 // The banner is the root's last child and the walk that renders is depth-first
 // in child order, so the banner draws after every surface it reports on and

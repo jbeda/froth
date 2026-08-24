@@ -153,6 +153,16 @@ func (uc *UpdateCtx) stepFocus(delta int) {
 	uc.f.pendingFocus, uc.f.focusPending = to, true
 }
 
+// Invoke delivers an action as an ActionMsg to the focused surface, which rises
+// from there. No key is involved; a binding is one way to ask for an action and
+// not the only one.
+//
+// It names no target, so it cannot fail.
+func (uc *UpdateCtx) Invoke(a Action) {
+	uc.check()
+	uc.f.queue = append(uc.f.queue, uc.f.action(a))
+}
+
 // Ctx reports the context this surface's asynchronous work should use. Every
 // surface gets froth's root context, so work started here outlives the surface
 // that started it and is cancelled only when the instance's context is.

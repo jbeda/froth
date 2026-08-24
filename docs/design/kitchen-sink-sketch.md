@@ -13,8 +13,8 @@
 > fields rather than bubbles' `key.Binding`, the text sink that keeps typing out of
 > them, keyboard traversal bounded by focus scopes, and froth's own `ActionFocusNext`
 > and `ActionFocusPrev` with `tab` and `shift+tab` bound to them. Everything concerning
-> intents, modals, the Environment, producers, reconcile, destroy, the help query and
-> the bubbles adapter is still design.
+> intents, modals, the Environment, producers, reconcile, destroy and the bubbles
+> adapter is still design.
 > [`milestone-log.md`](./milestone-log.md) records what shipped and where it diverged.
 >
 > **Superseded in specific ways, and not yet rewritten.** Decisions taken after this was
@@ -51,6 +51,11 @@
 > - **The theme-picker example is wholly stale**, and has a bug besides: `appRoot.Apply`
 >   calls `ac.SetEnvOn(ac.Root(), ...)`, using the child-targeting form on itself. It also
 >   raises an intent and commits in Apply, neither of which exists.
+> - **The query has two binding views and neither returns `[]Binding`.**
+>   `Query.LiveBindings` answers what a key press would do and `Query.Actions` answers
+>   what can be invoked here, both as `[]ChainBinding`, which carries the declaring
+>   handle. An action can be asked for by identity with `uc.Invoke` and no key at all.
+>   See [ADR 0008](../adr/0008-shortcuts-resolve-to-actions.md)'s amendments.
 > - **The dialog examples under-describe what froth supports.** A reply is a channel, not
 >   a single answer: a surface may reply repeatedly and close when it is done.
 

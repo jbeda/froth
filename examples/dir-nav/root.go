@@ -89,6 +89,9 @@ func (rt *root) Bindings() []froth.Binding {
 	)
 }
 
+// An action rises from whatever holds focus, so the root sees the ones nothing
+// below it took. Taking one means ending the walk: without that it carries on
+// past the root to froth, which reports that nobody took it.
 func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	m, ok := msg.(froth.ActionMsg)
 	if !ok {
@@ -109,7 +112,12 @@ func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 		rt.resize(-1, true)
 	case actionTaller:
 		rt.resize(1, true)
+	default:
+		// froth's own focus actions are among these: the board rebinds them to
+		// the bare arrows and leaves them to rise, so froth moves focus.
+		return
 	}
+	uc.StopRising()
 }
 
 // resize moves the divider next to whatever holds focus, by one cell. There is

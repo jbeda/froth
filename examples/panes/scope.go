@@ -39,6 +39,7 @@ func (g *scopePane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	case froth.ActionMsg:
 		if m.Action == actionLeaveScope {
 			uc.At(g.out).Focus()
+			uc.StopRising()
 		}
 	case noteMsg:
 		// Acting on a rising message is not taking it: the walk ends only where
@@ -106,5 +107,6 @@ func (c *control) Render(rc *froth.RenderCtx, r froth.Rect) string {
 func (c *control) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	if m, ok := msg.(froth.ActionMsg); ok && m.Action == actionNote {
 		uc.Self().Post(noteMsg{from: c.label})
+		uc.StopRising()
 	}
 }

@@ -209,8 +209,9 @@ if it did, a `SurvivesModal` binding would resolve from above and then never rea
 surface that declared it — every surviving binding would end as a diagnostic. See
 [ADR 0016](./0016-a-message-rises-until-something-takes-it.md).
 
-**`SurvivesModal` must be honoured inside `liveBindings()` and nowhere else.** Textual has
-shipped the bug that comes from doing otherwise: its escape mechanism is a second walk over
+**`SurvivesModal` must be honoured inside the one binding walk and nowhere else** —
+`chainBindings()` in `binding.go`. Textual has shipped the bug that comes from doing
+otherwise: its escape mechanism is a second walk over
 the untruncated chain, while its footer reads the truncated one, so `ctrl+p` fires under a
 modal screen and is absent from the help. One walk is what prevents this, and the flag has
 to live inside it.
@@ -237,6 +238,48 @@ worth noting that this was [ADR 0009](./0009-one-tree-no-implicit-surfaces.md)'s
 condition for reviving the superroot — *"if modality gives froth something to service that
 has no sensible home"* — and that it no longer would, because the instance at the tail of
 the walk is a sensible home.
+
+## Amendment: four things building it settled
+
+Built as #39. None of them changes the decisions above; three are refinements and one is
+a correction to this ADR's own wording.
+
+**The catalog is called `Query.Actions`, and the entry type is shared with help.**
+`LiveBindings` and `Actions` both return `[]ChainBinding` — the declaration plus the
+handle that declared it — and differ only in how `Keys` is narrowed. One type is the
+honest encoding of *"two views over one declaration"*: a second struct would have made
+them look like two sources. `From` also closes a hole that predates the catalog, since
+`LiveBindings` had been dropping the declaring handle entirely.
+
+**`From` is where a declaration came from and says nothing about where the action goes.**
+That distinction is the whole point of this ticket, so the field's doc says it outright.
+It is the zero handle for a stock binding, which no surface declared.
+
+**A disabled declaration is listed, and "every enabled action on the chain" above is
+wrong.** The amendment that coined the phrase also says an application *"may show a
+disabled action greyed in a palette and decline to invoke it; that is its call"*, which
+needs the entry present. Listing it also matches what help already does — a disabled
+binding is reported with its keys so help can grey it rather than lose it — and keeps the
+catalog free of a key-path rule. Read "every enabled action" as "every action".
+
+**Shadowing is computed twice, because it is not the same question twice.** A key a text
+sink takes as typing is claimed by nobody, so what shadows what genuinely differs between
+the two views whenever a sink holds focus. One walk, one call to each surface's
+`Bindings()`, two sets of claims — which is still one walk in the sense the amendment
+above insists on, since nothing re-reads a declaration or re-decides the chain. A
+declaration every one of whose keys was shadowed is listed with none, which reads the same
+as a keyless declaration and should: neither has a key that reaches it here.
+
+**"Catalog" is this ADR's word and not froth's.** The thing is `Query.Actions` in code and
+an **action listing** in `CONTEXT.md`. The amendments above are left as written rather than
+retitled, but nothing should carry "catalog" forward into code, comments or vocabulary.
+
+**Keyless invocation makes the `ActionCancel` gap reachable without a key.** The amendment
+above notes that a froth key bound to an action nobody takes fires the tail diagnostic on
+every press, and that froth binds no key here for exactly that reason. `Invoke` gets past
+that: the listing offers `froth.cancel`, an application may invoke it, and until something
+takes it the walk ends untaken and reports. That is the designed behaviour of a walk nobody
+ends rather than a defect, and it sharpens the open question below rather than answering it.
 
 ## Parked: registering an action
 

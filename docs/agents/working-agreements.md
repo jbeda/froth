@@ -120,7 +120,14 @@ Spec caught a real defect. Verify each finding rather than accepting it.
 
 **Then break each rule and check that a test fails.** Two of #13's rules turned out to be
 pinned by nothing. **Count test failures, not build failures** — a mutation that does not
-compile scores as "caught" and is not.
+compile scores as "caught" and is not. #39 ignored that sentence and had a mutation score
+zero for exactly this reason.
+
+**Restore the mutated files from a copy, never with `git checkout --`.** On #39 the harness
+reverted the files under test to `HEAD` between mutations and destroyed three files of
+uncommitted work, and its `cp` backup had silently failed for want of its destination
+directory. Copy into `.scratch/` first, assert the copy exists, and restore from that — or
+commit before mutating.
 
 **Scaffolding tests are fine; shipping them was decided against.** A throwaway `_test.go`
 driving froth through the public API and printing the frame is the fastest way to see an

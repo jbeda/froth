@@ -21,32 +21,34 @@ type envelope struct {
 }
 
 // route addresses a message arriving from Bubble Tea, and is where a key press
-// stops being a key. It reports false when there is nothing to deliver, which is
-// a press froth answered itself.
+// stops being a key.
 //
-// A press that matches a binding on the focus chain becomes an ActionMsg
-// addressed to the surface that declared it, which is not necessarily the
-// focused one — unless the action is one froth services, which froth performs
-// here and delivers nowhere. A press that matches nothing, and every other key
-// event, goes to the focused surface as it stands. Everything else goes to the
-// root, which is the surface the application handed froth and so the one its own
-// messages belong at.
+// A press that matches a binding on the focus chain becomes an ActionMsg, which
+// rises: resolution says which action the key means and delivery says who acts
+// on it. A press that matches nothing, and every other key event, goes to the
+// focused surface as it stands. Everything else goes to the root, which is the
+// surface the application handed froth and so the one its own messages belong
+// at.
 //
 // Only a press resolves. A release is the same key arriving a second time, so
 // matching it would fire every action twice.
-func (f *Froth) route(msg tea.Msg) (envelope, bool) {
+func (f *Froth) route(msg tea.Msg) envelope {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
-		if to, a, ok := f.resolve(k); ok {
-			if f.service(a) {
-				return envelope{}, false
-			}
-			return envelope{to: to, msg: ActionMsg{Action: a}}, true
+		if a, ok := f.resolve(k); ok {
+			return f.action(a)
 		}
 	}
 	if _, ok := msg.(tea.KeyMsg); ok {
-		return envelope{to: f.focused(), msg: msg}, true
+		return envelope{to: f.focused(), msg: msg}
 	}
-	return envelope{to: f.root, msg: msg}, true
+	return envelope{to: f.root, msg: msg}
+}
+
+// action addresses an action at the active surface, where the walk that delivers
+// it starts. A resolved key press and a keyless invocation both come through
+// here, so a command palette needs no path of its own.
+func (f *Froth) action(a Action) envelope {
+	return envelope{to: f.focused(), msg: ActionMsg{Action: a}}
 }
 
 // A budget bounds one settle pass. Delivering a message and mounting a surface
@@ -57,8 +59,8 @@ type budget struct {
 	left    int
 	tripped bool
 
-	// untaken records the message types already reported as untaken during this
-	// pass. See reportUntaken.
+	// untaken records what has already been reported as untaken during this
+	// pass. See reportUntaken and untakenKind.
 	untaken map[string]bool
 }
 
@@ -182,24 +184,29 @@ func (f *Froth) deliverEntry(e envelope, b *budget, cmds *[]tea.Cmd) bool {
 		h = n.parent
 	}
 
-	f.reportUntaken(b, e)
+	// froth is the tail. It takes the actions it implements itself, after every
+	// surface has had its turn, so an application pre-empts one by taking the
+	// message and needs no override table.
+	if !f.service(e.msg) {
+		f.reportUntaken(b, e)
+	}
 	return true
 }
 
 // reportUntaken says a rising message climbed past every surface with nobody
-// taking it — once per message type per settle pass.
+// taking it — once per finding per settle pass, where the finding is what
+// untakenKind names.
 //
-// Coalescing on the type is what keeps one bug from arriving as thousands of
-// reports: a missing case is a property of a type, so two hundred rows posting
-// the same untaken message is one thing to fix, and a cascade of them would
-// otherwise spend the whole budget reporting. Two different types are two
-// findings and both are reported. The handle in the detail is the first one
-// seen, as an example of where to look.
+// Coalescing is what keeps one bug from arriving as thousands of reports: what
+// is missing is a case, so two hundred rows posting the same untaken message is
+// one thing to fix, and a cascade of them would otherwise spend the whole budget
+// reporting. Two distinct findings are reported separately. The handle in the
+// detail is the first one seen, as an example of where to look.
 func (f *Froth) reportUntaken(b *budget, e envelope) {
 	if b.untaken == nil {
 		b.untaken = make(map[string]bool)
 	}
-	kind := fmt.Sprintf("%T", e.msg)
+	kind := untakenKind(e.msg)
 	if b.untaken[kind] {
 		return
 	}
@@ -209,6 +216,17 @@ func (f *Froth) reportUntaken(b *budget, e envelope) {
 		Detail: fmt.Sprintf("a %s posted to %s rose past every surface and "+
 			"nothing took it", kind, e.to),
 	})
+}
+
+// untakenKind names the finding a walk that nobody ended represents, which is
+// what reportUntaken coalesces on. It is the message type, except for an
+// ActionMsg: every action is one type, and the missing case is per action
+// rather than per type, so reporting one of them would hide the rest.
+func untakenKind(msg tea.Msg) string {
+	if m, ok := msg.(ActionMsg); ok {
+		return fmt.Sprintf("%T for %q", msg, m.Action)
+	}
+	return fmt.Sprintf("%T", msg)
 }
 
 // deliver runs the Deliver phase for one message and one surface, reporting

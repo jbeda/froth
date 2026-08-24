@@ -9,8 +9,10 @@
 // with froth.TabStop(); the notes pane is created without it, so the walk passes
 // over it while it keeps its place in the row and its share of the space. No
 // surface implements traversal and none binds tab: tab and shift-tab are froth's
-// own bindings for actions froth services itself, and an application rebinds or
-// disables them by declaring them like any other.
+// own bindings, and an application rebinds or disables them by declaring them
+// like any other. froth is the last stop on an action's walk rather than the
+// first, so a surface that wanted tab for something else could also simply take
+// the message and never let it get there.
 //
 // The scope on the right is a focus scope. Tab neither lands on it nor walks
 // into it, and tab inside it reaches nothing outside: g moves focus in, and the
@@ -45,15 +47,24 @@
 // froth abandons it, reports it through the diagnostic hook, and the program
 // carries on.
 //
-// Quit is a binding declared by the root, so it fires while a pane holds focus:
-// froth matches the key against the focus chain and hands the action to the
-// surface that declared it. The panes declare one of their own, and tab is
-// still a raw key they match themselves.
+// Quit is a binding declared by the root, so it fires while a pane holds focus.
+// Declaring it is not how the root receives it: matching the key answers which
+// action it means here and nothing else, and the action then starts at whatever
+// holds focus and climbs to the root, which takes it. Anything on the way could
+// have taken it first.
 //
 // The filter field along the top is created with froth.TextSink(), and it is
 // what the two halves of that quit binding are for. While it holds focus, "q"
 // is ordinary typing and lands in the field; "ctrl+c" is a chord, so it still
 // resolves to the root and quits. Tab it away and "q" is a shortcut again.
+//
+// The field is also the smallest command palette there is. Type into it and it
+// matches what froth says the focus chain currently offers — every action, not
+// every key — and enter asks for the first match by identity, with no key
+// pressed at all. Type "quit" and press enter. That listing is the same
+// declarations the bar at the bottom reads, asked a different question: it keeps
+// an action nobody bound a key to, and it does not change when a text sink takes
+// focus, which matters because the palette's own field is one.
 //
 // Pressing "n" inside the scope shows the other kind of delivery. The control
 // posts a message whose type embeds froth.Rising, so it does not stop where it

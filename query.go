@@ -54,27 +54,49 @@ func (q Query) Focus() Handle {
 	return q.f.focused()
 }
 
-// LiveBindings reports the bindings currently in effect, in the order a key
-// press is matched against them: deepest on the focus chain first, then froth's
-// own. It is the same walk resolution uses, so a help display built from it
-// cannot describe something other than what pressing the key does.
+// LiveBindings reports what a key press would currently do, in the order presses
+// are matched: deepest on the focus chain first, then froth's own. It is the
+// walk resolution uses, so help cannot describe something other than what
+// pressing the key does.
 //
 // Each binding carries only the keys that would actually reach it. A key some
 // surface closer to focus already answers to is gone from the binding behind it,
-// and while a text sink holds focus every key that is ordinary typing is gone
-// from all of them — which is why a quit bound to "q" and "ctrl+c" reports both
-// until a text field takes focus and only "ctrl+c" after. A binding left with no
-// keys is not reported at all.
+// and a text sink holding focus takes every key that is ordinary typing out of
+// all of them. A binding left with no keys is not reported.
 //
-// A disabled binding is reported with its keys and its Disabled field set, not
-// omitted: it cannot fire, and the application decides whether that is worth
-// showing greyed or worth hiding. Nothing else in the result can fail to fire.
-func (q Query) LiveBindings() []Binding {
+// A disabled binding is reported with its Disabled field set rather than
+// omitted, so an application can grey it instead of losing it.
+func (q Query) LiveBindings() []ChainBinding {
 	q.check()
-	live := q.f.liveBindings()
-	out := make([]Binding, 0, len(live))
-	for _, lb := range live {
-		out = append(out, lb.Binding)
+	collected := q.f.chainBindings()
+	out := make([]ChainBinding, 0, len(collected))
+	for i := range collected {
+		if len(collected[i].live) == 0 {
+			continue
+		}
+		cb := collected[i].ChainBinding
+		cb.Keys = collected[i].live
+		out = append(out, cb)
+	}
+	return out
+}
+
+// Actions reports every action the focus chain currently offers, in the same
+// order LiveBindings uses, each with the handle that declared it. An action with
+// no keys is reported like any other, and a text sink holding focus changes
+// nothing: the question is what can be asked for, not what a key would do.
+//
+// Keys carries whatever keys reach the action, which may be none. Disabled is
+// reported rather than omitted and gates nothing — Invoke takes an identity, so
+// what to do with a disabled entry is the application's call.
+func (q Query) Actions() []ChainBinding {
+	q.check()
+	collected := q.f.chainBindings()
+	out := make([]ChainBinding, 0, len(collected))
+	for i := range collected {
+		cb := collected[i].ChainBinding
+		cb.Keys = collected[i].listed
+		out = append(out, cb)
 	}
 	return out
 }

@@ -39,6 +39,7 @@ func (s *scope) Bindings() []froth.Binding {
 func (s *scope) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	if m, ok := msg.(froth.ActionMsg); ok && m.Action == actionLeaveScope {
 		uc.At(s.out).Focus()
+		uc.StopRising()
 	}
 }
 

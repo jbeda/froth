@@ -981,3 +981,79 @@ start a second naming convention for one call.
 - **A dead handle ends a walk** rather than climbing from where the surface used to be. The
   parent is not recoverable from a handle that names nothing, and guessing is worse than
   dropping.
+
+### #39 — An action resolves to an identity and rises, and the bindings gain a listing
+
+**Shipped.** Resolving a key press answers which action it means here and nothing else;
+`ActionMsg` embeds `froth.Rising` and is posted to the **active surface**, so who acts on it
+is settled by the climb rather than by who declared the binding. `service()` moved from in
+front of delivery to the tail of the walk, after root. `uc.Invoke(a)` asks for an action by
+identity with no key press, through the same envelope a resolved press produces.
+`Query.LiveBindings` and the new `Query.Actions` are two views over one walk, both
+`[]ChainBinding`.
+
+**The hole this closed is worth stating in one line.** A surface could rebind `focus.next`
+and never receive it, because `service` intercepted the identity before delivery. Now it
+receives it, and taking the message is the whole of pre-empting froth — no override table,
+and framework behaviour falls out of nobody else taking it.
+
+**Two claim maps, not one.** A key a text sink takes as typing is claimed by nobody, so
+shadowing genuinely resolves differently for the two views while a sink holds focus. It is
+still one walk and one `Bindings()` call per surface, which is what ADR 0008's amendment
+insists on; only the claim bookkeeping is doubled. Merging them into one map fails two
+tests.
+
+**`route` lost its bool.** With `service()` gone from the front, there is no press froth
+answers without delivering, so "nothing to deliver" stopped being expressible. `unparam`
+found it rather than a human.
+
+**The untaken diagnostic now coalesces per action.** Every action is one message type, so
+#38's per-type coalescing would have reported the first untaken action of a pass and hidden
+the rest. `untakenKind` is the one place that decides what the finding is; ADR 0016 carries
+the reasoning.
+
+**Disabled entries are listed, and ADR 0008 said otherwise.** Its amendment says "every
+enabled action on the chain" two sentences before saying an application may grey a disabled
+one in a palette. The second is what shipped, and the ADR is corrected rather than the code
+bent to it — help already reports a disabled binding for exactly this reason.
+
+**Nine mutations, nine caught**, failing between one and nineteen tests each. What the
+harness itself taught is in `docs/agents/working-agreements.md` under Verifying, which is
+where process lessons live.
+
+**The test fixture grew a `takes` field** — the actions a `speaker` ends the walk for. It
+had to: with actions rising, every ancestor `speaker` records what a key produced, so
+several M2 tests that read "the declarer got it and the focused surface did not" now read
+"both did", and the ones about focus navigation had to stop asserting on the root's row at
+all. Those rewrites are the change being visible in the tests rather than tests being
+loosened.
+
+**The example gained a one-line command palette.** The filter field matches what it is typed
+against `Query.Actions()` and enter invokes the first match. It is there because `Invoke`
+and `Actions` would otherwise have shipped with no caller, and because it demonstrates the
+two rules that separate the listing from help in the one place they matter: it keeps a
+keyless action, and it is a text sink itself.
+
+**The review found the constraint had drifted from its own home.** ADR 0008 said
+`SurvivesModal` must be honoured "inside `liveBindings()`", and this ticket renamed that
+function — so the one sentence M4 has to obey was pointing at nothing. Renaming a function
+an ADR names by hand is a documentation change, and `grep` for the old name is the check.
+
+**Two views, one walk, and now a test that says so.** Nothing pinned "one `Bindings()` call
+per surface", which is the actual anti-drift invariant behind the whole two-views design —
+the ⊆ test that existed would pass just as well if each view walked separately. A counting
+`Binder` asked once per view and once per key press is what pins it.
+
+**"Catalog" was never froth's word.** ADR 0008's amendments use it throughout, the code and
+`CONTEXT.md` say listing and `Query.Actions`. The ADR now says so rather than being
+retitled, because rewriting what an amendment said is worse than recording that its term
+did not survive contact.
+
+**`SurvivesModal` is still unread, which is the right amount of work.** #39's last
+acceptance criterion says the flag must be honoured inside the one binding walk and nowhere
+else. Modality does not exist until M4, so there is nothing to honour yet; what this ticket
+owed was leaving exactly one place for it to go, and `collect()` is it. The constraint is
+recorded in ADR 0008 and will be met or broken there.
+
+**Untouched and still open on #17's session-B comment:** nothing. Both catalog bugs and the
+dropped `liveBinding.from` are fixed here.

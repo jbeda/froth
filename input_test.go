@@ -1,6 +1,7 @@
 package froth_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -16,6 +17,11 @@ type speaker struct {
 	letter   string
 	bindings []froth.Binding
 	last     string
+
+	// takes are the actions this speaker ends the walk for. A speaker given
+	// none records what reached it and lets it carry on, which is what silence
+	// means: acting on a rising message is not taking it.
+	takes []froth.Action
 }
 
 func (s *speaker) Bindings() []froth.Binding { return s.bindings }
@@ -31,6 +37,9 @@ func (s *speaker) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	switch m := msg.(type) {
 	case froth.ActionMsg:
 		s.last = string(m.Action)
+		if slices.Contains(s.takes, m.Action) {
+			uc.StopRising()
+		}
 	case tea.KeyMsg:
 		s.last = m.String()
 	}
@@ -96,7 +105,7 @@ func bindTree(t *testing.T, root *bindRoot) *froth.Froth {
 	return f
 }
 
-func TestAnAncestorsBindingFiresWhileAChildHasFocus(t *testing.T) {
+func TestAnAncestorsBindingResolvesWhileAChildHasFocus(t *testing.T) {
 	left, right := &speaker{letter: "l"}, &speaker{letter: "r"}
 	root := &bindRoot{
 		speaker: speaker{letter: ".", bindings: binds("q", "Q")},
@@ -107,9 +116,32 @@ func TestAnAncestorsBindingFiresWhileAChildHasFocus(t *testing.T) {
 
 	f.Update(keyPress('q'))
 
-	if got, want := f.View().Content, "Q.\nlr"; got != want {
-		t.Errorf("View().Content = %q, want %q: the surface that declared the "+
-			"binding gets the action, not the one that had focus", got, want)
+	if got, want := f.View().Content, "Q.\nQr"; got != want {
+		t.Errorf("View().Content = %q, want %q: the key resolves against the "+
+			"whole chain and the action then rises through it, so the focused "+
+			"surface and the one that declared the binding both see it", got, want)
+	}
+}
+
+// The declaring surface is not the destination by virtue of having declared it.
+// Here the focused surface declares nothing, sees the action first, and ends
+// the walk — so the surface whose binding matched never hears about it.
+func TestTheFocusedSurfaceSeesAnActionBeforeTheSurfaceThatDeclaredIt(t *testing.T) {
+	left := &speaker{letter: "l", takes: []froth.Action{"Q"}}
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: binds("q", "Q")},
+		kids:    []froth.Surface{left, &speaker{letter: "r"}},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('q'))
+
+	if got, want := f.View().Content, "..\nQr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+	if root.last != "" {
+		t.Errorf("the declaring surface saw %q; the walk ended below it", root.last)
 	}
 }
 
@@ -124,7 +156,7 @@ func TestADeeperBindingBeatsAnAncestorsForTheSameKey(t *testing.T) {
 
 	f.Update(keyPress('x'))
 
-	if got, want := f.View().Content, "..\nLr"; got != want {
+	if got, want := f.View().Content, "L.\nLr"; got != want {
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
 }
@@ -141,7 +173,7 @@ func TestADisabledBindingFallsThroughToAnAncestor(t *testing.T) {
 
 	f.Update(keyPress('x'))
 
-	if got, want := f.View().Content, "R.\nlr"; got != want {
+	if got, want := f.View().Content, "R.\nRr"; got != want {
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
 }
@@ -210,7 +242,7 @@ func TestBindingsOnOneSurfaceResolveInDeclarationOrder(t *testing.T) {
 
 	f.Update(keyPress('x'))
 
-	if got, want := f.View().Content, "..\nAr"; got != want {
+	if got, want := f.View().Content, "A.\nAr"; got != want {
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
 }
@@ -244,7 +276,7 @@ func TestOneBindingCanCarrySeveralKeys(t *testing.T) {
 
 	f.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 
-	if got, want := f.View().Content, "Q.\nlr"; got != want {
+	if got, want := f.View().Content, "Q.\nQr"; got != want {
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
 }
@@ -318,7 +350,7 @@ func TestAModifiedChordStillResolvesWhileATextSinkHasFocus(t *testing.T) {
 
 	f.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 
-	if got, want := f.View().Content, "Q.\nfo"; got != want {
+	if got, want := f.View().Content, "Q.\nQo"; got != want {
 		t.Errorf("View().Content = %q, want %q: a chord is not typing, so an "+
 			"ancestor's binding still fires", got, want)
 	}
@@ -342,7 +374,7 @@ func TestKeysThatPrintNothingStillResolveWhileATextSinkHasFocus(t *testing.T) {
 
 			f.Update(c.key)
 
-			if got, want := f.View().Content, "K.\nfo"; got != want {
+			if got, want := f.View().Content, "K.\nKo"; got != want {
 				t.Errorf("View().Content = %q, want %q", got, want)
 			}
 		})
@@ -378,7 +410,7 @@ func TestASurfaceThatIsNotATextSinkMatchesOrdinaryTyping(t *testing.T) {
 
 	f.Update(typed('q'))
 
-	if got, want := f.View().Content, "Q.\nfo"; got != want {
+	if got, want := f.View().Content, "Q.\nfQ"; got != want {
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
 }
@@ -390,7 +422,7 @@ func TestMovingFocusOffATextSinkRestoresMatching(t *testing.T) {
 	f.Update(focusMsg{to: root.handles[1]})
 	f.Update(typed('q'))
 
-	if got, want := f.View().Content, "Q.\nqo"; got != want {
+	if got, want := f.View().Content, "Q.\nqQ"; got != want {
 		t.Errorf("View().Content = %q, want %q: the flag follows focus and "+
 			"leaves nothing set behind the move", got, want)
 	}
@@ -423,7 +455,7 @@ func TestATextSinkAboveTheFocusedSurfaceSuppressesNothing(t *testing.T) {
 
 	f.Update(typed('q'))
 
-	if got, want := f.View().Content, "Q\np\nl"; got != want {
+	if got, want := f.View().Content, "Q\nQ\nQ"; got != want {
 		t.Errorf("View().Content = %q, want %q: only the focused surface's own "+
 			"flag suppresses matching", got, want)
 	}
@@ -455,7 +487,7 @@ func TestABindingOnBothAPrintableAndAChordKeepsTheChordWhileATextSinkHasFocus(t 
 	}
 
 	f.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-	if got, want := f.View().Content, "Q.\nqo"; got != want {
+	if got, want := f.View().Content, "Q.\nQo"; got != want {
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
 }
@@ -463,8 +495,19 @@ func TestABindingOnBothAPrintableAndAChordKeepsTheChordWhileATextSinkHasFocus(t 
 // froth's own navigation bindings
 //
 // Tab and shift-tab resolve to froth-owned actions with froth-owned keys, and
-// froth services them itself. An application takes one over by declaring a
-// Binding for it, which is the machinery it already uses for its own.
+// froth handles them at the tail of the walk, after every surface has had its
+// turn. An application takes one over by declaring a Binding for it, which is
+// the machinery it already uses for its own — and pre-empts froth's handling by
+// taking the message, which is the machinery it already uses for that.
+
+// focusRow is the row the children draw on, which is where these tests read
+// focus from. The root draws the last thing that reached it on the row above,
+// and a froth action reaching it is what several of them are about — so they
+// assert on that separately rather than folding it into one string.
+func focusRow(f *froth.Froth) string {
+	_, row, _ := strings.Cut(f.View().Content, "\n")
+	return row
+}
 
 // navRow stands a root over one-cell focusable children, all of them tab stops,
 // with whatever bindings the root was given. The root's own row draws the last
@@ -484,13 +527,13 @@ func TestTabMovesFocusWithoutTheApplicationBindingAnything(t *testing.T) {
 	f, _ := navRow(t, nil, "lr")
 
 	f.Update(tabPress())
-	if got, want := f.View().Content, "..\nLr"; got != want {
-		t.Errorf("after tab, View().Content = %q, want %q", got, want)
+	if got, want := focusRow(f), "Lr"; got != want {
+		t.Errorf("after tab, the focus row = %q, want %q", got, want)
 	}
 
 	f.Update(tabPress())
-	if got, want := f.View().Content, "..\nlR"; got != want {
-		t.Errorf("after a second tab, View().Content = %q, want %q", got, want)
+	if got, want := focusRow(f), "lR"; got != want {
+		t.Errorf("after a second tab, the focus row = %q, want %q", got, want)
 	}
 }
 
@@ -499,22 +542,46 @@ func TestShiftTabMovesFocusTheOtherWay(t *testing.T) {
 
 	f.Update(shiftTabPress())
 
-	if got, want := f.View().Content, "..\nlR"; got != want {
-		t.Errorf("after shift-tab, View().Content = %q, want %q", got, want)
+	if got, want := focusRow(f), "lR"; got != want {
+		t.Errorf("after shift-tab, the focus row = %q, want %q", got, want)
 	}
 }
 
-// froth services its own action rather than delivering it: the surface that
-// declared the binding asked froth to move focus, not to be told about it.
-func TestAFrothActionIsServicedAndNotDelivered(t *testing.T) {
-	f, _ := navRow(t, []froth.Binding{
+// froth is the tail rather than an interception in front of delivery: the
+// action is offered to every surface on the way up, and froth moves focus only
+// because nobody took it.
+func TestAFrothActionIsOfferedToEverySurfaceBeforeFrothTakesIt(t *testing.T) {
+	f, root := navRow(t, []froth.Binding{
 		{Action: froth.ActionFocusNext, Keys: []string{"n"}, Help: "next"},
 	}, "lr")
 
 	f.Update(keyPress('n'))
 
-	if got, want := f.View().Content, "..\nLr"; got != want {
-		t.Errorf("View().Content = %q, want %q — focus moves and nobody is told", got, want)
+	if got, want := focusRow(f), "Lr"; got != want {
+		t.Errorf("the focus row = %q, want %q — froth still moved focus", got, want)
+	}
+	if got, want := root.last, string(froth.ActionFocusNext); got != want {
+		t.Errorf("the root saw %q, want %q: declaring a froth action's keys "+
+			"and not taking the message is a supported path, and the message "+
+			"still arrives", got, want)
+	}
+}
+
+// Taking it is the whole override mechanism. The root declares one of froth's
+// own actions, ends the walk, and froth never gets its turn.
+func TestASurfaceThatTakesAFrothActionPreemptsFroth(t *testing.T) {
+	f, root := navRow(t, []froth.Binding{
+		{Action: froth.ActionFocusNext, Keys: []string{"n"}, Help: "next"},
+	}, "lr")
+	root.takes = []froth.Action{froth.ActionFocusNext}
+
+	f.Update(keyPress('n'))
+
+	if got, want := focusRow(f), "lr"; got != want {
+		t.Errorf("the focus row = %q, want %q — focus should not have moved", got, want)
+	}
+	if got, want := root.last, string(froth.ActionFocusNext); got != want {
+		t.Errorf("the root saw %q, want %q", got, want)
 	}
 }
 
@@ -554,8 +621,8 @@ func TestAnApplicationDisablesAFrothNavigationAction(t *testing.T) {
 	}
 	// shift-tab is a separate action and is untouched by disabling this one.
 	f.Update(shiftTabPress())
-	if got, want := f.View().Content, "ta\nlR"; got != want {
-		t.Errorf("after shift-tab, View().Content = %q, want %q", got, want)
+	if got, want := focusRow(f), "lR"; got != want {
+		t.Errorf("after shift-tab, the focus row = %q, want %q", got, want)
 	}
 }
 
@@ -589,7 +656,105 @@ func TestTabStillNavigatesWhileATextSinkHasFocus(t *testing.T) {
 
 	f.Update(tabPress())
 
-	if got, want := f.View().Content, "..\nlR"; got != want {
-		t.Errorf("View().Content = %q, want %q", got, want)
+	if got, want := focusRow(f), "lR"; got != want {
+		t.Errorf("the focus row = %q, want %q", got, want)
+	}
+}
+
+// Invoking without a key
+//
+// An action can be asked for by identity, which is what a command palette does:
+// the same walk a resolved key press gets, minus the resolving.
+
+// invoker asks for actions when a key it was told about arrives raw. Nothing it
+// does goes through a binding, so nothing about it depends on what resolves.
+type invoker struct {
+	speaker
+	on   string
+	what []froth.Action
+}
+
+func (i *invoker) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == i.on {
+		for _, a := range i.what {
+			uc.Invoke(a)
+		}
+		return
+	}
+	i.speaker.Update(uc, msg)
+}
+
+func TestAnInvokedActionRisesFromTheActiveSurface(t *testing.T) {
+	left := &invoker{speaker: speaker{letter: "l"}, on: "z", what: []froth.Action{"Q"}}
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: binds("q", "Q"), takes: []froth.Action{"Q"}},
+		kids:    []froth.Surface{left, &speaker{letter: "r"}},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('z'))
+
+	if got, want := f.View().Content, "Q.\nQr"; got != want {
+		t.Errorf("View().Content = %q, want %q: an invoked action starts at the "+
+			"active surface and climbs, exactly as a resolved key press does",
+			got, want)
+	}
+}
+
+// Disabled takes a binding's keys out of play and says nothing about the
+// action, so the key does nothing and the identity still works.
+func TestADisabledBindingDoesNotGateAnInvocation(t *testing.T) {
+	left := &invoker{speaker: speaker{letter: "l"}, on: "z", what: []froth.Action{"Q"}}
+	root := &bindRoot{
+		speaker: speaker{letter: ".", takes: []froth.Action{"Q"}, bindings: []froth.Binding{
+			{Action: "Q", Keys: []string{"q"}, Help: "quit", Disabled: true},
+		}},
+		kids: []froth.Surface{left, &speaker{letter: "r"}},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('q'))
+	if got, want := f.View().Content, "..\nqr"; got != want {
+		t.Fatalf("after the disabled key, View().Content = %q, want %q", got, want)
+	}
+
+	f.Update(keyPress('z'))
+
+	if got, want := f.View().Content, "Q.\nQr"; got != want {
+		t.Errorf("View().Content = %q, want %q: disabling is about keys", got, want)
+	}
+}
+
+// An action nobody takes reaches froth, and froth implements nothing for this
+// one, so the walk ends untaken and is reported. One finding per action rather
+// than per message type: every action is an ActionMsg, so coalescing on the type
+// would report the first and hide the rest.
+func TestAnUntakenActionIsReportedOncePerAction(t *testing.T) {
+	left := &invoker{
+		speaker: speaker{letter: "l"},
+		on:      "z",
+		what:    []froth.Action{"A", "B", "A"},
+	}
+	root := &bindRoot{speaker: speaker{letter: "."}, kids: []froth.Surface{left, &speaker{letter: "r"}}}
+	f, got := newWatched(t, root, 2, 2)
+	f.View()
+	f.Update(focusMsg{to: root.handles[0]})
+
+	f.Update(keyPress('z'))
+
+	var actions []string
+	for _, d := range *got {
+		if d.Kind != froth.DiagUntakenMessage {
+			t.Fatalf("diagnostics = %v, want only %q", *got, froth.DiagUntakenMessage)
+		}
+		actions = append(actions, d.Detail)
+	}
+	if len(actions) != 2 {
+		t.Fatalf("reported %d untaken actions, want 2: %v", len(actions), actions)
+	}
+	if !strings.Contains(actions[0], `"A"`) || !strings.Contains(actions[1], `"B"`) {
+		t.Errorf("details = %v, want the first to name A and the second B", actions)
 	}
 }
