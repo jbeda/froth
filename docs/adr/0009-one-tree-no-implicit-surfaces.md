@@ -34,3 +34,22 @@ with it the meaning of "immediate children" that ownership is defined in terms o
 The cost paid for this is real: froth cannot silently optimise or restructure the tree,
 and features that would be natural as wrappers have to be expressed as metadata on a
 handle instead.
+
+## Parked: a node that only ever exists at the root
+
+Raised while slicing M3, and not taken. The case for it is real and worth stating so it is
+judged on its merits rather than rediscovered: **froth's own actions are inconsistent with
+every other action.** An action a surface declares arrives as an `ActionMsg`; an action
+froth services arrives nowhere, and which you get turns on whether the identity is
+froth-owned — a property invisible at the declaration site. A root-most surface declaring
+froth's bindings and handling their messages would make one path out of two, and
+`liveBindings` would lose the special case at its tail.
+
+Against it: this ADR, whose argument is that the duality arrives one convenience at a time.
+And the placement precedent is unanimous — no windowing system surveyed puts application
+scope in a node of the window tree; `GtkApplication`, `QApplication` and `NSApp` are all
+application-level objects, and none is a window. froth already has that tier in the
+instance, `Query` and `Composite`, and gates it more tightly than any of them.
+
+Revive it if the inconsistency above produces a real bug, or if modality gives froth
+something to service that has no sensible home — not on uniformity alone.

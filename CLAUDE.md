@@ -40,6 +40,24 @@ When these disagree:
 Where reality has diverged from a document, fix the document in the same change — and
 record it in the milestone log if the divergence was a decision rather than a typo.
 
+## Ideas with no case yet
+
+An idea worth keeping but not worth building goes in **the ADR that governs its area**,
+never in `CONTEXT.md` and never only in an issue or a commit message. A `CONTEXT.md` entry
+names something that exists in code or is scoped in the spec; aspirational vocabulary gets
+used as though it were real.
+
+Mark it `Parked:` and say **what evidence would revive it** — a case, not a preference.
+ADR 0004 set the form: *"if a case appears that Environment, Intent and Query genuinely
+cannot serve, bring that case — not the mechanism."* The index is a grep:
+
+```
+grep -rn "Parked" docs/adr/
+```
+
+If no ADR governs the area, that absence is the finding: either the area needs a decision
+record, or the idea is not ready to park.
+
 ## Working state
 
 `HANDOFF.md` at the repo root holds working state across sessions — agreements, current

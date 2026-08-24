@@ -69,7 +69,8 @@ tags them itself.
 
 **Environment**:
 Ambient values a surface reads from its ancestors rather than being handed at
-construction — theme, capabilities, locale. Bound to a surface and scoped to its
+construction — theme, capabilities, locale, a service a subtree should use. Not a
+surface's own cancellation, which froth manages and hands over itself. Bound to a surface and scoped to its
 subtree: resolution walks root-ward and takes the nearest binding, so a subtree
 can override what is above it. Resolved at read time, so it is never a stale
 snapshot.
@@ -154,10 +155,6 @@ A long-lived goroutine froth runs on a surface's behalf, emitting messages to
 that surface's handle until the surface dies. Producers may not touch surface
 state.
 _Avoid_: subscription, worker, stream
-
-**Topic**:
-A named channel a surface subscribes to and an outside system posts to, for
-events with several interested surfaces or a lifetime longer than any of them.
 
 **Anchor**:
 A scroll position expressed as an item plus an offset within it, rather than an
