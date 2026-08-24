@@ -1118,6 +1118,25 @@ path — what is pinned today is the record-and-commit path and the Apply-time p
 `ActionCancel` by closing one, and destroy-then-create-a-replacement ordering in one Update
 callback.
 
+**Thirty-one mutations, thirty caught.** Three real gaps came out of the first sweep and
+all three are now pinned: nothing destroyed anything from inside an `Unmount`, nothing
+asserted that a surface panicking while drawing takes its subtree off the frame, and
+nothing rehomed focus that a flat mutation could not survive. The surviving mutant is
+equivalent — the idempotence guard at the top of `Shutdown` cannot be observed, because the
+first call empties the registry and the second finds no root to walk. It stays as the
+stated contract rather than as load-bearing code.
+
+**A defect the render mutation found, older than this ticket.** `Composite` flushed
+diagnostics through `applyPending` and then drew, so anything *drawing* reported — a dead
+handle minted from a `RenderCtx`, a reentrant query, and now a surface that panicked — waited
+for whatever drove froth next. `Composite`'s own doc comment claimed otherwise. It flushes
+after the frame is built.
+
+**One guard was deleted for being unreachable.** `placeSubtree` skipped a quarantined
+surface, and nothing could reach it: `Composite` applies pending structure before it draws,
+so a surface marked in an earlier phase has already left the tree. The two skips that are
+reachable — delivery and the binding walk — are pinned by tests.
+
 **The example gained `x`.** The focused pane removes itself, its `Unmount` says so in the
 notes pane, and focus moves to the nearest survivor rather than back to the root. `main`
 calls `Shutdown` after `Run` returns, which is the demonstration that matters: the walk is

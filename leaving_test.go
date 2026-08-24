@@ -564,3 +564,46 @@ func TestFocusingASurfaceDestroyedInTheSameTurnIsRefused(t *testing.T) {
 		t.Errorf("focus = %v, want the root %v", got, f.Root())
 	}
 }
+
+// A surface that panics while drawing takes its subtree off the frame with it.
+// froth has nothing to composite the children over and no reason to believe
+// what the parent would have said about where they go.
+func TestASurfaceThatPanicsWhileDrawingHidesItsSubtree(t *testing.T) {
+	kid := &leaver{name: "kid"}
+	broken := &leaver{name: "broken", panicIn: "Render", kids: []froth.Surface{kid}}
+	root := &leaver{name: "root", kids: []froth.Surface{broken}}
+	f, diags := newWatched(t, root, 4, 1)
+
+	frame := f.Composite(f.Root())
+
+	if !hasKind(*diags, froth.DiagSurfacePanic) {
+		t.Fatalf("a panic while drawing reported %v, want a surface panic", kinds(*diags))
+	}
+	if _, ok := frame.Rects[broken.self]; ok {
+		t.Error("the surface that panicked was placed in the frame")
+	}
+	if _, ok := frame.Rects[kid.self]; ok {
+		t.Error("a child of the surface that panicked was drawn")
+	}
+	if kid.renders != 0 {
+		t.Errorf("the child drew %d times, want 0", kid.renders)
+	}
+}
+
+// Teardown may itself destroy something, and what it names may already be
+// inside the removal that is running. Unmount runs once per surface, so the
+// second request is a no-op rather than a second teardown.
+func TestDestroyingFromInsideUnmountDoesNotTearDownTwice(t *testing.T) {
+	grandkid := &leaver{name: "g"}
+	kid := &leaver{name: "kid", kids: []froth.Surface{grandkid}}
+	root := &leaver{name: "root", kids: []froth.Surface{kid}}
+	kid.onUnmount = func(ac *froth.ApplyCtx) { ac.Child(grandkid.self).Destroy() }
+	root.onMsg = func(uc *froth.UpdateCtx, msg tea.Msg) { uc.Child(kid.self).Destroy() }
+	f := newSized(t, root, 4, 1)
+
+	f.Update(startMsg{})
+
+	if grandkid.unmounts != 1 {
+		t.Errorf("the grandchild unmounted %d times, want 1", grandkid.unmounts)
+	}
+}

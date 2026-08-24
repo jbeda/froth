@@ -48,6 +48,11 @@ type Frame struct {
 // is ever updated mounts its whole tree here.
 func (f *Froth) Composite(h Handle) Frame {
 	f.applyPending()
+	// Drawing reports too — a dead handle minted from a RenderCtx, a query
+	// asked from inside one, a surface that panicked — and those are found
+	// after applyPending has already flushed. Without this they would wait for
+	// whatever drove froth next.
+	defer f.flush()
 
 	screen := Rect{W: f.size.W, H: f.size.H}
 	if f.reg.get(h) == nil || screen.Empty() {
@@ -132,9 +137,6 @@ func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placemen
 	// reachable through it either.
 	n := f.reg.get(h)
 	if n == nil {
-		return
-	}
-	if n.panicked {
 		return
 	}
 	content, ok := f.callRender(token, n, h, r)
