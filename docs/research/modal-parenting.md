@@ -222,5 +222,7 @@ ambient, but neither gates access. Flutter's `BuildContext` requirement is the o
 token-scoped one, and the evidence says it is a **mechanical byproduct**: the docs describe
 `BuildContext` as *"a handle to the location of a widget in the widget tree"* and frame
 `.of(context)` as walking up from that position. No design rationale framing it as access
-control was found. *[Several Apple and Android verbatim quotations could not be fetched
-from JS-rendered pages; those are flagged in `.scratch/app-object-access-research.md`.]*
+control was found. *[Unverified: Apple's and Android's JS-rendered doc pages did not yield full body text, so
+`NSApplication.shared`'s exact wording and Android's Context-leak wording are reported from
+secondary corroboration rather than primary quotation. Re-fetch before either goes into an
+ADR.]*
