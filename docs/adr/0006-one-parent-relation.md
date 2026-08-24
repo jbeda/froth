@@ -52,6 +52,60 @@ relation:
   it, and that asymmetry is deliberate: intents are for ancestors, replies are for the
   opener. Routing intents along the reply address would be exactly the second graph this
   ADR declined.
-- **A modal's lifetime** is its parent's, so an opener that dies leaves its modal
-  standing. That is accepted rather than fixed by making the reply address a lifetime
-  edge, which is the same second relation arriving through a different door.
+- **A modal's lifetime** was its parent's, so an opener that died left its modal standing.
+  Superseded — see the amendment below, which makes the reply address a lifetime edge
+  after all.
+
+## Amendment: the opener edge carries lifetime, and this is a second edge
+
+Settled while slicing M3, against prior art gathered for the purpose
+(`docs/research/modal-parenting.md`). The bullet above is reversed: **a modal is destroyed
+when its opener is destroyed.**
+
+froth already had an opener edge. `Reply` addresses the surface that opened a modal, and a
+root-parented modal's intents reach root without passing through it. What changes is that
+the edge now also decides lifetime, which is precisely what this ADR declined as *"the same
+second relation arriving through a different door."*
+
+Calling it anything else would be dishonest. **This is Win32's parent/owner split, taken
+narrowly.** The reasoning above — that Win32 needs `owner` only because a top-level window
+structurally cannot have a parent, a constraint froth does not inherit — was incomplete.
+The owner relation also carries the destroy cascade, and that has nothing to do with the
+structural constraint. AppKit reaches the same shape by different means: `sheetParent` is
+deliberately a separate relation from `childWindows`, so walking the window tree does not
+find sheets.
+
+What keeps it from becoming the general case:
+
+- The opener edge is created only by `OpenModal`, never by a caller naming one.
+- It cannot be transferred or reparented, like the parent link.
+- It carries reply routing and lifetime, and nothing else. Position, modality scope,
+  stacking and routing all stay on the parent link, which is why a modal is still parented
+  to the root.
+
+So the headline stands with an exception: one parent relation carrying four properties for
+every surface, plus an opener edge carrying two for modals alone.
+
+### Why the orphan was not worth keeping
+
+The case for leaving the modal standing is real and is Flutter's documented guarantee — a
+dialog's widget *"can be safely removed from the tree before the dialog is closed."* But
+Flutter's motivating scenario is **framework churn**: a list item recycled out of the tree,
+or an Activity destroyed by a configuration change, where the opener's disappearance is
+bookkeeping unrelated to the user's question. froth has no churn. Surfaces are not
+recycled and there is no rebuild, so a surface being destroyed is always a deliberate
+application decision.
+
+Without churn, the orphan buys a user answering a question nobody is listening to. The
+reply had one destination and it is gone.
+
+### What this costs and retires
+
+- **The counted-drop-with-a-diagnostic for an orphaned modal's reply is retired.** The
+  modal dies before it can answer, so there is nothing to drop.
+- **`ApplyCtx.Post` loses its stated motivation** — it was added so an opener being torn
+  down could ask its modal to close itself during `Unmount`. froth now does that. It needs
+  a new justification or it does not ship.
+- **Opener edges form chains.** A modal that opens a modal makes one, and a surface dying
+  takes the whole chain. The cascade runs leaf-up alongside the parent cascade, and a
+  pathological chain is the iteration cap's problem rather than a new invariant.

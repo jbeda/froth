@@ -71,3 +71,28 @@ for a subtree it is not in — is authority, and belongs on the link or nowhere.
 exactly that. The sketch spells it as a create option, and it can stay one, because what
 the flag says is only *that* the surface is modal: the subtree it takes input for is the
 one its parent gives it, so the authority is in the link either way.
+
+## Amendment: modality scope stays on the link, and Qt is the reason to watch it
+
+The amendment above argues modality can be a create option because *"the subtree it takes
+input for is the one its parent gives it, so the authority is in the link either way."*
+That holds. It is also, precisely, `Qt::WindowModal` — and prior art gathered for M3
+(`docs/research/modal-parenting.md`) found Qt is the **only** system of seven that derives
+blocking scope from the parent chain.
+
+Everyone else makes blocking a separate, explicitly-scoped mechanism: the web spends a
+whole spec concept on `inert`, enumerated facility by facility; Flutter inserts a
+`ModalBarrier` widget whose job is absorbing pointers; Android sets a window flag; GTK's
+`set_modal` is application-wide regardless of `transient-for`. GTK is the counter-design
+worth naming — `transient-for`, `set_modal` and `destroy-with-parent` are three
+independent knobs, none implying another.
+
+Qt is also the one whose blocking behaviour its own documentation undercuts: `exec()`
+silently forces `ApplicationModal`, overriding a scope the caller configured.
+
+froth keeps the fusion, deliberately. Its tree is one in-process tree with no window
+manager and no nested loops, so Qt's failure modes are not froth's. But the cost is
+concrete and should be stated rather than discovered: **froth cannot express "modal to this
+pane, but outliving this pane."** Lifetime and blocking scope ride the same link, so
+choosing subtree-scoped modality also chooses opener-coupled lifetime. If that combination
+is ever wanted, this is the decision to reopen.

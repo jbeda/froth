@@ -6,6 +6,14 @@ to them.
 
 ## Language
 
+**Instance**:
+The object an application's root model owns and forwards `Init`, `Update` and `View` to.
+It holds one surface tree, its registry, and the phase machinery. A program may hold
+more than one, and a handle names the instance that issued it, so a handle used against
+the wrong instance is a defined drop rather than an accidental alias. Not the
+application: the application owns an instance, not the other way round.
+_Avoid_: app, screen, manager, context
+
 **Surface**:
 An independently addressed unit of screen and behaviour that renders itself and
 handles messages sent to it. The unit of composition in froth.
@@ -14,7 +22,9 @@ _Avoid_: window, component, view, screen, panel
 **Handle**:
 The stable identity of a surface, valid to store and to name as a message
 destination. A handle outlives the surface it names, so delivery to a dead
-surface is a defined drop rather than an error.
+surface is a defined drop rather than an error. It is inert data and confers
+nothing: acting on a surface means asking a phase context for a `Ctx` scoped to
+that handle, and what may be done depends on the tier that mints.
 _Avoid_: id, ref, pointer
 
 **Parent**:
@@ -47,7 +57,9 @@ _Avoid_: focused window, current surface
 
 **Modal**:
 A surface that takes input for its parent's whole subtree while it is open. A
-surface parented to the root is modal to the entire application.
+surface parented to the root is modal to the entire application. Its parent
+decides what it blocks; its opener decides how long it lives, because a modal is
+destroyed when the surface that opened it is.
 
 **Cmd**:
 Bubble Tea's unit of asynchronous work: a function run off the update loop whose
@@ -94,6 +106,14 @@ Which part of an update froth is in — Deliver, Apply, or Render — and theref
 what a surface is allowed to do. Delivery may change only the receiving
 surface; structure changes only in Apply; Render may not change structure at
 all.
+
+**Ctx**:
+A limited-lifetime struct that lets you operate on something within a particular
+situation, and expires when that situation ends. The phase contexts are one kind —
+what a surface may do during Deliver, Apply or Render. The handle-scoped kind is
+minted from those, and its type says what may be done to the handle it names: reading
+anything, reaching a stranger, or restructuring yourself or an immediate child.
+Retaining one past its callback panics.
 
 **Measure**:
 A surface's answer to "how big would you be at this size", asked by a layout as

@@ -104,3 +104,40 @@ question as how it is addressed for writes, and neither is answered yet. Enforci
 ownership rule on structural mutation, and the table of who may do what and when, is
 scheduled ahead of that. Until it lands, core hands out one handle and nothing to ask
 about it.
+
+## Amendment: enumeration is ordinary API, and the opening claim was never true
+
+Settled while slicing M3. Two corrections, one of them to a fact.
+
+**"There is no child enumeration" was false when it was written.** `Composite` returns a
+`Frame` whose `Rects` is keyed by handle for the whole composited subtree, so
+`Composite(Root()).Rects` has always yielded every handle in the tree. What kept a
+*surface* from doing it is the phase re-entrancy panic, not a design decision. The property
+froth actually had was **no downward enumeration from inside a surface**, and it should
+have been stated that way.
+
+**Downward enumeration is now core API**, on the handle-scoped reader
+([ADR 0014](./0014-capability-is-minted-from-a-phase-context.md)), for any live handle.
+Two things decided it. `Layout.Arrange` already receives every child of a container as a
+real handle, and a layout is application code — so the capability was already granted to
+application authors while being withheld from the surface that owns those children.
+Reading a handle's parent is also core, and parent traversal without child traversal is an
+omission rather than a policy.
+
+This does not widen the hatch; it narrows it. Under this ADR's own rule — *an application
+reaching for `inspect` is a missing feature in core* — the debugger case that motivated the
+package is served by core plus `Composite`. `froth/inspect` keeps what an application
+genuinely should not have: observing a focus change from outside, and minting a full-tier
+accessor for a handle that is not the caller's child.
+
+**Enumeration is honest, and `Destroy` is the guard.** A surface froth parented on a
+caller's behalf — a modal — appears in a separate list rather than being hidden from the
+first one, and `Destroy` refuses it. Hiding it would be
+[ADR 0010](./0010-presentation-is-metadata-authority-is-the-link.md)'s failure case
+exactly: a curated list exists to change who may destroy a surface, which is authority
+wearing a presentation costume. The precedent is uniform — every windowing toolkit
+surveyed separates application-level enumeration of top-level windows from parent-tree
+traversal, and AppKit keeps `sheetParent` out of `childWindows` for this reason.
+
+Nothing carries the mark until modals exist, so the rule ships with no surface subject to
+it.
