@@ -139,6 +139,11 @@ is not the same thing and stays.
 
 ## Agent skills
 
+### Working agreements
+
+How work gets built here: closing tickets, the `gh` traps, running a design session, prior-art
+surveys, and what verification means. See `docs/agents/working-agreements.md`.
+
 ### Issue tracker
 
 Issues live as GitHub issues on `jbeda/froth`, managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.

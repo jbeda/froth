@@ -203,8 +203,9 @@ price of moving only paint.
 
 ## Appendix: how the application-level object is reached
 
-Asked separately, because froth gates access more tightly than these do. Ranked
-most-ambient to most-scoped:
+Asked separately, because froth gates access more tightly than these do. Summarised here;
+the full study, with per-framework detail and citations, is in
+[`app-object-access.md`](./app-object-access.md). Ranked most-ambient to most-scoped:
 
 | Framework | Object | Reached by | Gating |
 |---|---|---|---|
