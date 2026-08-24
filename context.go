@@ -16,11 +16,16 @@ type RenderCtx struct {
 	rect Rect
 }
 
-// Self reports the handle of the surface this context belongs to.
-func (rc *RenderCtx) Self() Handle {
-	rc.check()
-	return rc.self
-}
+// Self mints a context on the surface this one belongs to. It names no target,
+// so it cannot fail.
+func (rc *RenderCtx) Self() ReadCtx { return ReadCtx{rc.mintSelf(rc.self)} }
+
+// Child mints a context on an immediate child of this surface, and panics for a
+// handle that is not one.
+func (rc *RenderCtx) Child(h Handle) ReadCtx { return ReadCtx{rc.mintChild(rc.self, h)} }
+
+// At mints a context on any live surface.
+func (rc *RenderCtx) At(h Handle) ReadCtx { return ReadCtx{rc.mintAt("At", h)} }
 
 // Focused reports whether this surface is the focused one — the deep end of the
 // focus chain, and where a raw key would be delivered.
@@ -60,49 +65,25 @@ type UpdateCtx struct {
 	cmds []tea.Cmd
 }
 
-// Self reports the handle of the surface this context belongs to, which is what
-// a surface posts to when it wants to continue in a later delivery rather than
-// finish in this one.
-func (uc *UpdateCtx) Self() Handle {
-	uc.check()
-	return uc.self
+// Self mints a context on the surface this one belongs to — what a surface
+// posts to when it wants to continue in a later delivery rather than finish in
+// this one. It names no target, so it cannot fail.
+func (uc *UpdateCtx) Self() SelfUpdateCtx {
+	return SelfUpdateCtx{router{uc.mintSelf(uc.self)}}
 }
 
-// Post addresses a message to a surface. It is queued rather than delivered: the
-// current delivery finishes, and the message is handled later in the same
-// update, before anything is rendered. Nothing in froth is delivered
-// re-entrantly, so a surface is never inside two of its own handlers.
-//
-// A handle that names nothing — a surface that has been destroyed, or one from
-// another froth instance — is a defined drop rather than an error. That is what
-// makes a handle safe to store: the sender needs no way to ask whether the
-// destination is still alive.
-func (uc *UpdateCtx) Post(to Handle, msg tea.Msg) {
-	uc.check()
-	uc.f.queue = append(uc.f.queue, envelope{to: to, msg: msg})
+// Child mints a context on an immediate child of this surface, and panics for a
+// handle that is not one.
+func (uc *UpdateCtx) Child(h Handle) ChildCtx {
+	return ChildCtx{router{uc.mintChild(uc.self, h)}}
 }
 
-// Focus asks froth to move focus to a surface. Focus is structural, so it is
-// recorded here and commits in the Apply that follows this delivery — a key
-// that moves focus and the frame that shows the move are still one update.
-//
-// A surface created with FocusScope is entered rather than focused: the move
-// lands on the child the scope last had focus on, or on its first tab stop.
-//
-// The target is validated when it commits: a handle that is not in the tree is
-// reported through the diagnostic hook and focus does not move. It is not a
-// panic, because a stored handle whose surface has gone is exactly what handles
-// are meant to survive.
-func (uc *UpdateCtx) Focus(to Handle) {
-	uc.check()
-	uc.f.pendingFocus, uc.f.focusPending = to, true
-}
-
-// FocusSelf asks froth to move focus to this surface. It names no target, so it
-// cannot fail: a surface handling a message is in the tree by construction.
-func (uc *UpdateCtx) FocusSelf() {
-	uc.check()
-	uc.f.pendingFocus, uc.f.focusPending = uc.self, true
+// At mints a context on any live surface. A handle that names nothing — a
+// surface that has been destroyed, or one from another froth instance — is a
+// reported drop rather than an error. That is what makes a handle safe to
+// store: the sender needs no way to ask whether the destination is still alive.
+func (uc *UpdateCtx) At(h Handle) AnyCtx {
+	return AnyCtx{router{uc.mintAt("At", h)}}
 }
 
 // FocusNext moves focus to the next surface created with TabStop, in
@@ -160,55 +141,20 @@ type ApplyCtx struct {
 	self Handle
 }
 
-// Self reports the handle of the surface this context belongs to.
-func (ac *ApplyCtx) Self() Handle {
-	ac.check()
-	return ac.self
+// Self mints a context on the surface this one belongs to, which is the only
+// one it may restructure. It names no target, so it cannot fail.
+func (ac *ApplyCtx) Self() SelfApplyCtx {
+	return SelfApplyCtx{router{ac.mintSelf(ac.self)}}
 }
 
-// Create adds a child of this surface and returns its handle. It takes no
-// parent: a surface creates a child of itself, so "own yourself and your
-// immediate children" is structural rather than validated, and creating a
-// grandchild or a sibling is not expressible.
-//
-// The options say what froth should know about the child and are recorded
-// against its handle for its lifetime: creation is the only moment a surface's
-// creator gets to describe it. Passing none means every flag is off.
-//
-// The child is mounted before the frame it was created for is drawn.
-//
-// Create panics if s is nil: the handle would be indistinguishable from one
-// whose surface has died.
-func (ac *ApplyCtx) Create(s Surface, opts ...CreateOption) Handle {
-	ac.check()
-	return ac.f.reg.add(ac.self, s, opts...)
+// Child mints a context on an immediate child of this surface, and panics for a
+// handle that is not one.
+func (ac *ApplyCtx) Child(h Handle) ChildCtx {
+	return ChildCtx{router{ac.mintChild(ac.self, h)}}
 }
 
-// Focus moves focus to a surface, immediately — this is Apply, which is where
-// structural change commits, so there is nothing to defer it to.
-//
-// Unlike Create and SetLayout it names a target, because focus is not
-// self-relative: a container mounts its children and says which of them starts
-// focused. The handle is validated, and one that is not in the tree is reported
-// through the diagnostic hook rather than accepted.
-func (ac *ApplyCtx) Focus(to Handle) {
-	ac.check()
-	ac.f.setFocus(to)
-}
-
-// FocusSelf moves focus to this surface. It names no target, so it cannot fail.
-func (ac *ApplyCtx) FocusSelf() {
-	ac.check()
-	ac.f.setFocus(ac.self)
-}
-
-// SetLayout attaches a layout to this surface, which places its children from
-// then on. Like Create it names no target: a surface owns its own children, so
-// saying how they sit is self-relative, and a surface cannot rearrange somebody
-// else's.
-//
-// A surface with no layout stacks its children at its own whole rect.
-func (ac *ApplyCtx) SetLayout(l Layout) {
-	ac.check()
-	ac.f.reg.get(ac.self).layout = l
+// At mints a context on any live surface. See UpdateCtx.At for what a handle
+// that names nothing does.
+func (ac *ApplyCtx) At(h Handle) AnyCtx {
+	return AnyCtx{router{ac.mintAt("At", h)}}
 }

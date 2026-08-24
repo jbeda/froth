@@ -33,14 +33,14 @@ func (r *relay) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	}
 	r.seen++
 	if r.next != nil {
-		uc.Post(r.next.self, msg)
+		uc.At(r.next.self).Post(msg)
 	}
 }
 
 func (r *relay) Mount(ac *froth.ApplyCtx) {
-	r.self = ac.Self()
+	r.self = ac.Self().Handle()
 	for _, k := range r.kids {
-		ac.Create(k)
+		ac.Self().Create(k)
 	}
 }
 
@@ -59,7 +59,7 @@ func newWatched(t *testing.T, root froth.Surface, w, h int) (*froth.Froth, *[]fr
 type cycler struct{}
 
 func (c *cycler) Render(*froth.RenderCtx, froth.Rect) string { return "cycling" }
-func (c *cycler) Update(uc *froth.UpdateCtx, msg tea.Msg)    { uc.Post(uc.Self(), msg) }
+func (c *cycler) Update(uc *froth.UpdateCtx, msg tea.Msg)    { uc.Self().Post(msg) }
 
 func TestAPostedMessageIsHandledInTheSameFrame(t *testing.T) {
 	tail := &relay{}
@@ -118,7 +118,7 @@ func (b *bouncer) Render(*froth.RenderCtx, froth.Rect) string { return strconv.I
 func (b *bouncer) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	b.seen++
 	if b.seen == 1 {
-		uc.Post(uc.Self(), msg)
+		uc.Self().Post(msg)
 	}
 }
 
@@ -207,24 +207,29 @@ type spawner struct{}
 
 func (s *spawner) Render(*froth.RenderCtx, froth.Rect) string { return "" }
 func (s *spawner) Update(*froth.UpdateCtx, tea.Msg)           {}
-func (s *spawner) Mount(ac *froth.ApplyCtx)                   { ac.Create(&spawner{}) }
+func (s *spawner) Mount(ac *froth.ApplyCtx)                   { ac.Self().Create(&spawner{}) }
 
 // A handle outlives the surface it names, so addressing one that names nothing
-// is a defined drop rather than an error.
-func TestAPostToAHandleThatNamesNothingIsDropped(t *testing.T) {
-	f := newSized(t, &dropper{}, 4, 1)
+// is a defined drop rather than an error. It is reported, because minting a
+// context is where froth learns the surface has gone, and the sender carries on
+// either way.
+func TestAPostToAHandleThatNamesNothingIsDroppedAndReported(t *testing.T) {
+	f, diags := newWatched(t, &dropper{}, 4, 1)
 
 	f.Update(bumpMsg{})
 
 	if got, want := f.View().Content, "ok"; got != want {
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
+	if len(*diags) != 1 || (*diags)[0].Kind != froth.DiagDeadHandle {
+		t.Fatalf("froth reported %v, want one %q", *diags, froth.DiagDeadHandle)
+	}
 }
 
 type dropper struct{}
 
 func (d *dropper) Render(*froth.RenderCtx, froth.Rect) string { return "ok" }
-func (d *dropper) Update(uc *froth.UpdateCtx, msg tea.Msg)    { uc.Post(froth.Handle{}, msg) }
+func (d *dropper) Update(uc *froth.UpdateCtx, msg tea.Msg)    { uc.At(froth.Handle{}).Post(msg) }
 
 // The hook is application code, so froth calls it with no phase in progress —
 // otherwise a hook that looked at the tree would trip the re-entrancy check

@@ -15,10 +15,11 @@ import (
 type toolbar struct{ bd *board }
 
 func (t *toolbar) Mount(ac *froth.ApplyCtx) {
+	self := ac.Self()
 	for i, name := range []string{"Compose", "Refresh", "Help"} {
-		ac.Create(&panel{name: name, region: regButton, index: i, bd: t.bd}, froth.TabStop())
+		self.Create(&panel{name: name, region: regButton, index: i, bd: t.bd}, froth.TabStop())
 	}
-	ac.SetLayout(buttons{s: &t.bd.splits})
+	self.SetLayout(buttons{s: &t.bd.splits})
 }
 
 func (t *toolbar) Render(*froth.RenderCtx, froth.Rect) string { return "" }
@@ -31,10 +32,11 @@ func (t *toolbar) Update(*froth.UpdateCtx, tea.Msg)           {}
 type sidebar struct{ bd *board }
 
 func (s *sidebar) Mount(ac *froth.ApplyCtx) {
+	self := ac.Self()
 	for i, name := range []string{"Inbox", "Starred", "Drafts", "Sent"} {
-		ac.Create(&panel{name: name, region: regRow, index: i, bd: s.bd}, froth.TabStop())
+		self.Create(&panel{name: name, region: regRow, index: i, bd: s.bd}, froth.TabStop())
 	}
-	ac.SetLayout(rows{s: &s.bd.splits})
+	self.SetLayout(rows{s: &s.bd.splits})
 }
 
 func (s *sidebar) Render(*froth.RenderCtx, froth.Rect) string { return "" }
@@ -51,10 +53,11 @@ type rightCol struct {
 }
 
 func (rc *rightCol) Mount(ac *froth.ApplyCtx) {
-	ac.Create(&panel{name: "Metadata", region: regRight, index: 0, bd: rc.bd}, froth.TabStop())
-	ac.Create(&panel{name: "Labels", region: regRight, index: 1, bd: rc.bd}, froth.TabStop())
-	rc.scope = ac.Create(&scope{bd: rc.bd, out: rc.out}, froth.FocusScope())
-	ac.SetLayout(stack{s: &rc.bd.splits})
+	self := ac.Self()
+	self.Create(&panel{name: "Metadata", region: regRight, index: 0, bd: rc.bd}, froth.TabStop())
+	self.Create(&panel{name: "Labels", region: regRight, index: 1, bd: rc.bd}, froth.TabStop())
+	rc.scope = self.Create(&scope{bd: rc.bd, out: rc.out}, froth.FocusScope())
+	self.SetLayout(stack{s: &rc.bd.splits})
 }
 
 func (rc *rightCol) Render(*froth.RenderCtx, froth.Rect) string { return "" }

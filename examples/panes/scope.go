@@ -15,9 +15,10 @@ type scopePane struct {
 }
 
 func (g *scopePane) Mount(ac *froth.ApplyCtx) {
-	ac.Create(&control{label: "first"}, froth.TabStop())
-	ac.Create(&control{label: "second"}, froth.TabStop())
-	ac.SetLayout(stack{})
+	self := ac.Self()
+	self.Create(&control{label: "first"}, froth.TabStop())
+	self.Create(&control{label: "second"}, froth.TabStop())
+	self.SetLayout(stack{})
 }
 
 // The scope is on the focus chain while one of its controls has focus, and it
@@ -32,7 +33,7 @@ func (g *scopePane) Bindings() []froth.Binding {
 
 func (g *scopePane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	if m, ok := msg.(froth.ActionMsg); ok && m.Action == actionLeaveScope {
-		uc.Focus(g.out)
+		uc.At(g.out).Focus()
 	}
 }
 

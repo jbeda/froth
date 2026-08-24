@@ -30,7 +30,7 @@ type laidOut struct {
 
 func (l *laidOut) Mount(ac *froth.ApplyCtx) {
 	l.parent.Mount(ac)
-	ac.SetLayout(l.layout)
+	ac.Self().SetLayout(l.layout)
 }
 
 func TestLayoutPlacesChildrenSideBySide(t *testing.T) {

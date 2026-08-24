@@ -58,20 +58,21 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 			"under the title above.",
 	}
 
-	ac.Create(&filter{}, froth.TabStop(), froth.TextSink())
-	ac.Create(helpBar{})
-	leftH, rightH := ac.Create(left, froth.TabStop()), ac.Create(right, froth.TabStop())
-	ac.Create(notes)
+	self := ac.Self()
+	self.Create(&filter{}, froth.TabStop(), froth.TextSink())
+	self.Create(helpBar{})
+	leftH, rightH := self.Create(left, froth.TabStop()), self.Create(right, froth.TabStop())
+	self.Create(notes)
 
 	// The scope is created without TabStop, so tab neither lands on it nor
 	// walks into it. It is reached by name, which is what the root's g binding
 	// does — and the same key inside the scope reaches the scope first and
 	// takes focus back out.
-	rt.scope = ac.Create(&scopePane{out: leftH}, froth.FocusScope())
+	rt.scope = self.Create(&scopePane{out: leftH}, froth.FocusScope())
 
 	left.sibling, right.sibling = rightH, leftH
-	ac.SetLayout(fieldAndBar{rest: layout.Row(layout.Gap(1))})
-	ac.Focus(leftH)
+	self.SetLayout(fieldAndBar{rest: layout.Row(layout.Gap(1))})
+	ac.At(leftH).Focus()
 }
 
 func (rt *root) Render(rc *froth.RenderCtx, r froth.Rect) string {
@@ -113,7 +114,7 @@ func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	case actionEnterScope:
 		// Moving focus to a scope enters it: froth lands on the control the
 		// scope last had focus on, or its first one.
-		uc.Focus(rt.scope)
+		uc.At(rt.scope).Focus()
 	}
 }
 

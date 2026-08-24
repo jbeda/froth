@@ -141,3 +141,30 @@ arranged, is self. Something done *to* a child is the child tier. Reaching a sur
 without restructuring it is open. A title is the worked example: reading it belongs on the
 reader, and setting it is self or child depending on whether a surface titles itself or its
 parent titles it — a question this ADR does not answer, but does locate.
+
+## Amendment: the self tier carries the reach set, and Apply carries Post
+
+Settled while building it. The five types shipped as `ReadCtx` (Render, all three tiers),
+`SelfUpdateCtx`, `SelfApplyCtx`, `ChildCtx` and `AnyCtx` — "accessor" throughout this ADR
+is a `Ctx` in the code, per `CONTEXT.md`'s entry for the word. Two corrections to the
+table above, both forced by call sites.
+
+**Self carries post and focus as well as what the table lists.** A surface posting to
+itself to continue in a later delivery is an ordinary pattern, and the table as written
+sends it through `At(Self().Handle())` to reach a permission the self tier obviously has.
+So the tiers nest by *capability* — self ⊇ child ⊇ open — while still not nesting by
+*target*, which is why self remains a tier rather than a special case of child:
+`SetLayout` arranges your own children and has nowhere else to sit.
+
+**Apply mints contexts that can post.** The five-type count in the consequences depends on
+the child and open types being shared across Deliver and Apply, and that requires their
+method sets to agree. It is not a concession to the type count: #17's session-B comment
+had already given `ApplyCtx.Post` a justification — a surface being torn down telling
+something outside froth, which `Unmount` runs in Apply to do.
+
+**"A diagnostic and a drop, like delivery to a dead handle" was wrong about the simile,
+not the rule.** Delivery to a dead handle did not report anything; it dropped silently.
+The rule shipped as written, so posting to a stored handle whose surface has gone now
+reports `DiagDeadHandle` where it used to be silent. `DiagInvalidFocus` correspondingly
+has no reachable path until a surface can leave the tree between a recorded focus move and
+the Apply that commits it.

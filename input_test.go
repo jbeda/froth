@@ -64,9 +64,9 @@ func (r *bindRoot) Mount(ac *froth.ApplyCtx) {
 		if i < len(r.opts) {
 			opts = r.opts[i]
 		}
-		r.handles = append(r.handles, ac.Create(k, opts...))
+		r.handles = append(r.handles, ac.Self().Create(k, opts...))
 	}
-	ac.SetLayout(under{})
+	ac.Self().SetLayout(under{})
 }
 
 func (r *bindRoot) Render(rc *froth.RenderCtx, rect froth.Rect) string {
@@ -76,7 +76,7 @@ func (r *bindRoot) Render(rc *froth.RenderCtx, rect froth.Rect) string {
 
 func (r *bindRoot) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	if m, ok := msg.(focusMsg); ok {
-		uc.Focus(m.to)
+		uc.At(m.to).Focus()
 		return
 	}
 	r.speaker.Update(uc, msg)
@@ -405,8 +405,8 @@ type deep struct {
 }
 
 func (d *deep) Mount(ac *froth.ApplyCtx) {
-	d.child = ac.Create(d.kid)
-	ac.SetLayout(under{})
+	d.child = ac.Self().Create(d.kid)
+	ac.Self().SetLayout(under{})
 }
 
 func TestATextSinkAboveTheFocusedSurfaceSuppressesNothing(t *testing.T) {

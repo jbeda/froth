@@ -27,15 +27,15 @@ type focusRoot struct {
 
 func (r *focusRoot) Mount(ac *froth.ApplyCtx) {
 	r.parent.Mount(ac)
-	ac.SetLayout(r.layout)
+	ac.Self().SetLayout(r.layout)
 }
 
 func (r *focusRoot) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	switch msg := msg.(type) {
 	case focusMsg:
-		uc.Focus(msg.to)
+		uc.At(msg.to).Focus()
 	case selfFocusMsg:
-		uc.Post(msg.to, selfFocusMsg{})
+		uc.At(msg.to).Post(selfFocusMsg{})
 	}
 }
 
@@ -61,10 +61,10 @@ func (x *focusable) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	case tea.KeyMsg:
 		x.keys = append(x.keys, msg.String())
 		if x.toward != nil {
-			uc.Focus(*x.toward)
+			uc.At(*x.toward).Focus()
 		}
 	case selfFocusMsg:
-		uc.FocusSelf()
+		uc.Self().Focus()
 	case bumpMsg:
 		x.bumps++
 	}
@@ -193,7 +193,7 @@ func TestANonKeyMessageStillGoesToTheRoot(t *testing.T) {
 	}
 }
 
-func TestFocusingAHandleThatIsNotInTheTreeIsRejectedAndReported(t *testing.T) {
+func TestFocusingAHandleThatIsNotInTheTreeIsReportedAndDoesNothing(t *testing.T) {
 	elsewhere := froth.New(context.Background(), &pane{title: "elsewhere"})
 
 	left, right := &focusable{letter: "l"}, &focusable{letter: "r"}
@@ -205,14 +205,14 @@ func TestFocusingAHandleThatIsNotInTheTreeIsRejectedAndReported(t *testing.T) {
 	f.View()
 	f.Update(focusMsg{to: root.handles[0]})
 
-	// A handle from another instance names nothing here, which is the same
-	// rejection as a handle whose surface has gone.
+	// A handle from another instance names nothing here, so the context minted
+	// for it does nothing — the same answer as a handle whose surface has gone.
 	f.Update(focusMsg{to: elsewhere.Root()})
 
 	if len(*diags) != 1 {
 		t.Fatalf("froth reported %d diagnostics, want 1: %v", len(*diags), *diags)
 	}
-	if got, want := (*diags)[0].Kind, froth.DiagInvalidFocus; got != want {
+	if got, want := (*diags)[0].Kind, froth.DiagDeadHandle; got != want {
 		t.Errorf("diagnostic kind = %q, want %q", got, want)
 	}
 	if got, want := f.View().Content, "Lr"; got != want {
@@ -220,11 +220,10 @@ func TestFocusingAHandleThatIsNotInTheTreeIsRejectedAndReported(t *testing.T) {
 	}
 }
 
-// The zero handle names nothing, so it is rejected like any other target that
-// is not in the tree. It is worth its own test because "no pending move" and
-// "a pending move to nothing" would be the same value if froth recorded the
-// pending move as a handle alone, and the second would then be swallowed.
-func TestFocusingTheZeroHandleFromDeliverIsRejectedAndReported(t *testing.T) {
+// The zero handle names nothing, so it is answered like any other handle whose
+// surface is not there. It is worth its own test because it is the one dead
+// handle an application can write down without having created anything.
+func TestFocusingTheZeroHandleFromDeliverIsReportedAndDoesNothing(t *testing.T) {
 	left, right := &focusable{letter: "l"}, &focusable{letter: "r"}
 	root := &focusRoot{
 		parent: parent{body: "  ", kids: []froth.Surface{left, right}},
@@ -236,23 +235,23 @@ func TestFocusingTheZeroHandleFromDeliverIsRejectedAndReported(t *testing.T) {
 
 	f.Update(focusMsg{to: froth.Handle{}})
 
-	if len(*diags) != 1 || (*diags)[0].Kind != froth.DiagInvalidFocus {
-		t.Fatalf("froth reported %v, want one %q", *diags, froth.DiagInvalidFocus)
+	if len(*diags) != 1 || (*diags)[0].Kind != froth.DiagDeadHandle {
+		t.Fatalf("froth reported %v, want one %q", *diags, froth.DiagDeadHandle)
 	}
 	if got, want := f.View().Content, "Lr"; got != want {
 		t.Errorf("focus moved anyway: View().Content = %q, want %q", got, want)
 	}
 }
 
-// Apply rejects an invalid target the same way, though there it takes effect
-// immediately rather than being recorded.
-func TestFocusingAnInvalidHandleFromApplyIsRejectedAndReported(t *testing.T) {
+// Apply mints the same way, though a move made through a context minted there
+// takes effect immediately rather than being recorded.
+func TestFocusingAnInvalidHandleFromApplyIsReportedAndDoesNothing(t *testing.T) {
 	elsewhere := froth.New(context.Background(), &pane{title: "elsewhere"})
 	f, diags := newWatched(t, &focuserOnMount{to: elsewhere.Root()}, 1, 1)
 	f.View()
 
-	if len(*diags) != 1 || (*diags)[0].Kind != froth.DiagInvalidFocus {
-		t.Fatalf("froth reported %v, want one %q", *diags, froth.DiagInvalidFocus)
+	if len(*diags) != 1 || (*diags)[0].Kind != froth.DiagDeadHandle {
+		t.Fatalf("froth reported %v, want one %q", *diags, froth.DiagDeadHandle)
 	}
 	if got, want := f.View().Content, "X"; got != want {
 		t.Errorf("View().Content = %q, want %q — the root should still hold focus", got, want)
@@ -289,6 +288,33 @@ func TestAContainerCanFocusAChildAsItMounts(t *testing.T) {
 	}
 }
 
+// Apply is where structural change commits, so a move made there is not
+// recorded for later — it has happened by the time the next thing in the same
+// Apply looks. A container that focuses one child and then mounts another sees
+// the move it just made.
+func TestAMoveMadeDuringApplyHasHappenedByTheNextMountInThatApply(t *testing.T) {
+	asker := &focusAsker{}
+	root := &focusingParent{
+		focusRoot: focusRoot{
+			parent: parent{body: "  ", kids: []froth.Surface{&focusable{letter: "l"}, asker}},
+			layout: &halves{},
+		},
+		which: 0,
+	}
+	newSized(t, root, 2, 1)
+
+	if got, want := asker.sawFocus, root.handles[0]; got != want {
+		t.Errorf("a later mount saw focus at %v, want %v — the move was recorded rather than made", got, want)
+	}
+}
+
+// focusAsker records where focus was when it mounted.
+type focusAsker struct{ sawFocus froth.Handle }
+
+func (x *focusAsker) Render(*froth.RenderCtx, froth.Rect) string { return "a" }
+func (x *focusAsker) Update(*froth.UpdateCtx, tea.Msg)           {}
+func (x *focusAsker) Mount(ac *froth.ApplyCtx)                   { x.sawFocus = ac.Query().Focus() }
+
 // focuserOnMount focuses a handle from Apply, where the move commits at once.
 type focuserOnMount struct{ to froth.Handle }
 
@@ -299,7 +325,7 @@ func (x *focuserOnMount) Render(rc *froth.RenderCtx, r froth.Rect) string {
 	return "x"
 }
 func (x *focuserOnMount) Update(*froth.UpdateCtx, tea.Msg) {}
-func (x *focuserOnMount) Mount(ac *froth.ApplyCtx)         { ac.Focus(x.to) }
+func (x *focuserOnMount) Mount(ac *froth.ApplyCtx)         { ac.At(x.to).Focus() }
 
 // focusingParent mounts its children and focuses one of them, which is what a
 // container owning a starting selection does.
@@ -310,7 +336,7 @@ type focusingParent struct {
 
 func (p *focusingParent) Mount(ac *froth.ApplyCtx) {
 	p.focusRoot.Mount(ac)
-	ac.Focus(p.handles[p.which])
+	ac.At(p.handles[p.which]).Focus()
 }
 
 // tabMsg asks froth for a relative focus move, the way an application does: it
@@ -360,7 +386,7 @@ func (r *optRoot) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 			}
 		}
 	case focusMsg:
-		uc.Focus(m.to)
+		uc.At(m.to).Focus()
 	}
 }
 
@@ -370,13 +396,13 @@ func (r *optRoot) Mount(ac *froth.ApplyCtx) {
 		if i < len(r.opts) {
 			opts = r.opts[i]
 		}
-		r.handles = append(r.handles, ac.Create(k, opts...))
+		r.handles = append(r.handles, ac.Self().Create(k, opts...))
 	}
 	if r.lay != nil {
-		ac.SetLayout(r.lay)
+		ac.Self().SetLayout(r.lay)
 		return
 	}
-	ac.SetLayout(cells{})
+	ac.Self().SetLayout(cells{})
 }
 
 // tabRow builds a row of one-cell surfaces, each created with the options given
@@ -862,7 +888,7 @@ type withinBox struct {
 
 func (b *withinBox) Mount(ac *froth.ApplyCtx) {
 	b.parent.Mount(ac)
-	ac.SetLayout(underneath{})
+	ac.Self().SetLayout(underneath{})
 }
 
 func (b *withinBox) Render(rc *froth.RenderCtx, r froth.Rect) string {

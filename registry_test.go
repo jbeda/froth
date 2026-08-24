@@ -24,9 +24,9 @@ func (p *parent) Update(uc *froth.UpdateCtx, msg tea.Msg) {}
 
 func (p *parent) Mount(ac *froth.ApplyCtx) {
 	p.mounts++
-	p.self = ac.Self()
+	p.self = ac.Self().Handle()
 	for _, k := range p.kids {
-		p.handles = append(p.handles, ac.Create(k))
+		p.handles = append(p.handles, ac.Self().Create(k))
 	}
 }
 
@@ -49,7 +49,7 @@ func (b *block) Render(rc *froth.RenderCtx, r froth.Rect) string {
 }
 
 func (b *block) Update(uc *froth.UpdateCtx, msg tea.Msg) {}
-func (b *block) Mount(ac *froth.ApplyCtx)                { b.self = ac.Self() }
+func (b *block) Mount(ac *froth.ApplyCtx)                { b.self = ac.Self().Handle() }
 
 func TestMountCreatesChildrenBeforeTheFirstRender(t *testing.T) {
 	kid := &block{ch: "k", w: 2, h: 1}
@@ -152,7 +152,7 @@ type latecomer struct {
 
 func (l *latecomer) Render(*froth.RenderCtx, froth.Rect) string { return "" }
 func (l *latecomer) Update(*froth.UpdateCtx, tea.Msg)           {}
-func (l *latecomer) Mount(*froth.ApplyCtx)                      { (*l.ac).Create(l.kid) }
+func (l *latecomer) Mount(*froth.ApplyCtx)                      { (*l.ac).Self().Create(l.kid) }
 
 func TestASurfaceCreatedLateInTheMountPassIsStillMounted(t *testing.T) {
 	var borrowed *froth.ApplyCtx

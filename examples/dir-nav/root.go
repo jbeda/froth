@@ -42,9 +42,10 @@ type root struct {
 }
 
 func (rt *root) Mount(ac *froth.ApplyCtx) {
-	ac.Create(&toolbar{bd: rt.bd})
-	ac.Create(&sidebar{bd: rt.bd})
-	detail := ac.Create(&panel{
+	self := ac.Self()
+	self.Create(&toolbar{bd: rt.bd})
+	self.Create(&sidebar{bd: rt.bd})
+	detail := self.Create(&panel{
 		name:   "Detail",
 		region: regDetail,
 		body:   legend,
@@ -52,16 +53,16 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	}, froth.TabStop())
 
 	rt.rcol = &rightCol{bd: rt.bd, out: detail}
-	ac.Create(rt.rcol)
-	ac.Create(&filter{bd: rt.bd}, froth.TabStop(), froth.TextSink())
+	self.Create(rt.rcol)
+	self.Create(&filter{bd: rt.bd}, froth.TabStop(), froth.TextSink())
 
 	// The banner is created last so it renders last, which is what lets it
 	// report on the frame the other surfaces have just recorded into. The shell
 	// places it along the top regardless.
-	ac.Create(&banner{bd: rt.bd})
+	self.Create(&banner{bd: rt.bd})
 
-	ac.SetLayout(shell{s: &rt.bd.splits})
-	ac.Focus(detail)
+	self.SetLayout(shell{s: &rt.bd.splits})
+	ac.At(detail).Focus()
 }
 
 // Declaring the four directional actions replaces froth's shift+arrow keys for
@@ -97,7 +98,7 @@ func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	case actionQuit:
 		uc.Run(tea.Quit)
 	case actionEnterScope:
-		uc.Focus(rt.rcol.scope)
+		uc.At(rt.rcol.scope).Focus()
 	case actionArrowMode:
 		rt.bd.bare = !rt.bd.bare
 	case actionNarrow:

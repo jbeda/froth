@@ -92,16 +92,16 @@ func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 		if msg.Action == actionCycle {
 			// Answering a message with the same message is the cycle the
 			// iteration cap is for.
-			uc.Post(uc.Self(), cycleMsg{})
+			uc.Self().Post(cycleMsg{})
 		}
 	case tea.KeyMsg:
 		key := msg.String()
 		p.status = "I had focus, so froth gave me " + strconv.Quote(key)
-		uc.Post(p.sibling, echoMsg{key: key})
+		uc.At(p.sibling).Post(echoMsg{key: key})
 	case echoMsg:
 		p.status = "the focused pane passed on " + strconv.Quote(msg.key) +
 			", same frame as the keystroke"
 	case cycleMsg:
-		uc.Post(uc.Self(), msg)
+		uc.Self().Post(msg)
 	}
 }

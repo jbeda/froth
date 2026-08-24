@@ -864,3 +864,61 @@ problem disappear: the help bar asks `rc.Query()` and no surface holds a `*Froth
   be asked for without inventing a node. ADR 0009 is what any such change has to answer.
 - **The query is hard-coded to `Binder`.** `CONTEXT.md` describes a genus with one member;
   the second capability earns the mechanism.
+
+## M3 — Structure (in progress)
+
+Written per ticket while the milestone is open, and folded into one entry when it lands.
+Everything here is subject to a later ticket in the same milestone contradicting it.
+
+### #37 — Handle-scoped contexts: three tiers, reads and enumeration
+
+**Shipped.** `Self()`, `Child(h)` and `At(h)` on all three phase contexts, minting five
+concrete types — `ReadCtx` from Render, `SelfUpdateCtx`, `SelfApplyCtx`, `ChildCtx` and
+`AnyCtx` — all satisfying a sealed `HandleReader` of `Handle`, `Parent` and `Children`.
+`Create` and `SetLayout` moved to `SelfApplyCtx`; `Post` and `Focus` onto the tiers.
+`DiagDeadHandle` is new. `UpdateCtx.Post`, `UpdateCtx.Focus`, `FocusSelf`,
+`ApplyCtx.Create`, `ApplyCtx.Focus` and `ApplyCtx.SetLayout` are gone, and every example
+moved with them.
+
+**The self tier carries the reach set, which ADR 0014's table does not show it carrying.**
+`uc.Post(uc.Self(), msg)` is a real pattern — a surface continuing in a later delivery —
+and routing it through `At(Self().Handle())` to reach a tier that already permits it would
+be verbose for nothing. The tiers nest by capability: self ⊇ child ⊇ open. They still do
+not nest by *target*, which is why self is a tier rather than a special case of child.
+
+**Apply gained `Post`, which is what makes five types rather than seven.** The child and
+open tiers are one type each across Deliver and Apply, and that only works if their method
+sets agree. #17's session-B comment had already given `ApplyCtx.Post` its justification —
+a surface being torn down telling something outside froth — so this was owed anyway.
+
+**Minting on a dead handle reports, and that changes what a dead-handle drop looks like.**
+Posting to a stored handle whose surface has gone was silent; it is now
+`DiagDeadHandle` plus the same drop. ADR 0014 asks for the diagnostic and compares it to
+"delivery to a dead handle", which does not report — so the simile was wrong about froth
+as it stood, and the ADR's own instruction is what shipped.
+
+**`DiagInvalidFocus` is now unreachable through the public API.** Every path to
+`setFocus` mints first, and the mint rejects a handle that names nothing. It becomes
+reachable again the moment a surface can leave the tree between a recorded move and the
+Apply that commits it, which is #40. Nothing was deleted; the three tests that used to
+provoke it now assert `DiagDeadHandle`.
+
+**What stayed on the phase contexts, and why.** `FocusNext`/`FocusPrev` name no handle at
+all — they walk from wherever focus is — so they are not handle-scoped. `Focused`,
+`FocusWithin` and `Rect` answer about the surface being drawn and are Render's own.
+`Query` stays on all three. The contexts are otherwise mint sites, as ADR 0014 intended.
+
+**The examples read better with the mint hoisted.** `self := ac.Self()` at the top of a
+`Mount` beats six `ac.Self().Create(...)`, and that is the shape to copy. `Focus` reads
+worse than it did: `uc.Focus(h)` became `uc.At(h).Focus()`. Both are input to #32.
+
+**Next tickets should know.**
+
+- **Reads are on `reader`, which every tier embeds.** A read added later lands on all five
+  types at once, and the seal means the interface can grow with them.
+- **Enumeration is one list.** ADR 0012's amendment partitions froth-parented surfaces
+  into a second one; nothing carries that mark until modals exist, so `Children` is the
+  only list and the partition arrives with the surfaces subject to it.
+- **`Destroy` has a place to go and no work to do here.** It belongs on `ChildCtx`, and on
+  `SelfApplyCtx`/`SelfUpdateCtx` if a surface may destroy itself — the tier table answers
+  that, but #40 has to decide the second half.

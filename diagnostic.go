@@ -31,6 +31,13 @@ const DiagIterationCap DiagnosticKind = "iteration cap"
 // not in the tree. Focus does not move, and the surface that held it keeps it.
 const DiagInvalidFocus DiagnosticKind = "invalid focus"
 
+// DiagDeadHandle is reported when a handle-scoped context is minted for a
+// handle that names no live surface. The context is handed back rather than
+// refused and nothing asked of it reaches a surface, so the surface that asked
+// runs to the end of what it was doing rather than branching on whether its
+// target is still there.
+const DiagDeadHandle DiagnosticKind = "dead handle"
+
 // DiagReentrantQuery is reported when a query is asked from inside one, which
 // is a surface answering Bindings() by asking froth what the live bindings are.
 // The nested query answers nothing rather than recursing.

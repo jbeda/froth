@@ -115,7 +115,7 @@ what Bubble Tea does on startup. One `newSized(t, root, w, h)` helper covers it.
 
 **A fixture surface records its own handle.** `Create` returns a handle only to the
 parent that called it, and froth has no lookup by name, so a fixture a test wants to
-assert about stashes `ac.Self()` in its `Mount` and the test reads it from there. That is
+assert about stashes `ac.Self().Handle()` in its `Mount` and the test reads it from there. That is
 [ADR 0001](./adr/0001-surfaces-addressed-by-handle.md) and the no-global-namespace
 non-goal working as intended, not friction to remove.
 

@@ -19,10 +19,11 @@ type scope struct {
 }
 
 func (s *scope) Mount(ac *froth.ApplyCtx) {
+	self := ac.Self()
 	for _, name := range []string{"Reply", "Forward", "Archive"} {
-		ac.Create(&control{name: name, bd: s.bd}, froth.TabStop())
+		self.Create(&control{name: name, bd: s.bd}, froth.TabStop())
 	}
-	ac.SetLayout(scopeInner{})
+	self.SetLayout(scopeInner{})
 }
 
 // The scope is on the focus chain while one of its controls holds focus, and it
@@ -37,7 +38,7 @@ func (s *scope) Bindings() []froth.Binding {
 
 func (s *scope) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	if m, ok := msg.(froth.ActionMsg); ok && m.Action == actionLeaveScope {
-		uc.Focus(s.out)
+		uc.At(s.out).Focus()
 	}
 }
 

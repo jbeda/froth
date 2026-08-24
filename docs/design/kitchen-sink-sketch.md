@@ -33,6 +33,10 @@
 > - **An action is not delivered to the surface that declared its binding.** Resolution
 >   yields an identity; delivery rises from the active surface. See
 >   [ADR 0008](../adr/0008-shortcuts-resolve-to-actions.md)'s amendments.
+> - **`Create`, `SetLayout`, `Post` and `Focus` are not on a phase context.** They are
+>   minted for a handle — `ac.Self().Create(...)`, `uc.At(h).Post(...)` — and every
+>   example in this document shows the flat form. See
+>   [ADR 0014](../adr/0014-capability-is-minted-from-a-phase-context.md).
 > - **The Reference tables are stale.** `Raise` and `Reply` are listed flat on
 >   `*UpdateCtx` and `Sender()` on `*ApplyCtx`; handle-scoped operations are minted from
 >   a phase context instead ([ADR 0014](../adr/0014-capability-is-minted-from-a-phase-context.md)),
