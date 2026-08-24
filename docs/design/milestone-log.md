@@ -956,19 +956,23 @@ not fail so much as hang the suite for minutes, and chasing why is how the untak
 above was found. A mutation that hangs is a finding rather than a broken run.
 
 **Asking whether a message rises is public, in two forms.** `froth.Rises(msg)` and
-`uc.Rises()`. Not in the ticket: it came out of asking what a *user* knows, and the
-answer was that a reader of a type they wrote knows, while a handler generic over the
-message type has no way to find out and no safe way to probe — `StopRising` panics on the
-wrong guess. The method returns the same field the panic checks, so they cannot disagree.
+`uc.Rises()`. Not in the ticket, and **built on a judgement rather than on a case in this
+repo** — recorded that way deliberately, since the house rule is to bring a case. The
+argument is that a reader of a type they wrote already knows, while a handler generic over
+the message type has no way to find out and no safe way to probe, because `StopRising`
+panics on the wrong guess. No such handler exists in froth or its examples today; the
+nearest candidate, #39's `ActionMsg` sites, knows statically and does not need it. The
+method returns the same field the panic checks, so they cannot disagree.
 `Rises` keeps froth's bare-predicate style (`Rect.Empty`, `RenderCtx.Focused`) and the verb
 `CONTEXT.md` already uses. An `IsRising` spelling was tried first and reverted rather than
 start a second naming convention for one call.
 
 **Next tickets should know.**
 
-- **#39's migration is the case this was built for.** Seven `case froth.ActionMsg:` handlers
-  across the two examples call no `StopRising` today, because today it would panic. When
-  actions rise, every one silently becomes act-and-continue and fires the tail diagnostic.
+- **#39 has to add `StopRising` to seven `case froth.ActionMsg:` handlers** across the two
+  examples, all of which handle application actions. Ordinary call-site work the ticket
+  already implies, listed on #39 so it is not found twice. A *froth* action is the opposite
+  case and #39's body covers it: not taking one is supported, because the tail services it.
 - **`deliverEntry` is where the tail lives.** #39 puts `service()` at the end of the climb,
   which is the `break` that currently falls straight into `reportUntaken` — an action nobody
   takes should be serviced there rather than reported.

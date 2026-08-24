@@ -244,13 +244,18 @@ for the same reason.
 
 **There is a way to ask, in two places.** `froth.Rises(msg)` reports whether a type
 travels, and `uc.Rises()` answers the same for the delivery in progress. The ADR above
-argues that a reader of a type knows its reach without asking — which is true of code that
-handles types it declared, and not true of a handler generic over the message type, or of a
-surface handling a type froth or another package declared. The pair costs nothing: the
-package function is the `riser` assertion the walk already makes, and the method returns the
-same field `StopRising` checks, so the two can never disagree with each other or with the
-panic. `Rises` follows froth's bare-predicate house style — `Rect.Empty`, `RenderCtx.Focused` —
-and matches the verb this ADR and `CONTEXT.md` already use for what a message does.
+argues that a reader of a type knows its reach without asking, and that holds for code
+handling types it declared. It does not hold for a handler generic over the message type,
+which has no way to find out and no safe way to probe, since `StopRising` panics on the
+wrong guess. The pair costs nothing: the package function is the `riser` assertion the walk
+already makes, and the method returns the same field `StopRising` checks, so the two can
+never disagree with each other or with the panic. `Rises` follows froth's bare-predicate
+house style — `Rect.Empty`, `RenderCtx.Focused` — and matches the verb this ADR and
+`CONTEXT.md` already use for what a message does.
+
+**No such handler exists in froth or its examples yet**, so this was built on the argument
+rather than on a case, against the house rule. If it turns out nothing ever needs it, the
+honest correction is to delete it rather than to keep finding reasons for it.
 
 **`StopRising` panics when the message does not rise.** It is the one misuse that no data
 can produce: whether a message travels is fixed by its type, so a surface calling it while
