@@ -55,6 +55,14 @@
 // is ordinary typing and lands in the field; "ctrl+c" is a chord, so it still
 // resolves to the root and quits. Tab it away and "q" is a shortcut again.
 //
+// Pressing "n" inside the scope shows the other kind of delivery. The control
+// posts a message whose type embeds froth.Rising, so it does not stop where it
+// was posted: the scope sees it and counts it without ending the walk, and the
+// root sees it next and takes it by calling StopRising. Nothing above the root
+// hears about it. A message that nobody took would reach the tail and be
+// reported through the same hook the cycle uses — which is what a forgotten
+// case looks like from the outside.
+//
 // The bar along the bottom is the same story told forwards. It is built entirely
 // from a query — it asks froth what a key press would currently do and prints the
 // answer — so it knows no keys and no actions of its own and cannot describe
@@ -83,6 +91,7 @@ const (
 	actionEnterScope froth.Action = "enter scope"
 	actionLeaveScope froth.Action = "leave scope"
 	actionClear      froth.Action = "clear filter"
+	actionNote       froth.Action = "note this"
 )
 
 // model is the application root. It owns froth by pointer and forwards Bubble
@@ -103,7 +112,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func main() {
-	rt := &root{report: &report{}}
+	rt := &root{report: &report{}, note: &report{}}
 	m := model{f: froth.New(context.Background(), rt, froth.OnDiagnostic(rt.onDiagnostic))}
 
 	if _, err := tea.NewProgram(m).Run(); err != nil {

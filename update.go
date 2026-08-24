@@ -56,6 +56,10 @@ func (f *Froth) route(msg tea.Msg) (envelope, bool) {
 type budget struct {
 	left    int
 	tripped bool
+
+	// untaken records the message types already reported as untaken during this
+	// pass. See reportUntaken.
+	untaken map[string]bool
 }
 
 // iterationCap is how much one settle pass may spend before froth decides the
@@ -90,13 +94,17 @@ func (f *Froth) trip(b *budget, detail string) {
 	f.report(Diagnostic{Kind: DiagIterationCap, Detail: detail})
 }
 
-// settle runs Deliver and Apply alternately until the message queue drains.
+// settle applies, drains the whole message queue, and repeats while anything
+// structural is still pending.
 //
 // Apply leads because the tree has to exist before anything can be delivered
-// into it — the root's own mount is the first Apply any instance runs — and
-// because the Apply a delivery asks for is the one at the top of the next turn
-// of the loop. Deliver hands one message to one surface, which may change only
-// itself, and Apply commits the structural change that delivery asked for.
+// into it — the root's own mount is the first Apply any instance runs. It then
+// runs only once the queue is empty, so no delivery ever has the tree change
+// under it: a rising message cannot be halfway up a path that is being
+// rebuilt, and a message posted to a surface destroyed later in the same turn
+// is delivered, because the destroy commits at the Apply after the drain. The
+// price is that a delivery asking for Apply waits for the whole drain, so the
+// messages queued behind a focus request see the old focus.
 //
 // Delivering a message and mounting a surface both spend from one budget, and
 // running out of it means a cascade that is not going to settle. froth abandons
@@ -108,23 +116,8 @@ func (f *Froth) settle() tea.Cmd {
 
 	for {
 		f.apply(&b)
-		if len(f.queue) == 0 {
+		if len(f.queue) == 0 || !f.drain(&b, &cmds) {
 			break
-		}
-		if !b.spend() {
-			f.trip(&b, fmt.Sprintf("the message queue did not drain within %d "+
-				"deliveries and mounts; a surface is almost certainly posting "+
-				"a message that comes back to it", iterationCap))
-			f.queue = nil
-			break
-		}
-		e := f.queue[0]
-		// Clear the slot as well as dropping it: the backing array outlives the
-		// reslice, and a delivered message should not be kept alive by it.
-		f.queue[0] = envelope{}
-		f.queue = f.queue[1:]
-		if cmd := f.deliver(e.to, e.msg); cmd != nil {
-			cmds = append(cmds, cmd)
 		}
 	}
 
@@ -132,20 +125,106 @@ func (f *Froth) settle() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// deliver runs the Deliver phase for one message and one surface. A handle that
-// names nothing is a defined drop rather than an error, which is the point of
-// addressing surfaces by handle.
-func (f *Froth) deliver(h Handle, msg tea.Msg) tea.Cmd {
-	n := f.reg.get(h)
-	if n == nil {
-		return nil
+// drain delivers the whole queue, including what delivering it adds. It reports
+// false when the budget ran out, having abandoned what was left.
+func (f *Froth) drain(b *budget, cmds *[]tea.Cmd) bool {
+	for len(f.queue) > 0 {
+		e := f.queue[0]
+		// Clear the slot as well as dropping it: the backing array outlives the
+		// reslice, and a delivered message should not be kept alive by it.
+		f.queue[0] = envelope{}
+		f.queue = f.queue[1:]
+		if !f.deliverEntry(e, b, cmds) {
+			f.queue = nil
+			return false
+		}
+	}
+	return true
+}
+
+// deliverEntry delivers one queue entry: one surface for an addressed message,
+// and the whole climb for a rising one. It reports false when the budget ran
+// out partway.
+//
+// A walk is one entry rather than one per hop, which is what makes it
+// uninterruptible: a message posted while a rising one is passing through goes
+// to the tail of the queue and waits, rather than being delivered between two
+// of its hops.
+func (f *Froth) deliverEntry(e envelope, b *budget, cmds *[]tea.Cmd) bool {
+	rising := rises(e.msg)
+	h := e.to
+	for {
+		if !b.spend() {
+			f.trip(b, fmt.Sprintf("the message queue did not drain within %d "+
+				"deliveries and mounts; a surface is almost certainly posting "+
+				"a message that comes back to it", iterationCap))
+			return false
+		}
+
+		n := f.reg.get(h)
+		if n == nil {
+			// A handle that names nothing is a defined drop rather than an
+			// error, which is the point of addressing surfaces by handle. It
+			// ends a walk too: a path froth cannot climb is not one it can
+			// guess the rest of.
+			return true
+		}
+		cmd, stopped := f.deliver(n, h, e.msg, rising)
+		if cmd != nil {
+			*cmds = append(*cmds, cmd)
+		}
+		if !rising || stopped {
+			return true
+		}
+		if n.parent == (Handle{}) {
+			break
+		}
+		h = n.parent
 	}
 
-	uc := &UpdateCtx{phaseToken: f.enter(phaseDeliver), ctx: f.ctx, self: h}
+	f.reportUntaken(b, e)
+	return true
+}
+
+// reportUntaken says a rising message climbed past every surface with nobody
+// taking it — once per message type per settle pass.
+//
+// Coalescing on the type is what keeps one bug from arriving as thousands of
+// reports: a missing case is a property of a type, so two hundred rows posting
+// the same untaken message is one thing to fix, and a cascade of them would
+// otherwise spend the whole budget reporting. Two different types are two
+// findings and both are reported. The handle in the detail is the first one
+// seen, as an example of where to look.
+func (f *Froth) reportUntaken(b *budget, e envelope) {
+	if b.untaken == nil {
+		b.untaken = make(map[string]bool)
+	}
+	kind := fmt.Sprintf("%T", e.msg)
+	if b.untaken[kind] {
+		return
+	}
+	b.untaken[kind] = true
+	f.report(Diagnostic{
+		Kind: DiagUntakenMessage,
+		Detail: fmt.Sprintf("a %s posted to %s rose past every surface and "+
+			"nothing took it", kind, e.to),
+	})
+}
+
+// deliver runs the Deliver phase for one message and one surface, reporting
+// whether the surface ended the walk it was on.
+func (f *Froth) deliver(n *node, h Handle, msg tea.Msg, rising bool) (tea.Cmd, bool) {
+	uc := &UpdateCtx{
+		phaseToken: f.enter(phaseDeliver),
+		ctx:        f.ctx,
+		self:       h,
+		msg:        msg,
+		rising:     rising,
+	}
 	defer f.leave()
 
 	n.surface.Update(uc, msg)
-	return tea.Batch(uc.cmds...)
+	return tea.Batch(uc.cmds...), uc.stopped
 }
 
 // apply runs the Apply phase: everything structural that has been asked for

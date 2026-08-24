@@ -226,6 +226,29 @@ Qt do.
 dies at the first surface and nothing above ever runs, with no way for froth to tell a
 deliberate stop from a forgotten continue. Default pass fails loudly, at the tail.
 
+## Amendment: two things building it settled
+
+Built as #38. Both are refinements of "a message that reaches the tail with nobody taking
+it is a `Diagnostic`" rather than departures from it.
+
+**The tail diagnostic is reported once per message type per update.** A cascade of untaken
+rising messages otherwise reports one diagnostic per message: two surfaces bouncing one
+between them produced 5,000 before the cap tripped, each of them a call into application
+code, and a hook that itself drives froth turns that into a hang. Coalescing on the type is
+what the finding actually is — what is missing is a *case*, and a case belongs to a type
+rather than to any one message, so two hundred rows posting the same untaken message is one
+thing to fix. Two different untaken types are two findings and both are reported. The handle
+in the detail is the first one seen, as an example of where to look rather than an
+enumeration. The precedent is in the same file: `trip` reports the cap once per settle pass
+for the same reason.
+
+**`StopRising` panics when the message does not rise.** It is the one misuse that no data
+can produce: whether a message travels is fixed by its type, so a surface calling it while
+handling an addressed message is wrong about the type it is holding, not handling a
+condition. This is [ADR 0014](./0014-a-handle-confers-nothing.md)'s split applied to a
+second case — a stranger's handle where a child's belongs is a bug and panics, a surface
+that has gone is a condition and reports.
+
 ## Parked: a check for a forgotten `StopRising`
 
 A `go vet`-style analyzer could find a surface that acts on a rising message and never ends

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strconv"
+
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/jbeda/froth"
@@ -11,7 +13,8 @@ import (
 // controls. Focus crosses the boundary only by being moved, which is what the
 // binding below does — and what a dialog's open and close would do.
 type scopePane struct {
-	out froth.Handle
+	out   froth.Handle
+	notes int
 }
 
 func (g *scopePane) Mount(ac *froth.ApplyCtx) {
@@ -32,8 +35,15 @@ func (g *scopePane) Bindings() []froth.Binding {
 }
 
 func (g *scopePane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
-	if m, ok := msg.(froth.ActionMsg); ok && m.Action == actionLeaveScope {
-		uc.At(g.out).Focus()
+	switch m := msg.(type) {
+	case froth.ActionMsg:
+		if m.Action == actionLeaveScope {
+			uc.At(g.out).Focus()
+		}
+	case noteMsg:
+		// Acting on a rising message is not taking it: the walk ends only where
+		// something calls StopRising, and this surface deliberately does not.
+		g.notes++
 	}
 }
 
@@ -52,7 +62,8 @@ func (g *scopePane) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Height(r.H).
 		Render("scope\n\ng gets in and back out; tab cycles between the two " +
 			"controls below and reaches nothing else. Come back and focus is " +
-			"where you left it.")
+			"where you left it.\n\nn from a control sends a message up past " +
+			"me: counted " + strconv.Itoa(g.notes) + ", taken by the root.")
 }
 
 // stack gives each child a row of the space, top to bottom, leaving the first
@@ -72,6 +83,16 @@ func (stack) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
 // focus. It is a tab stop, so the scope's walk lands on it.
 type control struct{ label string }
 
+// The control says what happened and does not know who acts on it: n posts a
+// message that travels, and the surfaces above decide.
+func (c *control) Bindings() []froth.Binding {
+	return []froth.Binding{{
+		Action: actionNote,
+		Keys:   []string{"n"},
+		Help:   "send a note upward",
+	}}
+}
+
 func (c *control) Render(rc *froth.RenderCtx, r froth.Rect) string {
 	if rc.Focused() {
 		return lipgloss.NewStyle().
@@ -82,4 +103,8 @@ func (c *control) Render(rc *froth.RenderCtx, r froth.Rect) string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("  " + c.label)
 }
 
-func (c *control) Update(*froth.UpdateCtx, tea.Msg) {}
+func (c *control) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	if m, ok := msg.(froth.ActionMsg); ok && m.Action == actionNote {
+		uc.Self().Post(noteMsg{from: c.label})
+	}
+}

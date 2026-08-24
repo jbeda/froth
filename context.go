@@ -2,6 +2,7 @@ package froth
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	tea "charm.land/bubbletea/v2"
@@ -63,6 +64,33 @@ type UpdateCtx struct {
 	ctx  context.Context
 	self Handle
 	cmds []tea.Cmd
+
+	// msg is the message being delivered, kept only so StopRising can name it
+	// when a surface calls it for a message that has no walk to end.
+	msg     tea.Msg
+	rising  bool
+	stopped bool
+}
+
+// StopRising ends the walk a rising message is on: no surface above this one
+// sees it. Nothing else stops it — a surface that ignores a rising message, or
+// acts on it and says nothing, lets it keep going.
+//
+// It is named for what it does to the message rather than for what the surface
+// did with it, which is what keeps "act on this and let it continue" sayable.
+//
+// Calling it while handling a message that does not embed Rising panics.
+// Whether a message travels is a property of its type, so there is no data that
+// makes such a call happen; a surface that believes it ended a walk that never
+// existed is wrong about the type it is holding.
+func (uc *UpdateCtx) StopRising() {
+	uc.check()
+	if !uc.rising {
+		panic(fmt.Sprintf("froth: StopRising was called while handling a %T, "+
+			"which does not embed froth.Rising; only a rising message has a "+
+			"walk to end", uc.msg))
+	}
+	uc.stopped = true
 }
 
 // Self mints a context on the surface this one belongs to — what a surface

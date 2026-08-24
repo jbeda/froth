@@ -44,16 +44,6 @@ func (r *relay) Mount(ac *froth.ApplyCtx) {
 	}
 }
 
-// newWatched is newSized for the tests that need to see what froth reported.
-func newWatched(t *testing.T, root froth.Surface, w, h int) (*froth.Froth, *[]froth.Diagnostic) {
-	t.Helper()
-	var got []froth.Diagnostic
-	f := froth.New(context.Background(), root,
-		froth.OnDiagnostic(func(d froth.Diagnostic) { got = append(got, d) }))
-	f.Update(tea.WindowSizeMsg{Width: w, Height: h})
-	return f, &got
-}
-
 // cycler answers every message with the same message, addressed to itself, which
 // is the shortest cascade that never settles.
 type cycler struct{}
@@ -271,3 +261,109 @@ func TestAHookThatProvokesItsOwnDiagnosticTerminates(t *testing.T) {
 		t.Errorf("View().Content = %q, want %q; froth stopped drawing", got, want)
 	}
 }
+
+// The queue is a queue, and that is a promise rather than an accident of how it
+// is built: everything downstream of delivery order, including a walk's hops
+// arriving before later traffic, rests on it.
+func TestMessagesAreDeliveredInTheOrderTheyWerePosted(t *testing.T) {
+	kid := &ordered{}
+	root := &sender{kid: kid, kids: []froth.Surface{kid}}
+	f := newSized(t, root, 8, 2)
+
+	f.Update(bumpMsg{})
+
+	if got, want := kid.got, "1,2,3"; got != want {
+		t.Errorf("messages arrived as %q, want %q", got, want)
+	}
+}
+
+// orderMsg carries its position, so what a surface received says what order the
+// queue ran in.
+type orderMsg struct{ n int }
+
+type sender struct {
+	kid  *ordered
+	kids []froth.Surface
+}
+
+func (s *sender) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (s *sender) Mount(ac *froth.ApplyCtx) {
+	for _, k := range s.kids {
+		ac.Self().Create(k)
+	}
+}
+
+func (s *sender) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	if _, ok := msg.(bumpMsg); !ok {
+		return
+	}
+	for n := 1; n <= 3; n++ {
+		uc.At(s.kid.self).Post(orderMsg{n: n})
+	}
+}
+
+type ordered struct {
+	self froth.Handle
+	got  string
+}
+
+func (o *ordered) Render(*froth.RenderCtx, froth.Rect) string { return o.got }
+func (o *ordered) Mount(ac *froth.ApplyCtx)                   { o.self = ac.Self().Handle() }
+func (o *ordered) Update(_ *froth.UpdateCtx, msg tea.Msg) {
+	m, ok := msg.(orderMsg)
+	if !ok {
+		return
+	}
+	if o.got != "" {
+		o.got += ","
+	}
+	o.got += strconv.Itoa(m.n)
+}
+
+// Apply runs once the queue is empty rather than between deliveries, so the
+// messages queued behind a focus request see the focus that was there before
+// it. This is the ordering a walk depends on, observed on the one structural
+// change a surface can ask for during Deliver.
+func TestTheWholeQueueDrainsBeforeApplyRunsAgain(t *testing.T) {
+	kid := &fixed{content: "kid"}
+	root := &focusThenPeek{kid: kid}
+	f := newSized(t, root, 8, 2)
+
+	f.Update(bumpMsg{})
+
+	if root.peeked != root.self {
+		t.Errorf("the delivery after the focus request saw focus at %s, want "+
+			"%s — Apply ran in the middle of the drain", root.peeked, root.self)
+	}
+	if got := f.Query().Focus(); got != root.child {
+		t.Errorf("focus settled at %s, want %s — the move never committed", got, root.child)
+	}
+}
+
+// focusThenPeek asks for focus and then, in a later delivery of the same
+// update, asks froth where focus is.
+type focusThenPeek struct {
+	kid froth.Surface
+
+	self   froth.Handle
+	child  froth.Handle
+	peeked froth.Handle
+}
+
+func (p *focusThenPeek) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (p *focusThenPeek) Mount(ac *froth.ApplyCtx) {
+	p.self = ac.Self().Handle()
+	p.child = ac.Self().Create(p.kid)
+}
+
+func (p *focusThenPeek) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	switch msg.(type) {
+	case bumpMsg:
+		uc.At(p.child).Focus()
+		uc.Self().Post(peekMsg{})
+	case peekMsg:
+		p.peeked = uc.Query().Focus()
+	}
+}
+
+type peekMsg struct{}

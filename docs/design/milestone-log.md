@@ -922,3 +922,46 @@ worse than it did: `uc.Focus(h)` became `uc.At(h).Focus()`. Both are input to #3
 - **`Destroy` has a place to go and no work to do here.** It belongs on `ChildCtx`, and on
   `SelfApplyCtx`/`SelfUpdateCtx` if a surface may destroy itself — the tier table answers
   that, but #40 has to decide the second half.
+
+### #38 — Messages rise until something takes them, and the queue drains before Apply
+
+**Shipped.** `froth.Rising` — an embeddable struct whose unexported method nothing outside
+froth can satisfy — makes a message type travel: it is offered to the surface it was posted
+to, then to each ancestor, ending where a surface calls `uc.StopRising()`. One nothing takes
+reaches the root and is reported as `DiagUntakenMessage`. `settle` now applies, drains the
+queue **completely**, and applies again only while something structural is pending. The
+example gained a rising message: `n` inside the scope posts one from a control, the scope
+counts it without ending the walk, and the root takes it.
+
+**A walk is one queue entry, not one per hop.** The climb happens inside a single dequeue,
+which is what makes ADR 0016's two ordering promises hold together: messages are delivered
+in the order posted, *and* a message posted after a rising one cannot land between two of
+its hops. Mutating this into one-entry-per-hop breaks two tests, which is the pair worth
+having.
+
+**The tail diagnostic coalesces on the message type, once per settle pass.** Not in the
+ADR, found by measuring: two surfaces bouncing an untaken rising message reported 5,000
+diagnostics before the cap tripped — 8ms, but 5,000 calls into application code, and a hook
+that drives froth turns that into a hang. Coalescing on the type matches what the finding
+is: a missing *case* belongs to a type. The reasoning and the alternatives are in ADR 0016's
+amendment. `trip` had already made the same call for the cap, one report per pass.
+
+**`StopRising` panics for a message that does not rise**, rather than being a silent no-op.
+Whether a message travels is fixed by its type, so no data produces the call — it is ADR
+0014's bug-versus-condition split applied again.
+
+**The mutation pass paid, as it did on #37.** Six mutations, every one caught. Five failed
+the test that should have caught them; the sixth — treating every message as rising — did
+not fail so much as hang the suite for minutes, and chasing why is how the untaken storm
+above was found. A mutation that hangs is a finding rather than a broken run.
+
+**Next tickets should know.**
+
+- **`deliverEntry` is where the tail lives.** #39 puts `service()` at the end of the climb,
+  which is the `break` that currently falls straight into `reportUntaken` — an action nobody
+  takes should be serviced there rather than reported.
+- **`deliver` takes a `*node`** because `deliverEntry` has already resolved one to find the
+  parent. A destroy that runs mid-drain (#40) has to invalidate that, or re-resolve per hop.
+- **A dead handle ends a walk** rather than climbing from where the surface used to be. The
+  parent is not recoverable from a handle that names nothing, and guessing is worse than
+  dropping.

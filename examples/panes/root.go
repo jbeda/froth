@@ -15,6 +15,7 @@ import (
 // nobody else's.
 type root struct {
 	report *report
+	note   *report
 	scope  froth.Handle
 }
 
@@ -49,13 +50,15 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	notes := &pane{
 		title:  "notes",
 		report: rt.report,
+		note:   rt.note,
 		body: "This pane was created without froth.TabStop(), so tab never " +
 			"lands here — but it still sits third in the row, still gets its " +
 			"share of the space, and could still be given focus by name. " +
 			"Being outside the keyboard walk is not being moved and not " +
 			"being hidden.\n\n" +
 			"Whatever froth reports through the diagnostic hook shows up " +
-			"under the title above.",
+			"under the title above, and so does whatever rose all the way to " +
+			"the root.",
 	}
 
 	self := ac.Self()
@@ -101,20 +104,27 @@ func (rt *root) Bindings() []froth.Binding {
 	}}
 }
 
-// The root sees no raw keys — those go to the focused pane — so the only thing
-// addressed to it is the action it declared.
+// The root sees no raw keys — those go to the focused pane — so what is
+// addressed to it is the action it declared. A rising message is the other
+// thing that arrives here: it was posted somewhere below and nothing on the way
+// up took it.
 func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
-	m, ok := msg.(froth.ActionMsg)
-	if !ok {
-		return
-	}
-	switch m.Action {
-	case actionQuit:
-		uc.Run(tea.Quit)
-	case actionEnterScope:
-		// Moving focus to a scope enters it: froth lands on the control the
-		// scope last had focus on, or its first one.
-		uc.At(rt.scope).Focus()
+	switch m := msg.(type) {
+	case froth.ActionMsg:
+		switch m.Action {
+		case actionQuit:
+			uc.Run(tea.Quit)
+		case actionEnterScope:
+			// Moving focus to a scope enters it: froth lands on the control the
+			// scope last had focus on, or its first one.
+			uc.At(rt.scope).Focus()
+		}
+	case noteMsg:
+		// The walk ends here rather than at the tail. Saying nothing would let
+		// it past the root to the instance, where froth would report that
+		// nobody took it.
+		rt.note.text = "rose from " + m.from + " and the root took it"
+		uc.StopRising()
 	}
 }
 

@@ -30,7 +30,7 @@ than on internals. What stays out of bounds is a handle's *contents* and any han
 reached rather than was given.
 
 Almost everything is observable through the seam: shortcut precedence, focus movement and
-restoration, intent routing and unclaimed-intent reporting, modality, capture and capture
+restoration, rising delivery and untaken-message reporting, modality, capture and capture
 loss, command tagging and dead-handle drops, runtime phase violations, chrome, and Z
 ordering.
 

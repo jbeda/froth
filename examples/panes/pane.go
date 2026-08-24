@@ -17,6 +17,14 @@ type echoMsg struct{ key string }
 // itself, so the cascade never settles.
 type cycleMsg struct{}
 
+// noteMsg travels. Embedding froth.Rising means froth offers it to the surface
+// it was posted to, then to that surface's parent, and on up — so a control
+// deep in the tree says what happened without knowing who cares.
+type noteMsg struct {
+	froth.Rising
+	from string
+}
+
 // report is where the diagnostic hook leaves what froth said. The hook is
 // called with no phase in progress and so has no context to post through; a
 // value shared with the surface that draws it is the way onto the screen.
@@ -32,6 +40,7 @@ type pane struct {
 	status  string
 	sibling froth.Handle
 	report  *report // nil for a pane that does not draw diagnostics
+	note    *report // nil for a pane that does not draw what rose to the root
 }
 
 func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
@@ -57,6 +66,9 @@ func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
 	}
 	if p.report != nil && p.report.text != "" {
 		status += "\n\n" + p.report.text
+	}
+	if p.note != nil && p.note.text != "" {
+		status += "\n\n" + p.note.text
 	}
 
 	// The status sits under the title rather than under the body, so it stays

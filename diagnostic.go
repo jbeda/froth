@@ -38,6 +38,16 @@ const DiagInvalidFocus DiagnosticKind = "invalid focus"
 // target is still there.
 const DiagDeadHandle DiagnosticKind = "dead handle"
 
+// DiagUntakenMessage is reported when a rising message climbs past every
+// surface on its path and nothing calls StopRising. It is almost always a
+// missing case or a surface parented somewhere unexpected, and it is the only
+// thing that catches a forgotten StopRising, since Go cannot force the call.
+//
+// It is reported once per message type per update, however many messages of
+// that type went untaken: what is missing is a case, and a case is a property
+// of the type rather than of any one message.
+const DiagUntakenMessage DiagnosticKind = "untaken message"
+
 // DiagReentrantQuery is reported when a query is asked from inside one, which
 // is a surface answering Bindings() by asking froth what the live bindings are.
 // The nested query answers nothing rather than recursing.

@@ -38,6 +38,16 @@ func newSized(t *testing.T, root froth.Surface, w, h int) *froth.Froth {
 	return f
 }
 
+// newWatched is newSized for the tests that need to see what froth reported.
+func newWatched(t *testing.T, root froth.Surface, w, h int) (*froth.Froth, *[]froth.Diagnostic) {
+	t.Helper()
+	var got []froth.Diagnostic
+	f := froth.New(context.Background(), root,
+		froth.OnDiagnostic(func(d froth.Diagnostic) { got = append(got, d) }))
+	f.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	return f, &got
+}
+
 type fixed struct{ content string }
 
 func (x *fixed) Render(*froth.RenderCtx, froth.Rect) string { return x.content }
