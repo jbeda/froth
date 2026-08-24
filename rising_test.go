@@ -281,3 +281,83 @@ func TestUntakenMessagesAreReportedOncePerTypeInOneUpdate(t *testing.T) {
 		}
 	}
 }
+
+// IsRising answers about a type, so it is a pure function and tested as one.
+// The rule it decides is written down in ADR 0016: a type rises or it does not,
+// permanently.
+func TestIsRisingAnswersForTheType(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		msg  tea.Msg
+		want bool
+	}{
+		{"embeds Rising", riseMsg{}, true},
+		{"another that embeds it", otherRiseMsg{}, true},
+		{"embeds nothing", plainMsg{}, false},
+		{"a froth message that does not rise", postMsg{}, false},
+		{"a pointer to one that embeds it", &riseMsg{}, true},
+		{"nil", nil, false},
+	} {
+		if got := froth.IsRising(tc.msg); got != tc.want {
+			t.Errorf("IsRising(%s) = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// The context's answer and the package function's cannot disagree, because the
+// guard StopRising panics on is the same one this reports.
+func TestUpdateCtxIsRisingMatchesTheMessage(t *testing.T) {
+	var trace []string
+	root := &climber{name: "root", trace: &trace}
+	var seen []string
+	record := func(uc *froth.UpdateCtx) {
+		seen = append(seen, strconv.FormatBool(uc.IsRising()))
+	}
+	root.onRise, root.onPlain = record, record
+	f, _ := newWatched(t, root, 8, 1)
+
+	postTo(f, root.self, riseMsg{}, plainMsg{})
+
+	if got, want := strings.Join(seen, ","), "true,false"; got != want {
+		t.Errorf("uc.IsRising() reported %q, want %q", got, want)
+	}
+}
+
+// The pattern the predicate exists for: a surface whose handler is generic over
+// the message type ends the walk when there is one, and does not panic when
+// there is not.
+func TestGuardingStopRisingWithIsRisingIsSafeForBothKinds(t *testing.T) {
+	var trace []string
+	leaf := &generic{trace: &trace}
+	root := &climber{name: "root", trace: &trace, kids: []froth.Surface{leaf}}
+	f, diags := newWatched(t, root, 8, 2)
+
+	postTo(f, leaf.self, riseMsg{}, plainMsg{})
+
+	// The rising one ended at the leaf; the addressed one was never going
+	// anywhere. Neither panicked, and the root saw neither.
+	if got, want := strings.Join(trace, ","), "generic,generic"; got != want {
+		t.Errorf("delivery was %q, want %q — the guard should have ended the "+
+			"walk and left the addressed message alone", got, want)
+	}
+	if len(*diags) != 0 {
+		t.Errorf("froth reported %v, want nothing", *diags)
+	}
+}
+
+// generic handles whatever it is given without a case per type, which is the
+// code that cannot know statically whether to end a walk.
+type generic struct {
+	trace *[]string
+	self  froth.Handle
+}
+
+func (g *generic) Mount(ac *froth.ApplyCtx)                   { g.self = ac.Self().Handle() }
+func (g *generic) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+
+func (g *generic) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	*g.trace = append(*g.trace, "generic")
+	if froth.IsRising(msg) {
+		uc.StopRising()
+	}
+}

@@ -31,8 +31,14 @@ func (Rising) rising() {}
 
 type riser interface{ rising() }
 
-// rises reports whether msg travels past the surface it was posted to.
-func rises(msg tea.Msg) bool {
+// IsRising reports whether msg travels past the surface it was posted to.
+//
+// Whether a message rises is fixed by its type, so a surface handling a type it
+// wrote already knows. This is for the code that does not: a helper shared by
+// both kinds of message, or a surface handling a message type it did not
+// declare. It is the question StopRising panics on getting wrong, which is why
+// there is a way to ask it.
+func IsRising(msg tea.Msg) bool {
 	_, ok := msg.(riser)
 	return ok
 }

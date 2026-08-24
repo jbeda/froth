@@ -955,8 +955,19 @@ the test that should have caught them; the sixth — treating every message as r
 not fail so much as hang the suite for minutes, and chasing why is how the untaken storm
 above was found. A mutation that hangs is a finding rather than a broken run.
 
+**Asking whether a message rises is public, in two forms.** `froth.IsRising(msg)` and
+`uc.IsRising()`. Not in the ticket: it came out of asking what a *user* knows, and the
+answer was that a reader of a type they wrote knows, while a handler generic over the
+message type has no way to find out and no safe way to probe — `StopRising` panics on the
+wrong guess. The method returns the same field the panic checks, so they cannot disagree.
+`IsRising` over `Rises` is a deliberate departure from froth's bare-predicate style
+(`Rect.Empty`, `RenderCtx.Focused`), taken for how it reads at a guard.
+
 **Next tickets should know.**
 
+- **#39's migration is the case this was built for.** Seven `case froth.ActionMsg:` handlers
+  across the two examples call no `StopRising` today, because today it would panic. When
+  actions rise, every one silently becomes act-and-continue and fires the tail diagnostic.
 - **`deliverEntry` is where the tail lives.** #39 puts `service()` at the end of the climb,
   which is the `break` that currently falls straight into `reportUntaken` — an action nobody
   takes should be serviced there rather than reported.

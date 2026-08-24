@@ -72,6 +72,17 @@ type UpdateCtx struct {
 	stopped bool
 }
 
+// IsRising reports whether the message being delivered keeps travelling after
+// this surface has seen it, and so whether StopRising has a walk to end here.
+//
+// It answers from the same field StopRising checks, so the two cannot disagree:
+// where this is true, StopRising is safe, and where it is false, StopRising
+// panics.
+func (uc *UpdateCtx) IsRising() bool {
+	uc.check()
+	return uc.rising
+}
+
 // StopRising ends the walk a rising message is on: no surface above this one
 // sees it. Nothing else stops it — a surface that ignores a rising message, or
 // acts on it and says nothing, lets it keep going.
