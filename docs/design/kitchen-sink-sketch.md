@@ -38,6 +38,9 @@
 >   a phase context instead ([ADR 0014](../adr/0014-capability-is-minted-from-a-phase-context.md)),
 >   and `Ctx()` describes root-context behaviour that
 >   [ADR 0015](../adr/0015-results-come-back-to-whoever-asked.md) reverses.
+> - **The theme-picker example is wholly stale**, and has a bug besides: `appRoot.Apply`
+>   calls `ac.SetEnvOn(ac.Root(), ...)`, using the child-targeting form on itself. It also
+>   raises an intent and commits in Apply, neither of which exists.
 > - **The dialog examples under-describe what froth supports.** A reply is a channel, not
 >   a single answer: a surface may reply repeatedly and close when it is done.
 

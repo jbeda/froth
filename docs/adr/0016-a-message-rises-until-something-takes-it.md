@@ -112,6 +112,26 @@ The iteration cap is unchanged and already covers the cascade this makes easier 
 two surfaces posting a rising message to each other spend from the same budget as any other
 delivery, and exhausting it reports and abandons rather than hanging.
 
+## Delivery order is guaranteed, and a walk is not interrupted
+
+Two statements, both promises rather than accidents of the data structure.
+
+**Messages are delivered in the order they were posted.** Post A and then B, and A is
+delivered before B. This has always been true of the queue and was never written down.
+
+**A rising message reaches every ancestor in order, with nothing delivered in between.**
+The walk is *one* queue entry carrying its current position, and one dequeue climbs it
+until a surface calls `StopRising` or it reaches the tail. Had each hop been its own
+entry, a message posted after a rising one would be delivered between two of its hops,
+and the first guarantee would be true in letter and useless in practice.
+
+Nothing about this nests: each hop calls a different surface's `Update`, sequentially, and
+a path through a tree cannot visit the same surface twice, so
+[ADR 0004](./0004-no-synchronous-send.md)'s exclusion of re-entrant delivery is untouched.
+Every hop still spends from the budget, so a pathological chain trips the cap as any other
+cascade would. A surface that posts while the walk is passing through it gets ordinary
+tail-of-queue behaviour: a walk can cause later traffic, but cannot be split by it.
+
 ## Modality stops keys, not messages
 
 Delivery never truncates at a modal. Modality is settled entirely while resolving a key
