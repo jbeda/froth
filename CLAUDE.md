@@ -40,6 +40,22 @@ When these disagree:
 Where reality has diverged from a document, fix the document in the same change — and
 record it in the milestone log if the divergence was a decision rather than a typo.
 
+## Explicit over magic
+
+The base system is obvious and explicit, even when that makes it verbose. Sugar can be
+layered on later; a convenience that hides where something came from cannot be removed
+once applications depend on it.
+
+In practice this decides a recurring shape of question. When froth could either remember
+something on a caller's behalf or make the caller carry it, froth makes the caller carry
+it: a message that needs a reply address holds the handle in a field rather than froth
+recording who sent it, and a surface that depends on knowing who opened it takes that
+handle as a constructor parameter rather than through a create option. The verbose version
+says what the dependency is at the place a reader is already looking.
+
+This is not an argument against convenience. It is an argument about order: build the
+explicit mechanism, then add sugar over it if the ergonomics turn out to matter.
+
 ## Ideas with no case yet
 
 An idea worth keeping but not worth building goes in **the ADR that governs its area**,

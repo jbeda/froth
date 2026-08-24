@@ -53,3 +53,33 @@ instance, `Query` and `Composite`, and gates it more tightly than any of them.
 
 Revive it if the inconsistency above produces a real bug, or if modality gives froth
 something to service that has no sensible home — not on uniformity alone.
+
+## Amendment: the superroot's case has dissolved, and so has part of the case against
+
+Settled while slicing M3, and it moves both sides of the park above.
+
+**The case for it is gone.** It rested on one thing: *"froth's own actions are inconsistent
+with every other action. An action a surface declares arrives as an `ActionMsg`; an action
+froth services arrives nowhere, and which you get turns on whether the identity is
+froth-owned — a property invisible at the declaration site."* That inconsistency no longer
+exists. A key press now resolves to an identity only, delivery is a walk from the active
+surface up through the root, and froth's own handling is the last stop on it — so a surface
+that declares a froth action receives it like any other, and an application pre-empts froth
+by taking it. See [ADR 0016](./0016-a-message-rises-until-something-takes-it.md) and
+[ADR 0008](./0008-shortcuts-resolve-to-actions.md)'s amendments.
+
+**The case against is weaker than this ADR claims**, and that is worth recording rather than
+only the convenient half. The placement precedent above is called unanimous — *"no windowing
+system surveyed puts application scope in a node of the window tree"* — and it is unanimous
+among windowing systems. It is reversed in the two systems closest to froth in kind: Textual's
+`App` is the top of its DOM and its binding chain walks into it, and Flutter's framework
+defaults live in ordinary `Shortcuts` and `Actions` widgets in the tree. The unanimity was an
+artifact of which family got surveyed.
+
+**Still parked**, on the remaining argument: this ADR's own case that the duality arrives one
+convenience at a time, and the fact that the instance is now a demonstrably sufficient home
+for the one thing that wanted a node. The revival condition changes with the case. It is no
+longer the inconsistency, which is gone, nor modality giving froth something to service with
+nowhere to put it — the tail of the walk is somewhere to put it. Revive it if froth acquires
+behaviour that must run **before** any surface sees a message and cannot be expressed as a
+binding, since that is the one thing a tail position cannot do and a root-most node could.

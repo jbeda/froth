@@ -112,3 +112,149 @@ is the same walk anchored at the focused surface instead of at the raiser. Decid
 apart would land froth with two chain-of-responsibility mechanisms that differ for no
 reason. Deferring further, once intents exist and the walk has been felt, is a legitimate
 outcome; designing declining without looking at intents is not.
+
+## Amendment: a key press resolves to an identity, and nothing more
+
+Settled while slicing M3, and it corrects the rule at the top of this ADR: *"The surface
+whose binding matches receives a typed Action."* It does not. Resolution answers **which
+action this key means here**, and delivery answers **who acts on it** — two questions,
+settled separately.
+
+The chain walk is unchanged: deepest first, nearest declaration wins, shadowing settled
+statically, text sinks suppressing bare printable keys. What changes is that its output is
+an `Action` and nothing else. Delivery starts at the active surface and rises
+([ADR 0016](./0016-a-message-rises-until-something-takes-it.md)).
+
+**froth was the outlier here.** Every system surveyed separates identity from destination:
+none of them makes the site that *declared* a binding the recipient by virtue of having
+declared it. Destination is decided at invocation from a named scope (GTK's `win.`/`app.`,
+Textual's `app.`/`screen.`/`focused.`), from a walk anchored at focus (AppKit's nil-target
+`sendAction:`, WPF), or from a flat registry (VS Code, Emacs). Delivering to `lb.from` was
+froth's alone.
+
+Three things follow, and the third is what makes the whole change worth it.
+
+**A surface can take a froth action.** It could not before: `frothOwned` removed froth's
+default keys for a declared action but `service` still intercepted the identity, so a
+surface could rebind `focus.next` and never receive it. The declaration site gave no hint,
+which is the *"property invisible at the declaration site"* [ADR 0009](./0009-one-tree-no-implicit-surfaces.md)
+parked the superroot over.
+
+**"A serviced action is delivered nowhere" is retired.** froth's own handling is the last
+stop of the walk, after root. An application pre-empts a froth action by taking it, through
+the machinery it already uses, with no override table — the same shape as froth's bindings
+being matched last during resolution. Framework behaviour falls out of nobody else taking
+it.
+
+**An action can be invoked with no key press.** The walk is the same minus resolution, so a
+command palette needs no parallel path. Textual is the warning here: it has the same
+declarative bindings and the same per-node enablement predicate, and its palette is a
+hand-maintained parallel list that bypasses `run_action`, `_parse_action`, `_dispatch_action`
+and `check_action` entirely. Its palette guide never mentions bindings. That is what not
+unifying the two entry points costs.
+
+**Declining is answered, and needed no mechanism.** The amendment above deferred it to M3 as
+one question with intents, and it was right that they were one question. Delivery is
+default-pass, so declining is silence and the message continues up the chain. The resumable
+walk and the recorded decline that amendment sketched are both unnecessary.
+
+**Nothing gates a keyless invocation.** `Disabled` affects key resolution and nothing else,
+which matches the prior art exactly — VS Code's own schema says a disabled command *"does
+not prevent executing the command by other means, like the executeCommand-api"*, and Emacs
+that *"disabling a command has no effect on calling it as a function from Lisp programs"*. An
+application may show a disabled action greyed in a palette and decline to invoke it; that is
+its call.
+
+## Amendment: the binding table has two readers, and one of them is not about keys
+
+`liveBindings()` is *"the only place the chain is decided"*, and both resolution and help
+read it — which is what makes it impossible for help to describe something other than what
+a key press does. That property is kept. What changes is that keyless invocation adds a
+third reader, and two behaviours correct for a key map are wrong for a catalog:
+
+- **`claim` drops any binding left with no keys.** Correct when everything fires by key.
+  But a deliberately keyless action is now a legitimate declaration, and it is invisible.
+  `ActionCancel` already sits in this hole: froth publishes the identity, binds no key, and
+  nothing can see it.
+- **Text-sink stripping.** While a text sink holds focus, bare printable keys are stripped
+  from every binding on the chain. A command palette's filter field *is* a text sink, so a
+  listing built from the binding table shows a different set than the user saw one keystroke
+  earlier, because it opened.
+
+So `Bindings()` stays the single source and **two views are derived from it**: the
+key-shaped view resolution uses — shadowed, stripped, keyless entries dropped — and a
+**catalog** of every enabled action on the chain, keyless entries included, carrying the
+handle that declared each one.
+
+Two views over one declaration is not the two-table drift the survey warns about; that
+warning is about two *sources*. Help and dispatch still cannot describe different worlds,
+only ask different questions about the same one. Textual derives its footer and its
+dispatcher from one `active_bindings` for the same reason.
+
+The catalog is also what makes user-visible rebinding and discovery work, which is why
+`Action` stays a `string`. A Go type would be stronger against collisions — Flutter maps
+shortcut to Intent *type* — but a type has no stable spelling in a settings file or a
+palette row, which is what an action identity is for. VS Code, Emacs, GTK and Sublime all
+use string ids, and for this reason.
+
+**An action carries no parameters.** A binding has nowhere to put arguments, and an
+application that wants one defines its own rising message type and posts it — needing
+nothing from this machinery. A string-keyed argument bag would be strictly worse than a
+typed struct. The catalog lists actions; it is not the only way to invoke behaviour.
+
+## Amendment: what modality settles, and what froth still refuses
+
+Modality is settled here and nowhere else. Delivery does not truncate at a modal, because
+if it did, a `SurvivesModal` binding would resolve from above and then never reach the
+surface that declared it — every surviving binding would end as a diagnostic. See
+[ADR 0016](./0016-a-message-rises-until-something-takes-it.md).
+
+**`SurvivesModal` must be honoured inside `liveBindings()` and nowhere else.** Textual has
+shipped the bug that comes from doing otherwise: its escape mechanism is a second walk over
+the untruncated chain, while its footer reads the truncated one, so `ctrl+p` fires under a
+modal screen and is absent from the help. One walk is what prevents this, and the flag has
+to live inside it.
+
+The flag keeps its default. Six of eight surveyed systems default to not-surviving, and the
+two that do not simply lack a mechanism — no system built one and defaulted it open. Worth
+recording that froth's own examples are two of two the other way, and both are quit; that
+matches the three systems which curate an explicit survivor list, all of which start it with
+quit and none of which needed more than about six entries. The reading is that the flag is
+**degenerate in the common case** rather than wrongly defaulted: a modal is parented to the
+root, so truncation blocks the bindings of exactly one surface. It stays general because
+`Modal()` is an option on any create, and a modal parented deeper truncates more.
+
+**froth is also the only surveyed system that guarantees no way out**, and the amendment
+above should say so rather than read as uncontested. Every system except Win32 keeps
+something alive under a modal, and Textual's framework declares the surviving quit itself.
+froth's refusal is *better* justified than when written — under
+[ADR 0016](./0016-a-message-rises-until-something-takes-it.md) a froth key bound to an action
+nobody takes would fire the tail diagnostic on every press — but it is a departure from
+otherwise unanimous precedent, and it is recorded as one.
+
+Whether froth services `ActionCancel` by closing a modal, once modals exist, is open. It is
+worth noting that this was [ADR 0009](./0009-one-tree-no-implicit-surfaces.md)'s stated
+condition for reviving the superroot — *"if modality gives froth something to service that
+has no sensible home"* — and that it no longer would, because the instance at the tail of
+the walk is a sensible home.
+
+## Parked: registering an action
+
+Help text lives on `Binding`, so the same identity declared in two places can carry two
+different help strings with nothing to reconcile them. A registry — identity, help text,
+and whatever else describes an action rather than a key — would fix that and give the
+catalog a place to read from.
+
+Not built, because the bug is not reachable yet: it needs the catalog to exist and something
+to declare a duplicate. Revive it when the catalog actually has to choose between
+contradictory entries for one identity — bring the collision, not the tidiness.
+
+## Parked: namespacing action identities
+
+froth already has namespacing as convention with no enforcement: identities are dotted
+(`froth.focus.next`), and `Action`'s own doc says identity is *"a caller's to keep unique"*
+and that froth compares actions nowhere. GTK enforces namespaces (`app.`, `win.`) and Textual
+scopes them the same way.
+
+Enforcement buys nothing until independently authored surface libraries can collide, which
+needs a third-party ecosystem that does not exist. Revive it on a real collision.

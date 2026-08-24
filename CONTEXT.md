@@ -76,11 +76,15 @@ can override what is above it. Resolved at read time, so it is never a stale
 snapshot.
 _Avoid_: deps, context, config, globals
 
-**Intent**:
-A request a surface returns to its ancestors, applied by froth after the
-surface's handler has returned. It is a return value, not a message, so it can
-never be delivered re-entrantly.
-_Avoid_: action, event, callback
+**Rising**:
+A message that keeps travelling after it arrives. froth offers it to the surface it
+was posted to, then to that surface's parent, and on up through the root to the
+instance, stopping at the first surface that calls `StopRising`. A message type
+declares this by embedding `froth.Rising`, so how far a message travels is a
+property of its type rather than of the call that sent it, and a reader of the type
+knows its reach without finding the send site. One that nothing takes reaches the
+tail and is reported.
+_Avoid_: bubbling, intent, event
 
 **Live tree**:
 The surface hierarchy as it logically stands, including changes made during the
@@ -164,7 +168,10 @@ all of it.
 **Action**:
 What a shortcut resolves to: a stable identity a surface declares along with its
 default keys and help text. Surfaces handle actions rather than keys, so keys can
-be remapped without touching them.
+be remapped without touching them. Resolution yields the identity and nothing else
+— who acts on it is decided by delivery, which rises from the active surface — so
+an action can also be invoked with no key pressed at all. It is a string because
+its identity has to survive in a settings file and in front of a user.
 _Avoid_: command, shortcut, hotkey
 
 **Text sink**:
@@ -185,11 +192,13 @@ it and nothing above it that trusts its answer.
 
 **Post**:
 To enqueue a message for later delivery to a surface. All message delivery in
-froth is posted; nothing is delivered re-entrantly.
+froth is posted; nothing is delivered re-entrantly. It is the only verb: a message
+whose type is Rising is posted the same way and continues past its destination,
+which is why the queue drains completely before structure changes again.
 _Avoid_: send, dispatch, emit
 
 **Diagnostic**:
-Something froth detected and should not decide about — a message cycle, an
-intent nobody claimed, a surface that panicked. All of them go to one hook
+Something froth detected and should not decide about — a message cycle, a rising
+message nothing took, a surface that panicked. All of them go to one hook
 registered at construction, because none of them is froth's to escalate.
 _Avoid_: error, warning

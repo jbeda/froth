@@ -16,6 +16,30 @@
 > intents, modals, the Environment, producers, reconcile, destroy, the help query and
 > the bubbles adapter is still design.
 > [`milestone-log.md`](./milestone-log.md) records what shipped and where it diverged.
+>
+> **Superseded in specific ways, and not yet rewritten.** Decisions taken after this was
+> written contradict it; per `CLAUDE.md`'s precedence the ADRs win, and none of the
+> following should be read as current.
+>
+> - **`Intent`, `IntentSink`, `Raise`, `Sender()`, `Reply()` and `RepliesTo()` do not
+>   exist.** A surface asking an ancestor to act posts a message whose type embeds
+>   `froth.Rising`; it is delivered during Deliver, not applied during Apply, and a
+>   surface that must restructure records what it wants and reconciles. A message needing
+>   a reply address carries the handle in a field. See
+>   [ADR 0016](../adr/0016-a-message-rises-until-something-takes-it.md).
+> - **"Where an intent goes" describes the right walk under the wrong name**, and its
+>   four rules are superseded: the Apply landing is gone, `Sender()` is gone, and the
+>   ordering rule about queued destroys is now a property of the settle loop.
+> - **An action is not delivered to the surface that declared its binding.** Resolution
+>   yields an identity; delivery rises from the active surface. See
+>   [ADR 0008](../adr/0008-shortcuts-resolve-to-actions.md)'s amendments.
+> - **The Reference tables are stale.** `Raise` and `Reply` are listed flat on
+>   `*UpdateCtx` and `Sender()` on `*ApplyCtx`; handle-scoped operations are minted from
+>   a phase context instead ([ADR 0014](../adr/0014-capability-is-minted-from-a-phase-context.md)),
+>   and `Ctx()` describes root-context behaviour that
+>   [ADR 0015](../adr/0015-results-come-back-to-whoever-asked.md) reverses.
+> - **The dialog examples under-describe what froth supports.** A reply is a channel, not
+>   a single answer: a surface may reply repeatedly and close when it is done.
 
 Client code for a sample app, written as if froth existed. **None of this compiles.**
 Its job is to make the API's ergonomics visible while changing them is still free.

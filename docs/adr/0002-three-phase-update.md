@@ -69,3 +69,58 @@ The cap is one budget that deliveries and mounts spend alike, because a cascade 
 not settle can be made of either and the two interleave. Tripping it reports through the
 diagnostic hook and abandons what was being drained; the value it is set to, and why, is
 in the milestone log.
+
+## Amendment: the queue drains before Apply runs again
+
+Settled while slicing M3. The alternation above ran Apply between *every pair* of
+deliveries, so a message posted during one delivery was handled only after the next Apply.
+It now runs Apply once so the root exists, drains the queue **completely**, and applies
+again only when something structural is pending.
+
+The reason is that a message can now travel: a type embedding `froth.Rising` is offered to
+the surface it was posted to and then to each ancestor in turn
+([ADR 0016](./0016-a-message-rises-until-something-takes-it.md)). Such a walk cannot have
+the tree change under it mid-climb, which the old interleaving allowed — a surface calling
+`uc.Close()` and posting a rising message would have had its destroy committed before the
+message reached its parent.
+
+**Apply still leads**, for the reason the amendment above gives: the root's own mount is the
+first Apply any instance runs.
+
+Two consequences, both decisions rather than accidents:
+
+- **A message posted to a surface destroyed later in the same turn is delivered.** The
+  destroy is recorded during Deliver and commits at the next Apply, which is now after the
+  drain.
+- **A delivery asking for Apply waits for the whole drain** rather than getting it at the top
+  of the next turn. `Create` is unaffected, since no handle comes back either way; a focus
+  request and everything queued behind it see the old focus.
+
+The cap is unchanged and still one budget spent alike by deliveries and mounts. Each hop of a
+rising message is an ordinary delivery, so a pair of surfaces posting to each other spends
+from the same budget as any other cascade.
+
+## Amendment: "Ordering within Apply" is superseded
+
+That section is about intents, and intents no longer exist. It is kept for the record and
+should not be read as current on any of the following.
+
+**Apply no longer commits intents.** The opening line's *"creation, destruction, and intents
+raised to ancestors"* is now creation and destruction. A rising message is delivered during
+Deliver like any other, and a surface that must restructure in response records what it wants
+and reconciles.
+
+**The fixed order it describes has nothing left to order.** Its case — a handler that both
+raises and closes itself, where committing the destroy first would leave the sender naming a
+corpse — is handled by the drain above instead: the destroy commits after the queue empties,
+so the walk completes against a live tree.
+
+**`RepliesTo(sender)` is retired**, along with `Sender()` itself. froth records no sender; a
+message that needs a reply address carries the handle in a field. See
+[ADR 0015](./0015-results-come-back-to-whoever-asked.md) on currency belonging to the caller,
+and [ADR 0016](./0016-a-message-rises-until-something-takes-it.md).
+
+**What survives intact** is the shape of the walk and its failure mode: parent-ward from where
+it started, nearest ancestor first, and a message nobody takes reported through the diagnostic
+hook rather than dropped, because it is nearly always a missing case. An ancestor may post
+while handling, and that queues rather than recursing, under the same cap.
