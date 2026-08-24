@@ -15,6 +15,9 @@ and does not generalise to other GitHub state changes.
 
 Order is load-bearing: push, verify it landed (`git log origin/main..HEAD` is empty), then
 close. A closed issue pointing at a local-only commit lies to everyone reading the tracker.
+**#38 was closed before the push and sat that way for an hour**, its close comment citing a
+SHA that existed on one machine — which is the failure the order prevents, and it happened
+because closing felt like the end of the work. It is not; the push is.
 
 **Never use both a `Closes #N` trailer and `gh issue close --comment`.** The trailer closes
 on push, and `--comment` on an already-closed issue warns and **silently drops the comment**
