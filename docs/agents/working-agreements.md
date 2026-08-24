@@ -23,12 +23,27 @@ explicit `gh issue close <n> --comment "…"` summarising what landed.
 
 ## The `gh` CLI here
 
-**`gh` needs the sandbox disabled**, and fails silently without it: `gh issue view 14
---comments` exits 0 with **no output at all** rather than erroring.
+**`gh issue view <n> --comments` prints the comments and nothing else, so an issue with
+none produces no output at all and exits 0.** That reads exactly like a broken command and
+is not one. Ask how many there are before concluding anything:
 
-Even then `gh issue view` can return empty where `gh api repos/jbeda/froth/issues/<n> --jq
-'.title, .body'` works. Prefer the `gh api` form for reads and `--body-file` for anything
-multi-line.
+```
+gh api repos/jbeda/froth/issues/<n> --jq .comments
+```
+
+Measured across four issues: 0 comments gives 0 bytes, 1 comment gives output. Prefer the
+`gh api` form for reads generally, and `--body-file` for anything multi-line — a long
+`--comment "$(cat …)"` puts the whole body on the command line.
+
+**This section used to say `gh` needs the sandbox disabled, and that was wrong.** No
+sandbox is installed on this machine — no `bwrap`, `sandbox-exec` or `firejail`, and no
+`sandbox` key in any settings file — and the same `gh api` call returns byte-identical
+output with the flag and without it. So `dangerouslyDisableSandbox` changes nothing about
+how `gh` behaves and should not be passed. (Checked on the Linux box; the Mac is
+unverified, so check there before assuming rather than re-deriving from this.)
+
+The silent-empty result above is what the claim was built on. The correction is kept here
+rather than deleted, so an agent that has met the old advice elsewhere finds the answer.
 
 **Sub-issues** are `gh api -X POST repos/jbeda/froth/issues/<parent>/sub_issues -F
 sub_issue_id=<id>`. Two traps: `-F` rather than `-f`, because the API wants a real integer
