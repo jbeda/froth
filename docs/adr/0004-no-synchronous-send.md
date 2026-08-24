@@ -29,7 +29,7 @@ The rule above originally listed *cancellation* beside theme and capabilities. T
 wrong and is corrected in place. Environment is application-owned and subtree-overridable,
 so a surface could be handed a context other than its own lifetime's — which defeats the
 point of having one. A surface's context is froth-managed and reaches it through the phase
-context. See [ADR 0015](./0015-async-work-is-addressed-and-its-currency-is-the-callers.md).
+context. See [ADR 0015](./0015-results-come-back-to-whoever-asked.md).
 
 The closing rule stands and has now been used once: `Topic` was proposed as a mechanism
 without a case, and ADR 0015 parks it for exactly that reason.
