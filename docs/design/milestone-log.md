@@ -1052,7 +1052,7 @@ did not survive contact.
 **`SurvivesModal` is still unread, which is the right amount of work.** #39's last
 acceptance criterion says the flag must be honoured inside the one binding walk and nowhere
 else. Modality does not exist until M4, so there is nothing to honour yet; what this ticket
-owed was leaving exactly one place for it to go, and `collect()` is it. The constraint is
+owed was leaving exactly one place for it to go, and `chainBindings()` is it. The constraint is
 recorded in ADR 0008 and will be met or broken there.
 
 **Untouched and still open on #17's session-B comment:** nothing. Both catalog bugs and the

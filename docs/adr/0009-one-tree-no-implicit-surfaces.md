@@ -42,8 +42,8 @@ judged on its merits rather than rediscovered: **froth's own actions are inconsi
 every other action.** An action a surface declares arrives as an `ActionMsg`; an action
 froth services arrives nowhere, and which you get turns on whether the identity is
 froth-owned — a property invisible at the declaration site. A root-most surface declaring
-froth's bindings and handling their messages would make one path out of two, and
-`liveBindings` would lose the special case at its tail.
+froth's bindings and handling their messages would make one path out of two, and the
+binding walk would lose the special case at its tail.
 
 Against it: this ADR, whose argument is that the duality arrives one convenience at a time.
 And the placement precedent is unanimous — no windowing system surveyed puts application

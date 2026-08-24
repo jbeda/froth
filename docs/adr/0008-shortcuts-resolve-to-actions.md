@@ -167,7 +167,7 @@ its call.
 
 ## Amendment: the binding table has two readers, and one of them is not about keys
 
-`liveBindings()` is *"the only place the chain is decided"*, and both resolution and help
+The binding walk is *"the only place the chain is decided"*, and both resolution and help
 read it — which is what makes it impossible for help to describe something other than what
 a key press does. That property is kept. What changes is that keyless invocation adds a
 third reader, and two behaviours correct for a key map are wrong for a catalog:
