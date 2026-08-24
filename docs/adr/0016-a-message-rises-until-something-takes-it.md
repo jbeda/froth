@@ -242,15 +242,15 @@ in the detail is the first one seen, as an example of where to look rather than 
 enumeration. The precedent is in the same file: `trip` reports the cap once per settle pass
 for the same reason.
 
-**There is a way to ask, in two places.** `froth.IsRising(msg)` reports whether a type
-travels, and `uc.IsRising()` answers the same for the delivery in progress. The ADR above
+**There is a way to ask, in two places.** `froth.Rises(msg)` reports whether a type
+travels, and `uc.Rises()` answers the same for the delivery in progress. The ADR above
 argues that a reader of a type knows its reach without asking — which is true of code that
 handles types it declared, and not true of a handler generic over the message type, or of a
 surface handling a type froth or another package declared. The pair costs nothing: the
 package function is the `riser` assertion the walk already makes, and the method returns the
 same field `StopRising` checks, so the two can never disagree with each other or with the
-panic. `IsRising` rather than `Rises` was chosen against froth's own bare-predicate house
-style (`Rect.Empty`, `RenderCtx.Focused`) as the clearer read at a guard.
+panic. `Rises` follows froth's bare-predicate house style — `Rect.Empty`, `RenderCtx.Focused` —
+and matches the verb this ADR and `CONTEXT.md` already use for what a message does.
 
 **`StopRising` panics when the message does not rise.** It is the one misuse that no data
 can produce: whether a message travels is fixed by its type, so a surface calling it while

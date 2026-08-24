@@ -282,7 +282,7 @@ func TestUntakenMessagesAreReportedOncePerTypeInOneUpdate(t *testing.T) {
 	}
 }
 
-// IsRising answers about a type, so it is a pure function and tested as one.
+// Rises answers about a type, so it is a pure function and tested as one.
 // The rule it decides is written down in ADR 0016: a type rises or it does not,
 // permanently.
 func TestIsRisingAnswersForTheType(t *testing.T) {
@@ -298,8 +298,8 @@ func TestIsRisingAnswersForTheType(t *testing.T) {
 		{"a pointer to one that embeds it", &riseMsg{}, true},
 		{"nil", nil, false},
 	} {
-		if got := froth.IsRising(tc.msg); got != tc.want {
-			t.Errorf("IsRising(%s) = %v, want %v", tc.name, got, tc.want)
+		if got := froth.Rises(tc.msg); got != tc.want {
+			t.Errorf("Rises(%s) = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }
@@ -311,7 +311,7 @@ func TestUpdateCtxIsRisingMatchesTheMessage(t *testing.T) {
 	root := &climber{name: "root", trace: &trace}
 	var seen []string
 	record := func(uc *froth.UpdateCtx) {
-		seen = append(seen, strconv.FormatBool(uc.IsRising()))
+		seen = append(seen, strconv.FormatBool(uc.Rises()))
 	}
 	root.onRise, root.onPlain = record, record
 	f, _ := newWatched(t, root, 8, 1)
@@ -319,7 +319,7 @@ func TestUpdateCtxIsRisingMatchesTheMessage(t *testing.T) {
 	postTo(f, root.self, riseMsg{}, plainMsg{})
 
 	if got, want := strings.Join(seen, ","), "true,false"; got != want {
-		t.Errorf("uc.IsRising() reported %q, want %q", got, want)
+		t.Errorf("uc.Rises() reported %q, want %q", got, want)
 	}
 }
 
@@ -357,7 +357,7 @@ func (g *generic) Render(*froth.RenderCtx, froth.Rect) string { return "" }
 
 func (g *generic) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	*g.trace = append(*g.trace, "generic")
-	if froth.IsRising(msg) {
+	if froth.Rises(msg) {
 		uc.StopRising()
 	}
 }

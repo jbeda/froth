@@ -85,7 +85,7 @@ instance, stopping at the first surface that calls `StopRising`. A message type
 declares this by embedding `froth.Rising`, so how far a message travels is a
 property of its type rather than of the call that sent it, and a reader of the type
 knows its reach without finding the send site. Code that is generic over the message
-type asks instead, with `froth.IsRising` or `uc.IsRising`. One that nothing takes
+type asks instead, with `froth.Rises` or `uc.Rises`. One that nothing takes
 reaches the tail and is reported.
 _Avoid_: bubbling, intent, event
 

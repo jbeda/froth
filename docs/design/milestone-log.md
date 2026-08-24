@@ -955,13 +955,14 @@ the test that should have caught them; the sixth — treating every message as r
 not fail so much as hang the suite for minutes, and chasing why is how the untaken storm
 above was found. A mutation that hangs is a finding rather than a broken run.
 
-**Asking whether a message rises is public, in two forms.** `froth.IsRising(msg)` and
-`uc.IsRising()`. Not in the ticket: it came out of asking what a *user* knows, and the
+**Asking whether a message rises is public, in two forms.** `froth.Rises(msg)` and
+`uc.Rises()`. Not in the ticket: it came out of asking what a *user* knows, and the
 answer was that a reader of a type they wrote knows, while a handler generic over the
 message type has no way to find out and no safe way to probe — `StopRising` panics on the
 wrong guess. The method returns the same field the panic checks, so they cannot disagree.
-`IsRising` over `Rises` is a deliberate departure from froth's bare-predicate style
-(`Rect.Empty`, `RenderCtx.Focused`), taken for how it reads at a guard.
+`Rises` keeps froth's bare-predicate style (`Rect.Empty`, `RenderCtx.Focused`) and the verb
+`CONTEXT.md` already uses. An `IsRising` spelling was tried first and reverted rather than
+start a second naming convention for one call.
 
 **Next tickets should know.**
 

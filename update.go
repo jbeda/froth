@@ -151,7 +151,7 @@ func (f *Froth) drain(b *budget, cmds *[]tea.Cmd) bool {
 // to the tail of the queue and waits, rather than being delivered between two
 // of its hops.
 func (f *Froth) deliverEntry(e envelope, b *budget, cmds *[]tea.Cmd) bool {
-	rising := IsRising(e.msg)
+	rising := Rises(e.msg)
 	h := e.to
 	for {
 		if !b.spend() {
