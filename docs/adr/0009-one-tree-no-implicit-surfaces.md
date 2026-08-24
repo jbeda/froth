@@ -83,3 +83,24 @@ longer the inconsistency, which is gone, nor modality giving froth something to 
 nowhere to put it — the tail of the walk is somewhere to put it. Revive it if froth acquires
 behaviour that must run **before** any surface sees a message and cannot be expressed as a
 binding, since that is the one thing a tail position cannot do and a root-most node could.
+
+## Amendment: froth ships no grouping surface of its own
+
+Settled while designing the Environment. The consequences above set the bar — grouping
+surfaces are fine so long as they are **explicitly created**, because what this ADR forbids
+is froth *inserting* nodes nobody asked for. That stands, and a three-line container in
+application code clears it.
+
+froth ships no stock one. A stock wrapper gets reached for reflexively in a way a
+hand-written one does not, and reflexive wrapping is how *"the alternative arrives one
+convenience at a time"* actually happens. It also costs more now than it used to: every
+grouping surface is one more hop on every rising message through that part of the tree
+([ADR 0016](./0016-a-message-rises-until-something-takes-it.md)), and froth trees are
+already deep because controls are surfaces.
+
+The case that would have made one load-bearing has gone away.
+[ADR 0017](./0017-a-surface-and-its-parent-each-get-a-say.md) needed a way for a parent to
+give one child different ambient values, which every declarative system does by wrapping;
+two Environment slots provide it with no node at all. Revive this if some *other* capability
+turns out to be expressible only by interposing a surface — and note that adding a stock
+container later breaks nothing, while removing one would.

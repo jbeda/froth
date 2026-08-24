@@ -69,11 +69,13 @@ tags them itself.
 
 **Environment**:
 Ambient values a surface reads from its ancestors rather than being handed at
-construction — theme, capabilities, locale, a service a subtree should use. Not a
-surface's own cancellation, which froth manages and hands over itself. Bound to a surface and scoped to its
-subtree: resolution walks root-ward and takes the nearest binding, so a subtree
-can override what is above it. Resolved at read time, so it is never a stale
-snapshot.
+construction — theme, capabilities, locale, a service a subtree should use. The
+application owns what is in it; froth puts nothing there. Not a surface's own
+cancellation, which froth manages and hands over itself. Every surface has two slots,
+one it writes on itself and one its parent writes on it, and resolution takes the
+first of those before walking to the parent — so a surface always wins over what its
+parent gave it, and a subtree always wins over what is above it. Resolved at read
+time, so it is never a stale snapshot.
 _Avoid_: deps, context, config, globals
 
 **Rising**:

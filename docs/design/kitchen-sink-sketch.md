@@ -38,6 +38,12 @@
 >   a phase context instead ([ADR 0014](../adr/0014-capability-is-minted-from-a-phase-context.md)),
 >   and `Ctx()` describes root-context behaviour that
 >   [ADR 0015](../adr/0015-results-come-back-to-whoever-asked.md) reverses.
+> - **"The Environment" section is superseded.** `SetEnvOn` is gone — writes go on ADR
+>   0014's self and child accessors, so the parentage check replaces the documented
+>   restriction. Writes are **immediate**, not Apply-only, and mean the same thing on
+>   `UpdateCtx` and `ApplyCtx`. And every surface now has **two** slots, one it writes on
+>   itself and one its parent writes on it, resolved in that order. See
+>   [ADR 0017](../adr/0017-a-surface-and-its-parent-each-get-a-say.md).
 > - **The theme-picker example is wholly stale**, and has a bug besides: `appRoot.Apply`
 >   calls `ac.SetEnvOn(ac.Root(), ...)`, using the child-targeting form on itself. It also
 >   raises an intent and commits in Apply, neither of which exists.
