@@ -1150,16 +1150,19 @@ deleted on that reading — `Composite` applies pending structure before it draw
 walks the focus chain, and a surface further along the chain has not been drawn yet. All
 four skips are pinned by tests now.
 
-**Four names and one file placement changed after review.** `Unmounter` sits in
-`surface.go` with `Surface` and `Mounter` rather than beside the walk that calls it —
-froth's public interfaces belong in few enough files to find them. The focus helpers that
-are read from outside `focus.go` now say focus: `rememberFocusChain`, `rehomeFocus`,
-`enterFocusScope`, `focusScopeOf`, `focusScopeOrder`, and their two file-local siblings for
-consistency. `rehomeFocus` moved into `focus.go` with them. And `flush` became
-`FlushDiagnostics`, which also exports it: froth calls it at the end of every update and
-composite, so it is there for an application that drives froth some other way. ADR 0011
-named `scopeOrder` by hand and was corrected; the log's older entries keep the old spelling
-on purpose, because they are dated records.
+**`surface.go` now holds every interface a surface may satisfy**, and that is the file's
+job rather than a place `Unmounter` happened to fit: `Surface`, `Mounter`, `Unmounter` and
+`Binder`, which came over from `binding.go`. What a surface can be asked is one question,
+whatever part of froth does the asking, and a reader looking for the extension points
+should find them in one place. `Layout` stays where it is — it is implemented by a layout,
+not by a surface.
+
+**The focus helpers read from outside `focus.go` now say focus**: `rememberFocusChain`,
+`rehomeFocus`, `enterFocusScope`, `focusScopeOf`, `focusScopeOrder`, with their two
+file-local siblings renamed for consistency. `rehomeFocus` moved into `focus.go` with them,
+which was half the problem — it was defined next to the walk that calls it rather than next
+to the rule it reuses. ADR 0011 named `scopeOrder` by hand and was corrected; the log's
+older entries keep the old spelling on purpose, because they are dated records.
 
 **The example gained `x`.** The focused pane removes itself, its `Unmount` says so in the
 notes pane, and focus moves to the nearest survivor rather than back to the root. `main`

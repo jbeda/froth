@@ -145,7 +145,7 @@ func (f *Froth) Shutdown() {
 	f.pendingDestroy = nil
 	f.queue = nil
 	f.reg.abandonEntered()
-	f.FlushDiagnostics()
+	f.flush()
 }
 
 // quarantine recovers a panic that came out of a surface, reports it, and takes

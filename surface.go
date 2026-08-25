@@ -1,3 +1,11 @@
+// The interfaces a surface may satisfy. Surface is the two methods froth
+// requires; the rest are optional and discovered by type assertion, so a
+// surface opts into each by writing the method. They live together because what
+// a surface can be asked is one question, whatever part of froth does the
+// asking.
+//
+// Layout is not here: it is implemented by a layout, not by a surface.
+
 package froth
 
 import tea "charm.land/bubbletea/v2"
@@ -39,4 +47,15 @@ type Mounter interface {
 // so a post there is dropped and reported.
 type Unmounter interface {
 	Unmount(ac *ApplyCtx)
+}
+
+// A Binder declares the shortcuts a surface answers to. froth asks for them
+// while resolving a key press and while answering a query, which is a
+// synchronous call into a surface — rare enough in froth to be worth naming.
+//
+// Bindings must therefore be a read-only answer about the surface as it stands.
+// It may be called from any phase, more than once, and about a surface other
+// than the one froth is currently talking to.
+type Binder interface {
+	Bindings() []Binding
 }
