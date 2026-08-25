@@ -10,22 +10,6 @@ package froth
 
 import "fmt"
 
-// An Unmounter is told when its surface leaves the tree, whichever route it
-// leaves by: destroyed, cascaded away under an ancestor, or unmounted at
-// shutdown. It runs once, during Apply, and never for a surface that panicked.
-//
-// It is the mirror of Mount and runs leaf-up, so a child tears down before its
-// parent and can still reach it while doing so. It is for what froth does not
-// own — a file handle, a registration in something outside froth — and most
-// surfaces need it not at all.
-//
-// Posting from it is ordinary: it runs in Apply and a rising message posted
-// there behaves like any other. During Shutdown nothing will drain the queue,
-// so a post there is dropped and reported.
-type Unmounter interface {
-	Unmount(ac *ApplyCtx)
-}
-
 // destroy takes a surface out of the tree, or records that it should be. It is
 // immediate during Apply, which is where structural change commits, and
 // recorded anywhere else — during Deliver, so the drain finishes against the
@@ -97,14 +81,14 @@ func (f *Froth) removeSubtree(h Handle) {
 
 	// Where focus goes is decided before the tree is cut, because afterwards
 	// there is nothing left to ask whether focus was inside.
-	rehome := f.reg.descends(f.focus, h)
+	rehomeFocus := f.reg.descends(f.focus, h)
 	parent := n.parent
 
 	for _, g := range order {
 		f.reg.remove(g)
 	}
-	if rehome {
-		f.rehome(parent)
+	if rehomeFocus {
+		f.rehomeFocus(parent)
 	}
 }
 
@@ -137,28 +121,6 @@ func (f *Froth) unmount(h Handle) {
 	u.Unmount(&ApplyCtx{phaseToken: f.current(), self: h})
 }
 
-// rehome puts focus somewhere real after the surface holding it left the tree.
-// It lands on the nearest surviving ancestor and then descends the way entering
-// a scope does — onto what that surface remembers, or its first tab stop — so
-// closing one pane of several hands the keyboard to a sibling rather than
-// teleporting it to the root.
-//
-// It is not a requested move and reports nothing. Nobody asked for it; froth is
-// repairing a chain that a destroy broke.
-func (f *Froth) rehome(p Handle) {
-	if f.reg.get(p) == nil {
-		f.focus = f.root
-		f.remember()
-		return
-	}
-	to := p
-	if h, ok := f.enterScope(p); ok {
-		to = h
-	}
-	f.focus = to
-	f.remember()
-}
-
 // Shutdown tears the instance down: the same leaf-up unmount walk every destroy
 // runs, once from the root, so a teardown hook fires at the one moment every
 // application expects it to. Call it when the program is quitting.
@@ -183,7 +145,7 @@ func (f *Froth) Shutdown() {
 	f.pendingDestroy = nil
 	f.queue = nil
 	f.reg.abandonEntered()
-	f.flush()
+	f.FlushDiagnostics()
 }
 
 // quarantine recovers a panic that came out of a surface, reports it, and takes

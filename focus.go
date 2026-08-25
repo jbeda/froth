@@ -73,20 +73,20 @@ func (f *Froth) setFocus(h Handle) {
 	}
 	// Moving focus to a scope from outside means entering it; from inside the
 	// same move is literal. See ADR 0011.
-	if f.isScope(h) && !f.reg.descends(f.focused(), h) {
-		if to, ok := f.enterScope(h); ok {
+	if f.isFocusScope(h) && !f.reg.descends(f.focused(), h) {
+		if to, ok := f.enterFocusScope(h); ok {
 			h = to
 		}
 	}
 	f.focus = h
-	f.remember()
+	f.rememberFocusChain()
 }
 
-// remember records the focus chain as restoration state: every surface on it
+// rememberFocusChain records the chain as restoration state: every surface on it
 // notes which of its children the chain went through. It is written on every
 // commit rather than on the way out of a subtree, so a surface that dies while
 // focused leaves its ancestors' records already correct.
-func (f *Froth) remember() {
+func (f *Froth) rememberFocusChain() {
 	chain := f.focusChain()
 	for i := 0; i+1 < len(chain); i++ {
 		f.reg.get(chain[i]).lastActive = chain[i+1]
@@ -116,11 +116,11 @@ func (f *Froth) applyFocus() {
 // steps over it and everything under it, and the walk inside one cycles at its
 // ends. Focus crosses only by being moved by name. See ADR 0011.
 
-// scopeOf reports the scope a surface traverses within: the nearest ancestor —
+// focusScopeOf reports the scope a surface traverses within: the nearest ancestor —
 // or the surface itself — marked FocusScope, and the root when nothing on the
 // way up is one. Answering "itself" for a scope surface is what keeps a scope
 // closed.
-func (f *Froth) scopeOf(h Handle) Handle {
+func (f *Froth) focusScopeOf(h Handle) Handle {
 	for h != (Handle{}) {
 		n := f.reg.get(h)
 		if n == nil {
@@ -134,35 +134,35 @@ func (f *Froth) scopeOf(h Handle) Handle {
 	return f.root
 }
 
-func (f *Froth) isScope(h Handle) bool {
+func (f *Froth) isFocusScope(h Handle) bool {
 	n := f.reg.get(h)
 	return n != nil && n.meta.focusScope
 }
 
-// scopeOrder returns the surfaces the walk within s visits, depth-first and s
+// focusScopeOrder returns the surfaces the walk within s visits, depth-first and s
 // first. A nested scope and everything under it are absent: they belong to that
 // scope's own walk, not to this one. s itself is present, so a scope marked
 // TabStop is a stop within itself and in no other scope.
-func (f *Froth) scopeOrder(s Handle) []Handle {
+func (f *Froth) focusScopeOrder(s Handle) []Handle {
 	n := f.reg.get(s)
 	if n == nil {
 		return nil
 	}
 	out := []Handle{s}
 	for _, c := range n.children {
-		f.collectScoped(c, &out)
+		f.collectFocusScoped(c, &out)
 	}
 	return out
 }
 
-func (f *Froth) collectScoped(h Handle, out *[]Handle) {
+func (f *Froth) collectFocusScoped(h Handle, out *[]Handle) {
 	n := f.reg.get(h)
 	if n == nil || n.meta.focusScope {
 		return
 	}
 	*out = append(*out, h)
 	for _, c := range n.children {
-		f.collectScoped(c, out)
+		f.collectFocusScoped(c, out)
 	}
 }
 
@@ -177,7 +177,7 @@ func (f *Froth) isTabStop(h Handle) bool {
 	return n != nil && n.meta.tabStop
 }
 
-// enterScope reports where focus lands when it is moved to the scope s: the
+// enterFocusScope reports where focus lands when it is moved to the scope s: the
 // deepest surface s remembers that is still a stop, and the first stop within s
 // when it remembers nothing usable. It reports false for a scope holding no stop
 // at all, which leaves focus on the scope surface itself.
@@ -189,7 +189,7 @@ func (f *Froth) isTabStop(h Handle) bool {
 // traversal, costs a fallback rather than stranding focus. A remembered surface
 // that is itself a scope is entered rather than landed on, so the rule holds
 // however deep restoration reaches.
-func (f *Froth) enterScope(s Handle) (Handle, bool) {
+func (f *Froth) enterFocusScope(s Handle) (Handle, bool) {
 	var remembered []Handle
 	for cur := s; ; {
 		n := f.reg.get(cur)
@@ -201,8 +201,8 @@ func (f *Froth) enterScope(s Handle) (Handle, bool) {
 	}
 	for i := len(remembered) - 1; i >= 0; i-- {
 		h := remembered[i]
-		if f.isScope(h) {
-			if to, ok := f.enterScope(h); ok {
+		if f.isFocusScope(h) {
+			if to, ok := f.enterFocusScope(h); ok {
 				return to, true
 			}
 			continue
@@ -212,7 +212,7 @@ func (f *Froth) enterScope(s Handle) (Handle, bool) {
 		}
 	}
 
-	for _, h := range f.scopeOrder(s) {
+	for _, h := range f.focusScopeOrder(s) {
 		if f.isTabStop(h) {
 			return h, true
 		}
@@ -227,8 +227,8 @@ func (f *Froth) enterScope(s Handle) (Handle, bool) {
 // It reports false when the scope holds nowhere to go, which leaves focus where
 // it is. A from outside the tree walks the root's scope.
 func (f *Froth) stepFocus(from Handle, delta int) (Handle, bool) {
-	s := f.scopeOf(from)
-	order := f.scopeOrder(s)
+	s := f.focusScopeOf(from)
+	order := f.focusScopeOrder(s)
 	if len(order) == 0 {
 		return Handle{}, false
 	}
@@ -261,4 +261,26 @@ func (f *Froth) stepFrom() Handle {
 		return f.pendingFocus
 	}
 	return f.focused()
+}
+
+// rehomeFocus puts focus somewhere real after the surface holding it left the
+// tree. It lands on the nearest surviving ancestor and then descends the way
+// entering a focus scope does — onto what that surface remembers, or its first
+// tab stop — so closing one pane of several hands the keyboard to a sibling
+// rather than teleporting it to the root.
+//
+// It is not a requested move and reports nothing. Nobody asked for it; froth is
+// repairing a chain that a destroy broke.
+func (f *Froth) rehomeFocus(p Handle) {
+	if f.reg.get(p) == nil {
+		f.focus = f.root
+		f.rememberFocusChain()
+		return
+	}
+	to := p
+	if h, ok := f.enterFocusScope(p); ok {
+		to = h
+	}
+	f.focus = to
+	f.rememberFocusChain()
 }

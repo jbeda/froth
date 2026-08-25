@@ -24,3 +24,19 @@ type Surface interface {
 type Mounter interface {
 	Mount(ac *ApplyCtx)
 }
+
+// An Unmounter is told when its surface leaves the tree, whichever route it
+// leaves by: destroyed, cascaded away under an ancestor, or unmounted at
+// shutdown. It runs once, during Apply, and never for a surface that panicked.
+//
+// It is the mirror of Mount and runs leaf-up, so a child tears down before its
+// parent and can still reach it while doing so. It is for what froth does not
+// own — a file handle, a registration in something outside froth — and most
+// surfaces need it not at all.
+//
+// Posting from it is ordinary: it runs in Apply and a rising message posted
+// there behaves like any other. During Shutdown nothing will drain the queue,
+// so a post there is dropped and reported.
+type Unmounter interface {
+	Unmount(ac *ApplyCtx)
+}

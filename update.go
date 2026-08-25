@@ -123,7 +123,7 @@ func (f *Froth) settle() tea.Cmd {
 		}
 	}
 
-	f.flush()
+	f.FlushDiagnostics()
 	return tea.Batch(cmds...)
 }
 
@@ -340,5 +340,5 @@ func (f *Froth) callMount(token phaseToken, m Mounter, h Handle) {
 func (f *Froth) applyPending() {
 	b := budget{left: iterationCap}
 	f.apply(&b)
-	f.flush()
+	f.FlushDiagnostics()
 }

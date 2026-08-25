@@ -47,7 +47,7 @@ a modal: this decides where the keyboard walks, not who receives input.
 ## Amendment: the boundary bounds directional movement too
 
 A directional move is bounded by the focus scope exactly as traversal is, and by the same
-implementation: candidates come from `scopeOrder` of the source's scope, so a nested scope
+implementation: candidates come from `focusScopeOrder` of the source's scope, so a nested scope
 and everything under it are absent, and the scope surface itself is present. There is one
 answer to "where can the keyboard go" rather than two that can disagree.
 

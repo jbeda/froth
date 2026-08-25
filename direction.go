@@ -45,7 +45,7 @@ func (f *Froth) stepDirection(h Handle, d direction) (Handle, bool) {
 	if !ok || src.Empty() {
 		return Handle{}, false
 	}
-	return pick(d, src, f.candidatesIn(f.scopeOf(h), h))
+	return pick(d, src, f.candidatesIn(f.focusScopeOf(h), h))
 }
 
 // candidatesIn gathers the stops a move within scope may land on, excluding
@@ -56,7 +56,7 @@ func (f *Froth) stepDirection(h Handle, d direction) (Handle, bool) {
 // The frame can name surfaces destroyed since it was drawn. Membership is
 // decided by the live tree, so those are absent without being filtered for.
 func (f *Froth) candidatesIn(scope, except Handle) []candidate {
-	order := f.scopeOrder(scope)
+	order := f.focusScopeOrder(scope)
 	eligible := make(map[Handle]bool, len(order))
 	for _, h := range order {
 		if h != except && f.isTabStop(h) {

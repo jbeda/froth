@@ -1080,12 +1080,12 @@ deleting is three passes where one would have been cheaper and wrong.
 recorded in ADR 0002's amendment. Committing destroys first is what gives `DiagInvalidFocus`
 a reachable path again, which ADR 0014's amendment had flagged as owed to this ticket.
 
-**Focus rehoming reuses `enterScope` rather than inventing a rule.** When focus is inside
+**Focus rehoming reuses `enterFocusScope` rather than inventing a rule.** When focus is inside
 what is going, it lands on the nearest surviving ancestor and then descends the way entering
 a focus scope does. It reports nothing: nobody asked for the move, froth is repairing a
 chain a destroy broke. Note the consequence a test caught — if the surviving ancestor is
 itself a tab stop, focus lands *on it* rather than descending past it, because that is what
-`enterScope` already means. The alternative would have been a second rule about where focus
+`enterFocusScope` already means. The alternative would have been a second rule about where focus
 belongs, and froth has one.
 
 **froth's own panics are now an unexported error type.** Quarantine has to tell a surface
@@ -1149,6 +1149,17 @@ deleted on that reading — `Composite` applies pending structure before it draw
 `Bindings` case above put it back: a surface drawn early in a frame can ask a query, a query
 walks the focus chain, and a surface further along the chain has not been drawn yet. All
 four skips are pinned by tests now.
+
+**Four names and one file placement changed after review.** `Unmounter` sits in
+`surface.go` with `Surface` and `Mounter` rather than beside the walk that calls it —
+froth's public interfaces belong in few enough files to find them. The focus helpers that
+are read from outside `focus.go` now say focus: `rememberFocusChain`, `rehomeFocus`,
+`enterFocusScope`, `focusScopeOf`, `focusScopeOrder`, and their two file-local siblings for
+consistency. `rehomeFocus` moved into `focus.go` with them. And `flush` became
+`FlushDiagnostics`, which also exports it: froth calls it at the end of every update and
+composite, so it is there for an application that drives froth some other way. ADR 0011
+named `scopeOrder` by hand and was corrected; the log's older entries keep the old spelling
+on purpose, because they are dated records.
 
 **The example gained `x`.** The focused pane removes itself, its `Unmount` says so in the
 notes pane, and focus moves to the nearest survivor rather than back to the root. `main`

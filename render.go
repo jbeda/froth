@@ -52,7 +52,7 @@ func (f *Froth) Composite(h Handle) Frame {
 	// asked from inside one, a surface that panicked — and those are found
 	// after applyPending has already flushed. Without this they would wait for
 	// whatever drove froth next.
-	defer f.flush()
+	defer f.FlushDiagnostics()
 
 	screen := Rect{W: f.size.W, H: f.size.H}
 	if f.reg.get(h) == nil || screen.Empty() {
