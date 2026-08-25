@@ -1169,7 +1169,7 @@ notes pane, and focus moves to the nearest survivor rather than back to the root
 calls `Shutdown` after `Run` returns, which is the demonstration that matters: the walk is
 the guarantee, and an application that only calls it sometimes does not have one.
 
-### #41 — `Reconcile`, and a tab strip that adds and removes panes
+### #41 — `Reconcile`, and a list that adds and removes its own items
 
 **Shipped.** `Reconciler` is a fourth optional interface on a surface, asked for with
 `Self().Reconcile()` from Deliver or Apply and called during Apply with a full
@@ -1221,25 +1221,36 @@ that the handle be in the tree and mounting is a later step — the same thing `
 in the example has always done. Worth recording because it was the open question that
 decided reconcile's position after focus rather than before it.
 
-**The example gained a tab strip.** It keeps the titles it should be showing and which one
-should hold focus, and `match` — shared by `Mount` and `Reconcile` — destroys what is
-present and unwanted, creates what is wanted and absent, and puts focus where it says. `+`
-and `-` are the strip's own bindings, so they resolve only while one of its panes holds
-focus. The panes never remove themselves: a child that destroyed itself would leave the
-strip's idea of the world wrong, which is the sharpest edge in the desired-state shape and
-worth showing by avoiding rather than by hitting.
+**The demo went into the existing focus scope rather than into a new column.** It was built
+as a separate tab strip first and that was wrong twice over: a vertical list beside four
+other panes is not a tab strip, and the scope already held a list, so the two were the same
+demo drawn twice. The scope now keeps the labels it should be showing and which one should
+hold focus, and `match` — shared by `Mount` and `Reconcile` — destroys what is present and
+unwanted, creates what is wanted and absent, and puts focus where it says. `+` and `-` are
+the scope's own bindings, so they resolve only while one of its items holds focus. The
+items never remove themselves: a child that destroyed itself would leave the scope's idea
+of the world wrong, which is the sharpest edge in the desired-state shape and worth showing
+by avoiding rather than by hitting.
 
-**One pane sends two rising messages that stop in different places.** `t` inside a strip
-pane posts a `tallyMsg` the strip takes; `r` posts the same `noteMsg` the scope's controls
-send, which passes the strip untouched — it has no case for it — and the root takes. The
-pair is the argument for placement made from one surface: everything a modal contains is
-parented to the root, so the root sees every rising message from inside every dialog, and
-behaviour that is not genuinely global belongs on a surface that strangers' chains do not
-pass through.
+**Removing showed who owns the successor, and the answer is the application.** The first
+version removed the *last* item and focused the new last, so removing anything looked like
+focus jumping to the end. It now removes the item that holds focus — read with
+`uc.Query().Focus()`, which is the only way a container learns where the keyboard is — and
+names the neighbour above it, or below if the first went. froth's own rehoming is a repair
+for what nobody decided, and a reconcile is where a surface overrides it: it runs after
+Apply's focus step and `Focus()` during Apply is immediate, so the surface that knows the
+list has the last word. Recorded in ADR 0002's amendment.
 
-**The strip claims no focus while mounting.** Its `Mount` builds two panes and then clears
-the field that says which one should hold focus, because `match` is shared and would
-otherwise focus one — overruling the root, which had already said focus starts on the left
-pane. Caught by the spec review after the example silently started up focused in the wrong
-place. Worth naming as the general shape: a surface that grabs focus in `Mount` beats
-whoever built it, since children mount after their parent.
+**One item sends two rising messages that stop in different places.** `t` posts a
+`tallyMsg` the scope takes; `n` posts a `noteMsg` the scope counts without ending the walk,
+and the root takes. The pair is the argument for placement made from one surface:
+everything a modal contains is parented to the root, so the root sees every rising message
+from inside every dialog, and behaviour that is not genuinely global belongs on a surface
+that strangers' chains do not pass through.
+
+**The scope claims no focus while mounting.** Its `Mount` builds two items and then clears
+the field that says which should hold focus, because `match` is shared and would otherwise
+focus one — overruling the root, which had already said focus starts on the left pane.
+Caught by the spec review after the example silently started up focused in the wrong place.
+Worth naming as the general shape: a surface that grabs focus in `Mount` beats whoever
+built it, since children mount after their parent.

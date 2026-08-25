@@ -170,6 +170,13 @@ scope does — onto what that surface remembers, or its first tab stop. That reu
 0011's rule rather than adding a second one, and it is not a requested move, so it reports
 nothing.
 
+That rehoming is a **repair for what nobody decided, not a preference froth holds.** A
+surface that knows better says so, and a `Reconcile` is where: it runs after Apply's focus
+step and `Focus()` during Apply is immediate, so a container that destroys a child and
+names the successor has the last word. The example's scope does exactly this — remove the
+focused item and focus lands on its neighbour rather than wherever the ancestor walk
+happened to end.
+
 ## Amendment: reconcile shares the mount drain, and it brings the bit
 
 Settled while building the callback that lets a surface re-express its own children.

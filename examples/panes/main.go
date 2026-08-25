@@ -66,13 +66,13 @@
 // an action nobody bound a key to, and it does not change when a text sink takes
 // focus, which matters because the palette's own field is one.
 //
-// Pressing "n" inside the scope shows the other kind of delivery. The control
-// posts a message whose type embeds froth.Rising, so it does not stop where it
-// was posted: the scope sees it and counts it without ending the walk, and the
-// root sees it next and takes it by calling StopRising. Nothing above the root
-// hears about it. A message that nobody took would reach the tail and be
-// reported through the same hook the cycle uses — which is what a forgotten
-// case looks like from the outside.
+// Pressing "n" inside the scope shows the other kind of delivery. The item posts
+// a message whose type embeds froth.Rising, so it does not stop where it was
+// posted: the scope sees it and counts it without ending the walk, and the root
+// sees it next and takes it by calling StopRising. Nothing above the root hears
+// about it. A message that nobody took would reach the tail and be reported
+// through the same hook the cycle uses — which is what a forgotten case looks
+// like from the outside.
 //
 // Pressing "x" closes the focused pane. The pane removes itself and nothing
 // else is involved: no parent is told, no list is edited, and the layout gives
@@ -82,26 +82,33 @@
 // Unmount runs on the way out and says so in the notes pane, and the same walk
 // runs for every surface still standing when the program quits.
 //
-// The tab strip on the right is where structure stops being fixed. Tab into one
-// of its panes and + adds another, - takes the last one away, and neither key
-// edits the tree: the handler changes two ordinary fields — the titles the strip
-// should be showing and which of them should hold focus — and asks for a
-// reconcile. froth calls Reconcile during the Apply that follows, with a real
-// Apply context, and the strip makes the tree match what those fields now say.
-// Nothing keeps a list of pending additions and nothing flags a pane as on its
-// way out, because the desired state is the memory. Press + twice before froth
-// gets to Apply and it reconciles once, against a list that grew by two. The
-// pane it creates is mounted and focused inside that same Apply, so the very
-// next frame shows it with the keyboard on it.
+// The scope's list is where structure stops being fixed. Inside it, + adds an
+// item and - removes the one holding focus, and neither key edits the tree: the
+// handler changes two ordinary fields — the labels the scope should be showing
+// and which of them should hold focus — and asks for a reconcile. froth calls
+// Reconcile during the Apply that follows, with a real Apply context, and the
+// scope makes the tree match what those fields now say. Nothing keeps a list of
+// pending additions and nothing flags an item as on its way out, because the
+// desired state is the memory. Press + twice before froth gets to Apply and it
+// reconciles once, against a list that grew by two. The item it creates is
+// mounted and focused inside that same Apply, so the very next frame shows it
+// with the keyboard on it.
 //
-// A strip pane sends two rising messages and they stop in different places,
-// which is the other half of the lesson. "t" posts one the strip takes; "r"
-// posts the same message the scope's controls send with "n", which passes the
-// strip — it has no case for it — and the root takes, appearing in the notes
-// pane. Everything a modal contains is parented to the root, so the root sees
-// every rising message from inside every dialog in the program; behaviour that
-// is not genuinely global belongs on a surface that strangers' chains do not
-// pass through.
+// Removing shows who decides where focus goes. froth rehomes focus when the
+// surface holding it is destroyed — nearest surviving ancestor, then down — but
+// that is a repair for what nobody decided, not a preference. The scope decides:
+// before dropping the label it names the item above, or the one below if the
+// first went, and its reconcile puts focus there. A reconcile runs after Apply's
+// focus step and focus during Apply is immediate, so the surface that knows the
+// list has the last word.
+//
+// An item sends two rising messages and they stop in different places, which is
+// the other half of the lesson. "t" posts one the scope takes; "n" posts one
+// that passes the scope — which counts it without ending the walk — and the root
+// takes, appearing in the notes pane. Everything a modal contains is parented to
+// the root, so the root sees every rising message from inside every dialog in
+// the program; behaviour that is not genuinely global belongs on a surface that
+// strangers' chains do not pass through.
 //
 // The bar along the bottom is the same story told forwards. It is built entirely
 // from a query — it asks froth what a key press would currently do and prints the
@@ -133,9 +140,9 @@ const (
 	actionClear      froth.Action = "clear filter"
 	actionNote       froth.Action = "note this"
 	actionClose      froth.Action = "close this pane"
-	actionAddPane    froth.Action = "add a pane"
-	actionRemovePane froth.Action = "remove a pane"
-	actionTally      froth.Action = "tally this pane"
+	actionAddItem    froth.Action = "add an item"
+	actionRemoveItem froth.Action = "remove the focused item"
+	actionTally      froth.Action = "note this, for the scope"
 )
 
 // model is the application root. It owns froth by pointer and forwards Bubble
