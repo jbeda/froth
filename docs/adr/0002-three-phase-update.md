@@ -141,6 +141,28 @@ for exactly this case would have no reachable path.
 surface that mounts a child and focuses it there is making the later of two requests, and
 the later one should stand.
 
+**The destroys waiting for Apply are a work list, not a bit on each node.** A bit would
+match `mounted`, `leaving` and `panicked`, which are already there — and it would make
+recording idempotent, where the list can hold the same handle twice. It was rejected
+because finding the marked nodes means walking the tree at the top of every Apply, and
+nothing else there walks it: focus follows one chain and mounting drains
+`registry.entered`, which is the same shape and the precedent being followed. The duplicate
+costs nothing, because removing a subtree twice finds the second one already gone.
+
+*Parked: the bit as well as the list* — the dirty-flag-plus-work-list shape — if anything
+ever needs to **ask** whether a surface is on its way out. Nothing does: a departing
+surface is live until the Apply commits, which is the whole point, and no froth operation
+branches on the answer. Bring the caller, not the mechanism.
+
+**A destroy recorded during Deliver is not the same as one asked for from `Reconcile`, and
+the difference is one step of Apply.** Recorded destroys commit before focus; a `Reconcile`
+runs later in the same Apply, so a focus move is validated against a tree that reconcile has
+not yet cut. The two are otherwise interchangeable. Making them literally the same — a
+system message that Apply handles instead of the work list — was considered and rejected:
+the queue drains completely before Apply, so a message-borne destroy would either commit
+during the drain, which breaks the rule that no delivery has the tree change under it, or be
+held for Apply in a second queue, which is the work list wearing an envelope.
+
 Where focus goes when its holder is destroyed is not a fourth step. It happens inside the
 destroy, because it is only answerable while the tree still says where the surface was:
 focus lands on the nearest surviving ancestor and then descends the way entering a focus
