@@ -80,6 +80,10 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	// takes focus back out.
 	rt.scope = self.Create(&scopePane{out: leftH}, froth.FocusScope())
 
+	// The strip is created with no panes of its own named here: it decides
+	// what it contains, and says so in its own Mount and Reconcile.
+	self.Create(&strip{})
+
 	left.sibling, right.sibling = rightH, leftH
 	self.SetLayout(fieldAndBar{rest: layout.Row(layout.Gap(1))})
 	ac.At(leftH).Focus()

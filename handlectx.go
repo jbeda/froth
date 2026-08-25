@@ -130,6 +130,14 @@ type SelfUpdateCtx struct{ router }
 // and a rising walk passing through it still completes.
 func (sc SelfUpdateCtx) Destroy() { sc.destroy() }
 
+// Reconcile asks froth to call this surface's Reconcile during the next Apply.
+// Asking more than once before froth gets there reconciles once, so a handler
+// that changes several things need not track whether it has already asked.
+//
+// A surface that does not implement Reconciler reports a diagnostic and queues
+// nothing.
+func (sc SelfUpdateCtx) Reconcile() { sc.requestReconcile() }
+
 // A SelfApplyCtx is what a surface holds on itself during Apply, and the only
 // place structure a surface owns is assembled. Create and SetLayout name no
 // target, so creating a grandchild or arranging somebody else's children is not
@@ -176,6 +184,15 @@ func (sc SelfApplyCtx) Create(s Surface, opts ...CreateOption) Handle {
 // at once: Apply is where structural change commits, so there is nothing to
 // record.
 func (sc SelfApplyCtx) Destroy() { sc.destroy() }
+
+// Reconcile asks froth to call this surface's Reconcile. Unlike everything else
+// on this context it is a request rather than an immediate effect: the call
+// comes later in this same Apply, once whatever froth is doing now has
+// finished. That is what lets a surface ask from inside its own Reconcile
+// without recursing into it.
+//
+// See SelfUpdateCtx.Reconcile for the rest.
+func (sc SelfApplyCtx) Reconcile() { sc.requestReconcile() }
 
 // SetLayout attaches a layout to this surface, which places its children from
 // then on. A surface with no layout stacks its children at its own whole rect.

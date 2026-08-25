@@ -49,6 +49,28 @@ type Unmounter interface {
 	Unmount(ac *ApplyCtx)
 }
 
+// A Reconciler re-expresses the children it owns when its own state has moved
+// on from the tree it built. froth calls Reconcile during the Apply that
+// follows a request, with a full Apply context: real handles, immediate effect,
+// everything Apply can do.
+//
+// Ask for one with Self().Reconcile(), from Deliver or from Apply. Asking more
+// than once before froth gets there reconciles once, so a handler that changes
+// several things need not track whether it has already asked.
+//
+// Write it as a function of desired state rather than as a list of operations:
+// look at what the surface's children should now be, and make the tree match.
+// The state a surface already keeps is the memory, so there is no journal of
+// what has been asked for and no way for one to drift.
+//
+// It is separate from Mount rather than the same idempotent builder because
+// Mount also does one-time setup that is not structural — starting a producer,
+// taking a handle on something outside froth — and running that again would
+// start it twice.
+type Reconciler interface {
+	Reconcile(ac *ApplyCtx)
+}
+
 // A Binder declares the shortcuts a surface answers to. froth asks for them
 // while resolving a key press and while answering a query, which is a
 // synchronous call into a surface — rare enough in froth to be worth naming.

@@ -58,6 +58,11 @@ type Froth struct {
 	queue []envelope
 	diags []Diagnostic
 
+	// pendingReconcile holds the surfaces waiting for Reconcile, in the order
+	// they asked. Each one carries a bit saying it is here, which is what makes
+	// asking twice ask once.
+	pendingReconcile []Handle
+
 	// pendingDestroy holds the surfaces asked for during Deliver or Render and
 	// removed at the next Apply. shutdown says the instance has been torn down,
 	// after which posting is a reported drop and nothing else happens at all.

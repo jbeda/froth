@@ -169,3 +169,41 @@ focus lands on the nearest surviving ancestor and then descends the way entering
 scope does — onto what that surface remembers, or its first tab stop. That reuses ADR
 0011's rule rather than adding a second one, and it is not a requested move, so it reports
 nothing.
+
+## Amendment: reconcile shares the mount drain, and it brings the bit
+
+Settled while building the callback that lets a surface re-express its own children.
+Apply's three steps become destroy, focus, then **reconcile and mount together**.
+
+**Reconcile runs after focus**, which is what the amendment above already assumed when it
+said a `Reconcile` runs later in the same Apply, so a focus move is validated against a
+tree that reconcile has not yet cut. That reading is now load-bearing rather than
+anticipatory.
+
+**It shares one drain with mounting rather than running as a fourth step**, because each
+makes work for the other: a reconcile creates surfaces that must mount, a `Mount` may ask
+to reconcile, and a `Reconcile` may ask again. One loop that takes a reconcile if there is
+one and otherwise a mount settles all three without a rule about how many passes to make.
+Reconciles are taken first each time round, so a surface waiting to re-express itself does
+so before froth mounts what the last one produced. Both spend from the settle budget, which
+is what turns a surface that asks to reconcile from inside its own `Reconcile` from a hang
+into a report.
+
+**A request is never immediate, whatever phase asks.** `Destroy` executes on the spot during
+Apply and records everywhere else; `Reconcile` records in both, because running it where it
+was asked would put a surface inside its own callback. The consequence is worth stating: a
+surface may ask from inside its own `Reconcile` and be called again, later in the same
+Apply, against whatever the tree is by then.
+
+**This is the caller the parked bit was waiting for**, and it is a different work list
+rather than a change to the destroy one. The destroys stay a plain list. Reconcile carries a
+bit as well, because the two lists want different things: asking twice must reconcile once,
+where destroying twice may find the second subtree already gone, and the bit is what makes
+the request idempotent without scanning the list. It is cleared before the call rather than
+after, which is what makes a request from inside `Reconcile` a fresh one; and it is cleared
+along with the list when the budget abandons a pass, since a surface left marked could never
+ask again.
+
+**A surface that asks and implements no `Reconcile` is reported and nothing is queued.**
+The method is the opt-in, so the request names a callback that does not exist — a missing
+method rather than a condition, and the same reasoning as an untaken rising message.

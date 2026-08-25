@@ -51,9 +51,14 @@ type node struct {
 	// destroy asked for from an Unmount running above it is a no-op rather than
 	// a second teardown. panicked says froth has quarantined it and will not
 	// call it again.
-	mounted  bool
-	leaving  bool
-	panicked bool
+	//
+	// wantsReconcile says the surface is already on the reconcile work list, so
+	// asking again adds nothing. It is cleared before Reconcile is called, so a
+	// surface asking from inside one is asking afresh.
+	mounted        bool
+	leaving        bool
+	panicked       bool
+	wantsReconcile bool
 
 	// lastActive is the child of this surface that most recently sat on the
 	// focus chain. It is restoration state — where focus lands when traversal

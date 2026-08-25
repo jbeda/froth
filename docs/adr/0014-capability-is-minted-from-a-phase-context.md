@@ -192,7 +192,8 @@ froth goes on calling it. The tree empties and the instance is inert, which is w
 `Shutdown` also ends up.
 
 **A panic quarantine has to tell a surface's failure from froth's own.** Panic quarantine
-recovers a panic out of `Update`, `Render`, `Mount`, `Unmount` or `Bindings`, reports it and
+recovers a panic out of `Update`, `Render`, `Mount`, `Reconcile`, `Unmount` or `Bindings`,
+reports it and
 takes the surface out of the tree. Every contract this ADR puts teeth on is enforced by a
 panic raised from inside one of those same callbacks, so a blanket `recover` would demote
 all of them to a diagnostic and a removal — the illegal call would be reported far from its

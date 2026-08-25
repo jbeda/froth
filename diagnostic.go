@@ -121,6 +121,12 @@ func bug(format string, args ...any) {
 // the same surface that has already failed once.
 const DiagSurfacePanic DiagnosticKind = "surface panic"
 
+// DiagNoReconciler is reported when a surface asks to be reconciled and does
+// not implement Reconciler. Nothing is queued and nothing is called: the
+// request names a callback that does not exist, which is a missing method
+// rather than a condition to handle.
+const DiagNoReconciler DiagnosticKind = "no reconciler"
+
 // DiagPostAfterShutdown is reported when a surface posts a message during the
 // unmount walk Shutdown runs. Nothing will drain the queue, so the message is
 // dropped: it is pointless rather than illegal, and saying so is better than

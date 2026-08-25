@@ -606,7 +606,7 @@ iteration cap as the Deliver/Apply drain.
 ### Reconcile: as-needed Apply
 
 `Mount` is one-time Apply init. `Reconcile` is the as-needed version: the surface calls
-`uc.NeedsReconcile()` during Deliver, and froth calls it during Apply with a real
+`uc.Self().Reconcile()` during Deliver, and froth calls it during Apply with a real
 `ApplyCtx` — real handles, immediate effect, everything Apply can do.
 
 It exists because a surface doing serious restructuring in response to input has
@@ -621,7 +621,7 @@ operations, you express desired state and make the tree match it:
 func (t *tabStrip) Update(uc *froth.UpdateCtx, msg tea.Msg) {
     // ... input handling sets ordinary state ...
     t.want = computeTabs(t.model)
-    uc.NeedsReconcile()
+    uc.Self().Reconcile()
 }
 
 func (t *tabStrip) Reconcile(ac *froth.ApplyCtx) {
@@ -855,7 +855,7 @@ runtime one. Every context can read the Environment and report the caller's own 
 |---|---|---|
 | `*RenderCtx` | Render | `Cursor(Point)` — claim the terminal cursor · `Rect()` · `Focused()` — whether this surface holds focus · `FocusWithin()` — whether focus is at or below it |
 | `*MeasureCtx` | Measure | nothing beyond the common set; deliberately the narrowest |
-| `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Focus(Handle)` / `FocusSelf()` · `FocusNext()` / `FocusPrev()` — relative moves froth resolves, which `tab` and `shift+tab` reach without a surface calling them · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `NeedsReconcile()` · `Rect()` |
+| `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Focus(Handle)` / `FocusSelf()` · `FocusNext()` / `FocusPrev()` — relative moves froth resolves, which `tab` and `shift+tab` reach without a surface calling them · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `Self().Reconcile()` · `Rect()` |
 | `*ApplyCtx` | Apply | `Create(Surface, ...Option) Handle` — a child of self · `Destroy(Handle)` · `SetLayout(Layout)` · `Focus(Handle)` / `FocusSelf()` · `Post(Handle, tea.Msg)` · `Capture()` · `Produce(next, ...ProducerOpt)` · `Root()` · `Sender()` — the handle that raised the intent being applied |
 
 Every context knows the surface it belongs to and exposes it as `Self()`, so the
@@ -1049,7 +1049,7 @@ one-time Apply init, called once when the surface enters the tree.
 Writing real flows exposed two more. A surface restructuring itself in response to
 input needs Apply *again*, on demand, with real handles — otherwise every restructure
 routes through an ancestor that has no business knowing about it. That is `Reconcile`,
-requested with `uc.NeedsReconcile()`: one-time init and as-needed apply, the same
+requested with `uc.Self().Reconcile()`: one-time init and as-needed apply, the same
 capability at different times.
 
 And froth cancels producers and cascades destruction, but a surface holding something

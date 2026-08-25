@@ -266,18 +266,22 @@ func (f *Froth) callUpdate(uc *UpdateCtx, n *node, h Handle, msg tea.Msg) {
 // apply runs the Apply phase: everything structural that has been asked for
 // since the last one.
 //
-// The order is destroy, focus, mount. Destroys go first so that a focus move
-// recorded in the same delivery is validated against the tree that will exist —
-// which is what makes a move onto a surface that has since left the tree a
-// reported refusal rather than a focus committed and immediately undone. Focus
-// commits before mounting, so a surface that mounts a child and focuses it there
-// wins over a request made in the delivery before: the later of the two, and so
-// the one that should stand.
+// The order is destroy, focus, then reconcile and mount together. Destroys go
+// first so that a focus move recorded in the same delivery is validated against
+// the tree that will exist — which is what makes a move onto a surface that has
+// since left the tree a reported refusal rather than a focus committed and
+// immediately undone. Focus commits before mounting, so a surface that mounts a
+// child and focuses it there wins over a request made in the delivery before:
+// the later of the two, and so the one that should stand. Reconciles come last,
+// after focus has been validated against the tree they have not yet cut, and
+// they share a drain with mounting because each feeds the other: a reconcile
+// creates surfaces to mount, and a mount may ask for a reconcile.
 func (f *Froth) apply(b *budget) {
 	if f.shutdown {
 		return
 	}
-	if !f.reg.hasEntered() && !f.focusPending && len(f.pendingDestroy) == 0 {
+	if !f.reg.hasEntered() && !f.focusPending &&
+		len(f.pendingDestroy) == 0 && len(f.pendingReconcile) == 0 {
 		return
 	}
 
@@ -286,27 +290,41 @@ func (f *Froth) apply(b *budget) {
 
 	f.applyDestroys()
 	f.applyFocus()
-	f.mountEntered(b, token)
+	f.reconcileAndMount(b, token)
 }
 
-// mountEntered mounts the surfaces which have entered the tree and not been
-// mounted yet — the root to begin with, and then whatever the tree assembles for
-// itself — before froth renders or delivers anything.
+// reconcileAndMount runs the two callbacks that build the tree out: Reconcile
+// for the surfaces that asked for one, and Mount for the surfaces which have
+// entered the tree and not been mounted yet — the root to begin with, and then
+// whatever the tree assembles for itself.
 //
-// It drains a queue rather than recursing over the tree, so a surface created
-// late in the pass is mounted in that same pass whoever created it. Recursion
-// would have missed one: an ApplyCtx stays valid for the whole of the Apply that
+// The two share one drain because each makes work for the other, and a
+// reconcile asked for from inside a reconcile has to be serviced somewhere. It
+// drains queues rather than recursing over the tree, so a surface created late
+// in the pass is reached in that same pass whoever created it. Recursion would
+// have missed one: an ApplyCtx stays valid for the whole of the Apply that
 // issued it, so a surface can hand its own context to a sibling, and the child
 // that appears under a node already walked past would have rendered without ever
 // mounting.
-func (f *Froth) mountEntered(b *budget, token phaseToken) {
+//
+// Reconciles go first each time round, so a surface waiting to re-express
+// itself does so before froth mounts what the last one produced. A cascade of
+// either spends from the budget that stops it.
+func (f *Froth) reconcileAndMount(b *budget, token phaseToken) {
 	for {
 		if !b.spend() {
-			f.trip(b, fmt.Sprintf("mounting did not settle within %d deliveries "+
-				"and mounts; a surface is almost certainly mounting a child of "+
-				"its own type", iterationCap))
+			f.trip(b, fmt.Sprintf("reconciling and mounting did not settle "+
+				"within %d deliveries and mounts; a surface is almost certainly "+
+				"mounting a child of its own type, or asking to reconcile from "+
+				"inside its own Reconcile", iterationCap))
 			f.reg.abandonEntered()
+			f.abandonReconciles()
 			return
+		}
+
+		if h, ok := f.nextReconcile(); ok {
+			f.callReconcile(token, h)
+			continue
 		}
 
 		h, ok := f.reg.nextEntered()

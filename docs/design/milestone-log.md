@@ -1168,3 +1168,78 @@ older entries keep the old spelling on purpose, because they are dated records.
 notes pane, and focus moves to the nearest survivor rather than back to the root. `main`
 calls `Shutdown` after `Run` returns, which is the demonstration that matters: the walk is
 the guarantee, and an application that only calls it sometimes does not have one.
+
+### #41 — `Reconcile`, and a tab strip that adds and removes panes
+
+**Shipped.** `Reconciler` is a fourth optional interface on a surface, asked for with
+`Self().Reconcile()` from Deliver or Apply and called during Apply with a full
+`ApplyCtx`. Apply's three steps became destroy, focus, and reconcile-and-mount together.
+
+**The name went to the callback, not to the phase.** Collapsing the two — `RequestApply()`
+and an `Applier` interface, or renaming the phase to Reconcile — was considered and
+rejected. `Mount` and `Unmount` already run during Apply and are named for what they do,
+so `Reconcile` is their third sibling rather than the odd one out; and the phase is
+froth's commit step, which is not reconciliation. The request is `Reconcile()` on the self
+tier rather than the sketch's `NeedsReconcile()`, which reads as a getter — the same
+correction `Handled()` got while M3 was being sliced. The sketch has been updated.
+
+**Reconcile and mount share one drain.** They were nearly a fourth step and are not,
+because each makes work for the other and a request from inside `Reconcile` has to be
+serviced somewhere. One loop that takes a reconcile if there is one and otherwise a mount
+settles all three cases, and both spend from the settle budget — which is what turns a
+surface that never stops asking into a report rather than a hang. Reasoning in ADR 0002's
+amendment.
+
+**A request is never immediate, and that is the one place `Reconcile` differs from
+`Destroy`.** Destroy executes on the spot during Apply; reconcile records in every phase,
+because running it where it was asked would put a surface inside its own callback. What
+this buys is the criterion about asking from inside `Reconcile`: the second call is an
+ordinary queued request against whatever the tree is by the time it comes round.
+
+**The bit found its caller.** ADR 0002 parked "the bit as well as the list" for destroys,
+asking for a case rather than a preference. Reconcile is that case and it is a *separate*
+list — asking twice must reconcile once, where destroying twice may find the second
+subtree already gone. Two details are load-bearing and both are pinned: the bit is cleared
+*before* the call, which is what makes a request from inside `Reconcile` a fresh one, and
+it is cleared alongside the list when the budget abandons a pass, without which a surface
+left marked could never ask again.
+
+**A surface that asks and has no `Reconcile` method is reported.** The method is the
+opt-in, so the request names a callback that does not exist. `DiagNoReconciler` is not
+coalesced the way an untaken message is: one per request is one per keypress, not the
+thousands a cascade can produce.
+
+**This is the ticket that reached the immediate destroy path #40 flagged.** A surface's
+`Mount` runs before its children's, so nothing before this could destroy an already-mounted
+child during Apply. `Reconcile` can, and `TestAReconcileDestroysAnAlreadyMountedChildAtOnce`
+pins it: the child is gone from `Children()` before the callback returns and its `Unmount`
+has already run.
+
+**Focus during Apply was immediate already, so create-and-focus needed nothing.** A
+reconcile creates a child and focuses it in the same callback, because `setFocus` asks only
+that the handle be in the tree and mounting is a later step — the same thing `root.Mount`
+in the example has always done. Worth recording because it was the open question that
+decided reconcile's position after focus rather than before it.
+
+**The example gained a tab strip.** It keeps the titles it should be showing and which one
+should hold focus, and `match` — shared by `Mount` and `Reconcile` — destroys what is
+present and unwanted, creates what is wanted and absent, and puts focus where it says. `+`
+and `-` are the strip's own bindings, so they resolve only while one of its panes holds
+focus. The panes never remove themselves: a child that destroyed itself would leave the
+strip's idea of the world wrong, which is the sharpest edge in the desired-state shape and
+worth showing by avoiding rather than by hitting.
+
+**One pane sends two rising messages that stop in different places.** `t` inside a strip
+pane posts a `tallyMsg` the strip takes; `r` posts the same `noteMsg` the scope's controls
+send, which passes the strip untouched — it has no case for it — and the root takes. The
+pair is the argument for placement made from one surface: everything a modal contains is
+parented to the root, so the root sees every rising message from inside every dialog, and
+behaviour that is not genuinely global belongs on a surface that strangers' chains do not
+pass through.
+
+**The strip claims no focus while mounting.** Its `Mount` builds two panes and then clears
+the field that says which one should hold focus, because `match` is shared and would
+otherwise focus one — overruling the root, which had already said focus starts on the left
+pane. Caught by the spec review after the example silently started up focused in the wrong
+place. Worth naming as the general shape: a surface that grabs focus in `Mount` beats
+whoever built it, since children mount after their parent.

@@ -216,6 +216,17 @@ The root cannot be destroyed. Recorded during Deliver and committed at the next
 Apply, immediate during Apply.
 _Avoid_: remove, delete, close, dispose
 
+**Reconcile**:
+A surface re-expressing the children it owns, part-way through an Apply, because
+its own state has moved on from the tree it built. Asked for with
+`Self().Reconcile()` from Deliver or Apply and serviced during Apply; asking more
+than once before froth gets there reconciles once. It is written as a function of
+desired state rather than as a list of operations, which is what removes the need
+for a surface to remember what it has already asked for. Mount is the one-time
+half of the same capability and stays a separate method, because Mount also does
+setup that is not structural.
+_Avoid_: rebuild, refresh, update, sync, invalidate
+
 **Unmount**:
 A surface's chance to release what froth does not own, run once when it leaves
 the tree by any route. It runs leaf-up, so a child tears down before its parent
