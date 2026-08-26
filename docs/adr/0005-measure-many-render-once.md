@@ -30,3 +30,33 @@ stretch factors on the layout object outright.
 Nothing is parked here yet because froth has no such metadata. Recorded so that whichever
 change introduces the first piece of it asks the question deliberately, with ADR 0017's
 two-slot answer already on the table, rather than picking a side by accident.
+
+## Amendment: Render is offered a size, not a rect
+
+The contract above says `Render` is called *"at final geometry"*, and left open how much of
+that geometry a surface is told. It is told the **size of its client rect** and nothing
+else. `Render` takes a `Size`, and `RenderCtx.Rect` is gone with it.
+
+**A surface cannot position itself.** Where it sits is its parent's layout's decision, and
+`Arrange` has already made it by the time `Render` runs. Handing a surface coordinates it
+has no way to act on invites drawing in screen space — the one thing that would break
+froth's property of never translating coordinates, which ADR 0006's first amendment records
+as what makes a floating surface cheap. Passing a size makes that property structural rather
+than conventional.
+
+**Nothing that draws was using the position.** `RenderCtx.Rect` had one call site in the
+repo, a test asserting it panics out of phase. The rect parameter was used only for its
+width and height, with one exception: `examples/dir-nav` stashed it so a banner could print
+`"%s at %d,%d %d×%d"` while judging directional movement. That is a diagnostic, and
+`froth/inspect` is where it belongs if it is wanted again.
+
+**Rejected: letting `Render` return an offset within the rect it was offered.** It would let
+a child place itself inside its parent's allocation, which is the parent's decision under the
+Measure and `Arrange` protocol this ADR describes, and it would be the second mechanism after
+`Float` by which placement escapes a layout. A surface that wants to sit in the middle of
+what it was given draws itself in the middle of what it was given.
+
+Where a surface *ends up* is still answerable, and by the party that should answer it:
+`Frame` reports one surface rect per handle. See
+[ADR 0018](./0018-a-surface-occupies-the-rectangle-its-output-makes.md) for the geometry
+this leaves froth with, and for what the string a surface returns is then taken to occupy.

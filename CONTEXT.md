@@ -99,6 +99,28 @@ The structure and geometry as of the last render. The only place geometry
 exists, and what a click resolves against. Read-only.
 _Avoid_: last frame, screen state
 
+**Surface rect**:
+The whole rect a layout gave a surface, chrome included. froth draws the
+surface's chrome on its perimeter, and nothing the surface contributes to a
+frame falls outside it. This is the rect a `Frame` reports, and the one
+directional movement resolves against.
+_Avoid_: window rect, outer rect, bounds
+
+**Client rect**:
+The part of a surface rect left inside its chrome, and the space `Render` is
+offered. A surface renders only here and never its own chrome. A surface with
+no chrome has a client rect equal to its surface rect, which is every surface
+until chrome is asked for.
+_Avoid_: content rect, inner rect, viewport
+
+**Drawn rect**:
+The rectangle a surface's rendered string actually makes — line count by
+longest printable line — sitting at the client rect's origin. Never larger than
+the client rect, and smaller whenever a surface draws less than it was offered.
+A click resolves against this rather than the surface rect, because it is what
+was painted; the two differ only for a surface that underfills.
+_Avoid_: ink, painted rect, extent
+
 **Focus scope**:
 A surface whose subtree keyboard navigation cycles within, rather than escaping
 into the rest of the tree. The boundary holds in both directions: the walk
@@ -130,8 +152,9 @@ answers are discarded.
 
 **Chrome**:
 The border, title, and focus indication froth draws around a surface from its
-handle metadata. A surface renders only its client area and never its own
-chrome.
+handle metadata, on the perimeter of its surface rect. A surface renders only
+its client rect and never its own chrome. Chrome is opt-in: a surface has none
+unless it is asked for, and its size never changes with focus.
 _Avoid_: decoration, frame, border
 
 **Layout**:
