@@ -140,11 +140,20 @@ children's measures into a rect per child. Layouts see handles and metadata,
 never surface state.
 
 **Query**:
-A read-only walk over the surface tree collecting from surfaces that implement
-a given capability — help bindings being the first — and also the value an
-application or a surface asks one through, which can change nothing. Queries and
-shortcut resolution are the only synchronous calls into a surface, and both read
-the same declarations by walking together rather than alike.
+The read-only value an application or a surface asks froth questions through,
+which can change nothing. It walks the tree reading what froth has stored and
+calls into no surface: shortcut resolution, the help view and the action listing
+are all reads of the same stored declarations, so no two of them can describe
+different worlds. froth makes no synchronous call into a surface at all.
+
+**Binding**:
+A surface's declaration that it answers to some keys, under one action, with help
+text. A surface pushes its whole set with `SetBindings` — from Mount, from
+Reconcile, or from Update where its state changed — and froth stores it against
+the handle; nothing asks a surface what its bindings are. A declaration therefore
+stands until it is replaced, so a surface whose state moves on from what it last
+said declares again. `Disabled` is the field that most needs it.
+_Avoid_: keymap, accelerator, hotkey table
 
 **Stock binding**:
 A binding froth declares for an action it services itself, matched after every

@@ -3,8 +3,6 @@
 
 package froth
 
-import "slices"
-
 // A Query is a read-only view of a froth instance. It answers questions about
 // the tree as it stands and changes nothing, which is what makes it safe to hold
 // and safe to hand to a surface: there is nothing on it that can drive froth.
@@ -109,10 +107,4 @@ func (q Query) Actions() []ChainBinding {
 // application needs this only to change them: declare the ones it wants with its
 // own keys, or with Disabled set, and the declaration takes the action over.
 // Nothing has to be handed back to froth.
-func StockBindings() []Binding {
-	out := slices.Clone(frothBindings)
-	for i := range out {
-		out[i].Keys = slices.Clone(out[i].Keys)
-	}
-	return out
-}
+func StockBindings() []Binding { return cloneBindings(frothBindings) }

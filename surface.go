@@ -70,14 +70,3 @@ type Unmounter interface {
 type Reconciler interface {
 	Reconcile(ac *ApplyCtx)
 }
-
-// A Binder declares the shortcuts a surface answers to. froth asks for them
-// while resolving a key press and while answering a query, which is a
-// synchronous call into a surface — rare enough in froth to be worth naming.
-//
-// Bindings must therefore be a read-only answer about the surface as it stands.
-// It may be called from any phase, more than once, and about a surface other
-// than the one froth is currently talking to.
-type Binder interface {
-	Bindings() []Binding
-}

@@ -24,7 +24,10 @@ type speaker struct {
 	takes []froth.Action
 }
 
-func (s *speaker) Bindings() []froth.Binding { return s.bindings }
+// A surface declares its bindings; froth never asks. The declaration is pushed
+// at mount and again whenever a test says the set has changed, which is the
+// discipline a real surface follows for a Disabled field that tracks state.
+func (s *speaker) Mount(ac *froth.ApplyCtx) { ac.Self().SetBindings(s.bindings) }
 
 func (s *speaker) Render(rc *froth.RenderCtx, r froth.Rect) string {
 	if s.last != "" {
@@ -35,6 +38,8 @@ func (s *speaker) Render(rc *froth.RenderCtx, r froth.Rect) string {
 
 func (s *speaker) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	switch m := msg.(type) {
+	case declareMsg:
+		uc.Self().SetBindings(s.bindings)
 	case froth.ActionMsg:
 		s.last = string(m.Action)
 		if slices.Contains(s.takes, m.Action) {
@@ -67,7 +72,12 @@ type bindRoot struct {
 	handles []froth.Handle
 }
 
+// declareMsg tells a speaker to declare its bindings again, so a test that
+// changes the set can push it the way a surface changing its own state would.
+type declareMsg struct{}
+
 func (r *bindRoot) Mount(ac *froth.ApplyCtx) {
+	r.speaker.Mount(ac)
 	for i, k := range r.kids {
 		var opts []froth.CreateOption
 		if i < len(r.opts) {
@@ -103,6 +113,53 @@ func bindTree(t *testing.T, root *bindRoot) *froth.Froth {
 	f := newSized(t, root, len(root.kids), 2)
 	f.View()
 	return f
+}
+
+// Declaring again replaces the whole set rather than adding to it, which is
+// what lets a surface express its bindings as a function of its state.
+func TestDeclaringAgainReplacesTheSetBefore(t *testing.T) {
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: binds("q", "Q")},
+		kids:    []froth.Surface{&speaker{letter: "l"}, &speaker{letter: "r"}},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	root.bindings = binds("z", "Z")
+	f.Update(declareMsg{})
+
+	f.Update(keyPress('q'))
+	if got, want := focusRow(f), "qr"; got != want {
+		t.Errorf("focus row after pressing q = %q, want %q: the replaced "+
+			"binding still fired, so declaring added rather than replaced",
+			got, want)
+	}
+	f.Update(keyPress('z'))
+	if got, want := f.View().Content, "Z.\nZr"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// The drift push accepts, stated as a test rather than only as prose. Nothing
+// recomputes a declaration, so a surface whose state moves on and that does not
+// declare again goes on answering to what it last said. Pulling could not do
+// this; the price is paid here and is the whole trade in #30.
+func TestASurfaceThatChangesStateWithoutDeclaringKeepsWhatItLastSaid(t *testing.T) {
+	root := &bindRoot{
+		speaker: speaker{letter: ".", bindings: binds("q", "Q")},
+		kids:    []froth.Surface{&speaker{letter: "l"}, &speaker{letter: "r"}},
+	}
+	f := bindTree(t, root)
+	f.Update(focusMsg{to: root.handles[0]})
+
+	root.bindings = nil
+
+	f.Update(keyPress('q'))
+
+	if got, want := f.View().Content, "Q.\nQr"; got != want {
+		t.Errorf("View().Content = %q, want %q: a surface that never declared "+
+			"again answers to what it last declared", got, want)
+	}
 }
 
 func TestAnAncestorsBindingResolvesWhileAChildHasFocus(t *testing.T) {
@@ -437,6 +494,7 @@ type deep struct {
 }
 
 func (d *deep) Mount(ac *froth.ApplyCtx) {
+	d.speaker.Mount(ac)
 	d.child = ac.Self().Create(d.kid)
 	ac.Self().SetLayout(under{})
 }

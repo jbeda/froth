@@ -51,6 +51,10 @@
 > - **The theme-picker example is wholly stale**, and has a bug besides: `appRoot.Apply`
 >   calls `ac.SetEnvOn(ac.Root(), ...)`, using the child-targeting form on itself. It also
 >   raises an intent and commits in Apply, neither of which exists.
+> - **`Binder` is gone and a surface declares its bindings.** M2 shipped the interface
+>   named in the M2 line above; #30 replaced it with `Self().SetBindings(...)`, which a
+>   surface calls from `Mount`, `Reconcile` or `Update`. froth stores the set and calls
+>   into no surface to get it, so every `Bindings()` method below is stale.
 > - **The query has two binding views and neither returns `[]Binding`.**
 >   `Query.LiveBindings` answers what a key press would do and `Query.Actions` answers
 >   what can be invoked here, both as `[]ChainBinding`, which carries the declaring
@@ -144,7 +148,6 @@ type Mounter interface   { Mount(ac *ApplyCtx) }                      // self-as
 type Reconciler interface{ Reconcile(ac *ApplyCtx) }                  // restructure on demand
 type Unmounter interface { Unmount(ac *ApplyCtx) }                    // release non-froth resources
 type Measurer interface  { Measure(mc *MeasureCtx, offer Size) Size } // multi-pass layout
-type Binder interface    { Bindings() []Binding }                     // shortcuts + help
 type IntentSink interface{ Apply(ac *ApplyCtx, in Intent) bool }      // handle descendants' intents
 type ItemSource interface {                                           // virtualized content
     ItemCount() int
@@ -888,9 +891,13 @@ type Binding struct {
     SurvivesModal bool           // still resolves from outside an open modal
 }
 type ActionMsg struct{ Action Action }
-
-type Binder interface{ Bindings() []Binding }
 ```
+
+A surface declares its bindings rather than being asked for them, with
+`Self().SetBindings([]Binding{...})` — from `Mount` or `Reconcile` on the Apply context,
+and from `Update` on the Deliver one. Each call replaces the whole set and takes effect at
+once, and nothing recomputes one: a surface whose state moves on from what it last declared
+declares again. See [ADR 0008](../adr/0008-shortcuts-resolve-to-actions.md)'s amendment.
 
 ### Create options
 

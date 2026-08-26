@@ -24,16 +24,14 @@ func (s *scope) Mount(ac *froth.ApplyCtx) {
 		self.Create(&control{name: name, bd: s.bd}, froth.TabStop())
 	}
 	self.SetLayout(scopeInner{})
-}
-
-// The scope is on the focus chain while one of its controls holds focus, and it
-// is deeper than the root, so its g wins over the root's from inside.
-func (s *scope) Bindings() []froth.Binding {
-	return []froth.Binding{{
+	// The scope is on the focus chain while one of its controls holds focus,
+	// and it is deeper than the root, so its g wins over the root's from
+	// inside.
+	self.SetBindings([]froth.Binding{{
 		Action: actionLeaveScope,
 		Keys:   []string{"g"},
 		Help:   "leave the scope",
-	}}
+	}})
 }
 
 func (s *scope) Update(uc *froth.UpdateCtx, msg tea.Msg) {

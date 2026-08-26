@@ -209,10 +209,11 @@ func TestTheDirectionalKeysAreRebindableLikeAnyOther(t *testing.T) {
 // arrow key to it.
 type rebinder struct{ optRoot }
 
-func (r *rebinder) Bindings() []froth.Binding {
-	return []froth.Binding{{
+func (r *rebinder) Mount(ac *froth.ApplyCtx) {
+	r.optRoot.Mount(ac)
+	ac.Self().SetBindings([]froth.Binding{{
 		Action: froth.ActionFocusRight,
 		Keys:   []string{"right"},
 		Help:   "move focus right",
-	}}
+	}})
 }

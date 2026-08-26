@@ -169,8 +169,9 @@ type Binding struct {
 
 	// Disabled takes the binding out of play without removing it: it neither
 	// fires nor stops the key resolving further up the chain, and help can
-	// still see it. Disabling is how a shortcut becomes context-sensitive —
-	// a surface recomputes the field from its own state each time it is asked.
+	// still see it. Disabling is how a shortcut becomes context-sensitive — and
+	// it is the field most likely to go stale, because nothing recomputes it: a
+	// surface whose state moves on declares its bindings again.
 	//
 	// It is phrased as the exception so the zero Binding is one that works.
 	Disabled bool
@@ -216,6 +217,38 @@ type chainEntry struct {
 	listed []string
 }
 
+// setBindings replaces the surface's declarations with the ones given. Alone
+// among the things a surface asks for on itself during Deliver it takes effect
+// at once rather than at the next Apply: nothing structural changes, and the
+// key press being handled resolved before the pass began, so there is no
+// ordering a delay would protect. What can see the difference is a query asked
+// later in the same settle pass, which is the behaviour pulling already had.
+//
+// The set is copied, so a surface may keep and reuse the slice it passed.
+func (r router) setBindings(bs []Binding) {
+	r.check()
+	n := r.f.reg.get(r.h)
+	if n == nil {
+		return
+	}
+	n.bindings = cloneBindings(bs)
+}
+
+// cloneBindings copies a declaration set deeply enough that nothing a caller
+// still holds can change what froth stored. Keys is the only slice inside a
+// Binding. StockBindings hands out froth's own declarations and needs exactly
+// the same depth, so it is the other caller.
+func cloneBindings(bs []Binding) []Binding {
+	if len(bs) == 0 {
+		return nil
+	}
+	out := slices.Clone(bs)
+	for i := range out {
+		out[i].Keys = slices.Clone(out[i].Keys)
+	}
+	return out
+}
+
 // chainBindings walks the focus chain deepest first and gathers the bindings
 // currently in effect, in the order resolution consults them. Resolution, the
 // help query and the action listing are all consumers of it, which is what makes
@@ -231,19 +264,6 @@ type chainEntry struct {
 // surface taking input for a whole subtree, so that what is above it stops
 // contributing — narrows it here, or the consumers stop agreeing.
 func (f *Froth) chainBindings() []chainEntry {
-	if f.querying {
-		f.report(Diagnostic{
-			Kind: DiagReentrantQuery,
-			Detail: "a query was asked from inside one, which would not " +
-				"terminate; the nested query answered nothing. A surface " +
-				"must answer Bindings() from its own state rather than by " +
-				"asking froth",
-		})
-		return nil
-	}
-	f.querying = true
-	defer func() { f.querying = false }()
-
 	focused := f.focused()
 	var sink bool
 	if n := f.reg.get(focused); n != nil {
@@ -271,11 +291,10 @@ func (f *Froth) chainBindings() []chainEntry {
 		if n == nil {
 			continue
 		}
-		b, ok := n.surface.(Binder)
-		if !ok || n.panicked {
+		if n.panicked {
 			continue
 		}
-		for _, d := range f.callBindings(b, chain[i]) {
+		for _, d := range n.bindings {
 			// Any declaration of a froth action takes it over, a disabled one
 			// included — which is what makes disabling a froth binding as inert
 			// as disabling an application one. It counts even when the
@@ -297,15 +316,6 @@ func (f *Froth) chainBindings() []chainEntry {
 		add(frothBindings[i], Handle{})
 	}
 	return out
-}
-
-// callBindings asks one surface for its declarations under quarantine. This is
-// the one callback froth makes from whatever phase it happens to be in — a key
-// press resolves from no phase at all, and a query can be asked from any of
-// them — which is why quarantine reads the phase rather than being handed it.
-func (f *Froth) callBindings(b Binder, h Handle) []Binding {
-	defer f.quarantine(h, "Bindings")
-	return b.Bindings()
 }
 
 // narrow reports the keys of a declaration that would actually arrive at it, and

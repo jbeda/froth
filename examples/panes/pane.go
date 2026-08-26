@@ -104,10 +104,11 @@ func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Render(content)
 }
 
-// The cycle binding is the pane's own, so it resolves only while this pane is
-// on the focus chain.
-func (p *pane) Bindings() []froth.Binding {
-	return []froth.Binding{{
+// A surface with no children still has a Mount, because declaring bindings is
+// something a surface does about itself. These are the pane's own, so they
+// resolve only while this pane is on the focus chain.
+func (p *pane) Mount(ac *froth.ApplyCtx) {
+	ac.Self().SetBindings([]froth.Binding{{
 		Action: actionCycle,
 		Keys:   []string{"d"},
 		Help:   "post a message that comes back",
@@ -115,7 +116,7 @@ func (p *pane) Bindings() []froth.Binding {
 		Action: actionClose,
 		Keys:   []string{"x"},
 		Help:   "close this pane",
-	}}
+	}})
 }
 
 func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {

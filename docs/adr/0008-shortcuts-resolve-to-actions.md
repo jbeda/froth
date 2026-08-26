@@ -281,6 +281,105 @@ that: the listing offers `froth.cancel`, an application may invoke it, and until
 takes it the walk ends untaken and reports. That is the designed behaviour of a walk nobody
 ends rather than a defect, and it sharpens the open question below rather than answering it.
 
+## Amendment: a surface declares its bindings, and froth stores them
+
+Settled as #30, and it inverts the mechanism this ADR has assumed throughout. froth no
+longer asks a surface for its bindings. A surface **pushes** its whole set with
+`SetBindings`, froth stores it against the handle, and `chainBindings` reads stored state.
+`Binder` is gone.
+
+Everything above about *what* the walk does is unchanged: deepest first, nearest
+declaration wins, shadowing settled statically, text sinks suppressing bare printable keys,
+`SurvivesModal` honoured inside the one walk, froth's own bindings matched last, two views
+derived from one set. Read `Bindings()` in the amendments above as "the surface's stored
+declarations". What changes is where those declarations come from.
+
+**froth now makes no synchronous call into a surface at all.** Resolution and both queries
+were the last two, and they read the same declarations, so inverting one inverted both.
+Four things went with the call: the re-entrancy guard in `chainBindings`,
+`DiagReentrantQuery`, `Binder`, and the quarantine site that had to read the phase because
+it was the one callback froth made from whatever phase it happened to be in — the site
+whose zero token caused the bug recorded in the #40 log entry.
+
+**It also made a latent bug visible, which is worth recording as a consequence.** Pull let
+an *unmounted* surface answer `Bindings()`, which was asking a surface to declare before it
+had been given its chance to. Push makes "a surface has declared nothing until it has
+mounted" true, and that exposed `Update` routing a message against a tree it had not applied
+yet. `Update` now applies before it routes. See the #30 milestone-log entry.
+
+**The trade is a drift for a drift, and it is not a wash.** Pulling made drift impossible:
+a `Disabled` field was recomputed at the moment froth needed the answer. Pushing makes a
+different drift possible: a surface changes state and does not declare again, so it goes on
+answering to what it last said. Nothing in froth detects that, and nothing was built to.
+
+Three things make it a trade worth taking rather than a regression:
+
+- **The property this ADR is actually about survives untouched.** *"Help can never describe
+  something other than what fires"* is a claim about two readers of one source. Both are
+  now reads of froth's stored set, which is a stronger version of the same guarantee, not a
+  weaker one — they cannot disagree even in principle, where before they merely asked the
+  same surface twice in one walk.
+- **A stale declaration is stale in one direction that matters and one that does not.** A
+  wrongly-enabled binding fires an action the surface then declines to service, which is
+  what an action nobody takes already does. A wrongly-disabled one loses a keystroke. Both
+  are visible, neither corrupts anything.
+- **The push point is where the state changed.** `SetBindings` is on the self tier in both
+  Apply and Update, so the surface declares three lines from the field it just wrote.
+  Routing every re-declaration through `Self().Reconcile()` was considered and rejected for
+  exactly this: it puts a request and a phase boundary between the state change and the
+  declaration that describes it, for a set of bindings that is not structure.
+
+**Considered and rejected: froth requests a reconcile on a surface's behalf.** After any
+delivery to a surface that has declared bindings, froth could queue a reconcile, which
+makes forgetting impossible. Rejected because it breaks the invariant #41 shipped — froth
+never calls `Reconcile` on its own — and because it makes a structural callback run per
+keystroke for every binding-declaring surface, spending settle budget on the common case to
+insure against the rare one. The honest answer is that push accepts a drift, and this ADR
+records it as accepted rather than mitigated.
+
+**Considered and rejected: `Binder` survives as a one-time seed read at Mount.** Every
+deletion above still happens, and a surface with static bindings keeps a declarative
+`Bindings()`. Rejected because a method called exactly once, whose later return values are
+silently ignored, is the *"property invisible at the declaration site"*
+[ADR 0009](./0009-one-tree-no-implicit-surfaces.md) parked the superroot over. A filter
+field recomputing `Disabled` per keystroke would have gone on compiling and quietly stopped
+working. A leaf that only declares bindings grows a three-line `Mount` instead, which says
+what it does.
+
+**Considered and rejected: dropping `Disabled`.** It is the field that drifts; static
+declarations would barely drift at all. Rejected because greying a shortcut is what this
+ADR wanted the shared declaration set for, and the action listing publishes `Disabled` for
+a palette to act on. The churn stays, and it is what decided that Update gets `SetBindings`
+rather than Apply alone.
+
+## Parked: reading a surface's declarations back
+
+`SetBindings` writes and nothing reads, which is an odd shape for an API and was noticed
+immediately. It is not quite write-only: `Query.LiveBindings` and `Query.Actions` both
+report declarations with the handle that declared each, so a surface can already see its
+own — but only while it is on the focus chain, and only with `Keys` narrowed to what the
+question being asked cares about. What is missing is the unnarrowed set, for any handle.
+
+Not built, because the shape it would enable is the one froth argues against everywhere
+else. A read-modify-write makes froth's stored set the memory, which is the journal
+`Reconciler` refuses for children: *"the state a surface already keeps is the memory, so
+there is no journal of what has been asked for and no way for one to drift."* It also
+compounds the drift the amendment above accepts — recomputing the whole set self-heals,
+because the next declaration corrects a missed one, while a read-modify-write turns a
+missed write into a permanently wrong base for every later read. A surface computes its
+declarations from its own state, which both examples that declare dynamically now do.
+
+Revive it on a case where a surface genuinely **cannot** compute its whole set: a wrapper
+around a third-party component that declares bindings froth stored and the wrapper never
+saw. Go embedding is not that case — `append(b.base.bindings(), extra...)` composes without
+froth. Debugging and demos are not that case either; that want is the inspection hatch,
+which reads a *stranger's* declarations rather than modifying one's own, and belongs to
+whatever ships `froth/inspect`.
+
+If it is built, note the trap: the obvious spelling is `Bindings()` on `HandleReader`,
+which is the exact name this amendment deleted from `Surface`. Different receiver, so it
+compiles; a reader would have to be told why.
+
 ## Parked: registering an action
 
 Help text lives on `Binding`, so the same identity declared in two places can carry two

@@ -21,6 +21,20 @@ type root struct {
 }
 
 func (rt *root) Mount(ac *froth.ApplyCtx) {
+	// Quit belongs to the whole application, so the root declares it and the
+	// panes know nothing about it. These never change, so declaring them once
+	// on the way in is the whole of it.
+	ac.Self().SetBindings([]froth.Binding{{
+		Action:        actionQuit,
+		Keys:          []string{"q", "ctrl+c"},
+		Help:          "quit",
+		SurvivesModal: true,
+	}, {
+		Action: actionEnterScope,
+		Keys:   []string{"g"},
+		Help:   "focus the scope",
+	}})
+
 	left := &pane{
 		title: "left",
 		torn:  rt.torn,
@@ -94,21 +108,6 @@ func (rt *root) Render(rc *froth.RenderCtx, r froth.Rect) string {
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).
 		Render(strings.Join(rows, "\n"))
-}
-
-// Quit belongs to the whole application, so the root declares it and the panes
-// know nothing about it.
-func (rt *root) Bindings() []froth.Binding {
-	return []froth.Binding{{
-		Action:        actionQuit,
-		Keys:          []string{"q", "ctrl+c"},
-		Help:          "quit",
-		SurvivesModal: true,
-	}, {
-		Action: actionEnterScope,
-		Keys:   []string{"g"},
-		Help:   "focus the scope",
-	}}
 }
 
 // The root sees no raw keys — those go to the focused pane. What reaches it is

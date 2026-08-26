@@ -123,3 +123,53 @@ func TestWideGraphemesOccupyTheirRealWidth(t *testing.T) {
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
 }
+
+// firstRoot moves focus and declares a binding during Mount, which is the only
+// chance it gets before the instance's first message.
+type firstRoot struct {
+	speaker
+	kid   froth.Surface
+	child froth.Handle
+}
+
+func (r *firstRoot) Mount(ac *froth.ApplyCtx) {
+	r.speaker.Mount(ac)
+	r.child = ac.Self().Create(r.kid)
+	ac.Self().SetLayout(under{})
+	ac.At(r.child).Focus()
+}
+
+// A message is addressed against the tree, so the tree has to exist first. On a
+// fresh instance the root is registered and not yet mounted, so it has declared
+// nothing and has not had its chance to move focus — and a key press arriving
+// before anything else would otherwise resolve against an empty chain and land
+// on the root rather than on what Mount focused.
+func TestTheFirstMessageIsAddressedAgainstAMountedTree(t *testing.T) {
+	t.Run("a press resolves", func(t *testing.T) {
+		kid := &speaker{letter: "l"}
+		root := &firstRoot{speaker: speaker{letter: ".", bindings: binds("q", "Q")}, kid: kid}
+		f := froth.New(context.Background(), root)
+
+		f.Update(keyPress('q'))
+		f.Update(tea.WindowSizeMsg{Width: 1, Height: 2})
+
+		if got, want := f.View().Content, "Q\nQ"; got != want {
+			t.Errorf("View().Content = %q, want %q: the very first key press "+
+				"resolved against a tree that had not been built", got, want)
+		}
+	})
+
+	t.Run("a raw key reaches what Mount focused", func(t *testing.T) {
+		kid := &speaker{letter: "l"}
+		root := &firstRoot{speaker: speaker{letter: "."}, kid: kid}
+		f := froth.New(context.Background(), root)
+
+		f.Update(keyPress('z'))
+		f.Update(tea.WindowSizeMsg{Width: 1, Height: 2})
+
+		if got, want := f.View().Content, ".\nz"; got != want {
+			t.Errorf("View().Content = %q, want %q: the key went to the root "+
+				"rather than to the surface Mount focused", got, want)
+		}
+	})
+}

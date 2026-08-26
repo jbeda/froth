@@ -130,6 +130,14 @@ type SelfUpdateCtx struct{ router }
 // and a rising walk passing through it still completes.
 func (sc SelfUpdateCtx) Destroy() { sc.destroy() }
 
+// SetBindings declares the shortcuts this surface answers to, replacing
+// whatever it declared before. It takes effect at once rather than at the next
+// Apply: the key press being handled has already resolved, so there is nothing
+// for a delay to protect.
+//
+// See SelfApplyCtx.SetBindings for the rest.
+func (sc SelfUpdateCtx) SetBindings(bs []Binding) { sc.setBindings(bs) }
+
 // Reconcile asks froth to call this surface's Reconcile during the next Apply.
 // Asking more than once before froth gets there reconciles once, so a handler
 // that changes several things need not track whether it has already asked.
@@ -200,6 +208,16 @@ func (sc SelfApplyCtx) SetLayout(l Layout) {
 	sc.check()
 	sc.f.reg.get(sc.h).layout = l
 }
+
+// SetBindings declares the shortcuts this surface answers to, replacing
+// whatever it declared before. froth stores them, so resolution and both
+// binding queries read froth's own state and never call back into a surface.
+//
+// Nothing recomputes a declaration. A surface whose state moves on from what it
+// declared — a binding that should now be Disabled, a key that should no longer
+// be offered — declares again, from wherever the state changed. That is usually
+// Update, which has SetBindings for exactly this reason.
+func (sc SelfApplyCtx) SetBindings(bs []Binding) { sc.setBindings(bs) }
 
 // mintSelf builds the read set for the surface holding the phase context. It names
 // no target and so cannot fail.

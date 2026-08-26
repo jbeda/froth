@@ -20,6 +20,7 @@ type leaver struct {
 
 	noStop    bool
 	panicIn   string
+	declares  []froth.Binding
 	onDraw    func(rc *froth.RenderCtx)
 	onMsg     func(uc *froth.UpdateCtx, msg tea.Msg)
 	onMount   func(ac *froth.ApplyCtx)
@@ -57,6 +58,7 @@ func (l *leaver) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 
 func (l *leaver) Mount(ac *froth.ApplyCtx) {
 	l.self = ac.Self().Handle()
+	ac.Self().SetBindings(l.declares)
 	for _, k := range l.kids {
 		var opts []froth.CreateOption
 		if kl, ok := k.(*leaver); !ok || !kl.noStop {
@@ -82,13 +84,6 @@ func (l *leaver) Unmount(ac *froth.ApplyCtx) {
 	if l.onUnmount != nil {
 		l.onUnmount(ac)
 	}
-}
-
-func (l *leaver) Bindings() []froth.Binding {
-	if l.panicIn == "Bindings" {
-		panic("bindings broke")
-	}
-	return nil
 }
 
 // kinds reports the diagnostic kinds seen, in order, so a test says which
@@ -445,7 +440,7 @@ type checkMsg struct{}
 // removed by the ordinary destroy path, and never called again — including its
 // own teardown, which is code from the same surface that has already failed.
 func TestASurfaceThatPanicsIsReportedAndRemoved(t *testing.T) {
-	for _, in := range []string{"Update", "Render", "Mount", "Bindings"} {
+	for _, in := range []string{"Update", "Render", "Mount"} {
 		t.Run(in, func(t *testing.T) {
 			kid := &leaver{name: "kid", panicIn: in}
 			root := &leaver{name: "root", kids: []froth.Surface{kid}}
@@ -610,51 +605,6 @@ func TestDestroyingFromInsideUnmountDoesNotTearDownTwice(t *testing.T) {
 	}
 }
 
-// The one callback froth makes from whatever phase it is in. A query can be
-// asked from Apply, so a surface that panics answering it is removed on the
-// spot — and the teardown that removal runs is handed a real context.
-func TestASurfaceThatPanicsAnsweringAQueryDuringApplyIsRemoved(t *testing.T) {
-	grandkid := &leaver{name: "g"}
-	broken := &leaver{name: "broken", panicIn: "Bindings", kids: []froth.Surface{grandkid}}
-	asking := &leaver{name: "asking"}
-	root := &leaver{name: "root", kids: []froth.Surface{broken, asking}}
-	asking.onUnmount = func(ac *froth.ApplyCtx) { ac.Query().LiveBindings() }
-	root.onMount = func(ac *froth.ApplyCtx) { ac.Child(root.kidHs[0]).Focus() }
-	root.onMsg = func(uc *froth.UpdateCtx, msg tea.Msg) { uc.Child(asking.self).Destroy() }
-	f, diags := newWatched(t, root, 4, 1)
-
-	f.Update(startMsg{})
-
-	if !hasKind(*diags, froth.DiagSurfacePanic) {
-		t.Fatalf("a panic answering a query reported %v, want a surface panic", kinds(*diags))
-	}
-	if grandkid.unmounts != 1 {
-		t.Errorf("the child of the surface that panicked unmounted %d times, want 1",
-			grandkid.unmounts)
-	}
-}
-
-// A query walks the focus chain, so a surface drawn early in a frame can
-// quarantine one that has not been drawn yet.
-func TestASurfaceQuarantinedMidFrameIsNotDrawnInIt(t *testing.T) {
-	broken := &leaver{name: "broken", panicIn: "Bindings"}
-	asking := &leaver{name: "asking"}
-	root := &leaver{name: "root", kids: []froth.Surface{asking, broken}}
-	asking.onDraw = func(rc *froth.RenderCtx) { rc.Query().LiveBindings() }
-	root.onMount = func(ac *froth.ApplyCtx) { ac.Child(root.kidHs[1]).Focus() }
-	f, diags := newWatched(t, root, 4, 1)
-
-	f.View()
-
-	if !hasKind(*diags, froth.DiagSurfacePanic) {
-		t.Fatalf("reported %v, want a surface panic", kinds(*diags))
-	}
-	if broken.renders != 0 {
-		t.Errorf("a surface quarantined earlier in the frame was drawn %d times",
-			broken.renders)
-	}
-}
-
 // Nothing destroys the root — no surface can name it. Quarantine is not a
 // surface asking, and it has to take the root out or go on calling something
 // that has already failed. What is left is an instance with an empty tree,
@@ -679,5 +629,38 @@ func TestARootThatPanicsEndsTheInstance(t *testing.T) {
 	}
 	if got := f.View().Content; got != "" {
 		t.Errorf("an instance whose root panicked drew %q, want nothing", got)
+	}
+}
+
+// A quarantined surface's declarations are still on its node — the destroy that
+// removes it commits at the next Apply — so the walk has to skip it. Pulling
+// skipped it by not making the call; storing means skipping a read of live
+// data, which is a different mechanism for the same rule and needs its own test.
+func TestAQuarantinedSurfaceStopsContributingItsBindings(t *testing.T) {
+	broken := &leaver{
+		name:     "broken",
+		panicIn:  "Update",
+		declares: []froth.Binding{{Action: "Q", Keys: []string{"q"}, Help: "quit"}},
+	}
+	asking := &leaver{name: "asking"}
+	root := &leaver{name: "root", kids: []froth.Surface{broken, asking}}
+	root.onMount = func(ac *froth.ApplyCtx) { ac.Child(root.kidHs[0]).Focus() }
+
+	var live []froth.ChainBinding
+	asking.onMsg = func(uc *froth.UpdateCtx, msg tea.Msg) { live = uc.Query().LiveBindings() }
+	root.onMsg = func(uc *froth.UpdateCtx, msg tea.Msg) {
+		uc.At(broken.self).Post(plainMsg{})
+		uc.At(asking.self).Post(checkMsg{})
+	}
+	f, diags := newWatched(t, root, 4, 1)
+
+	f.Update(startMsg{})
+
+	if !hasKind(*diags, froth.DiagSurfacePanic) {
+		t.Fatalf("reported %v, want a surface panic", kinds(*diags))
+	}
+	if reports(live, "Q") {
+		t.Error("a quarantined surface is still contributing its bindings to " +
+			"the chain, so a key would resolve to a surface froth will not call")
 	}
 }

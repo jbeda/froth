@@ -42,11 +42,6 @@ type Froth struct {
 	// surfaces destroyed since. See ADR 0013.
 	renderedFrame []placement
 
-	// querying says a query is already walking the tree, so a surface that
-	// answers Bindings() by asking froth one gets nothing back rather than
-	// recursion. See DiagReentrantQuery.
-	querying bool
-
 	onDiagnostic func(Diagnostic)
 	// flushing says the hook is being called from the stack below, so a hook
 	// that drives froth queues its diagnostics for the pass already running
@@ -125,6 +120,18 @@ func (f *Froth) Update(msg tea.Msg) tea.Cmd {
 		f.size = Size{W: ws.Width, H: ws.Height}
 		return f.settle()
 	}
+	// A message is addressed against the tree, so the tree has to exist first.
+	// Routing resolves a key press against the declarations on the focus chain
+	// and reads where focus is, and on a fresh instance neither has been
+	// established: the root is registered but not mounted, so it has declared
+	// nothing and has not had its chance to move focus. Every later message
+	// finds this a no-op, because settle always ends on an Apply.
+	//
+	// One budget covers the Apply and the settle that follows, so a cascade
+	// that starts in a mount and continues through delivery is bounded once.
+	b := budget{left: iterationCap}
+	f.apply(&b)
+
 	f.queue = append(f.queue, f.route(msg))
-	return f.settle()
+	return f.settleWith(&b)
 }

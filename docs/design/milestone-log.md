@@ -1254,3 +1254,107 @@ focus one — overruling the root, which had already said focus starts on the le
 Caught by the spec review after the example silently started up focused in the wrong place.
 Worth naming as the general shape: a surface that grabs focus in `Mount` beats whoever
 built it, since children mount after their parent.
+
+### #30 — A surface declares its bindings, and froth stores them
+
+**Shipped.** `SetBindings` on the self tier in both Apply and Update. froth stores the set
+against the handle and `chainBindings` reads it. `Binder` is gone, and with it the
+re-entrancy guard, `DiagReentrantQuery`, and the quarantine site for `Bindings`.
+
+**froth now makes no synchronous call into a surface.** That was the prize the M2 log
+entry named — "taking the count of synchronous calls into a surface from two to zero" —
+and the two turned out to be one inversion, because resolution and both queries had always
+read the same declarations.
+
+**The ticket asked the wrong question, and the answer was better than the one it wanted.**
+Its title is "push bindings during Reconcile", and its stated blocker was that M2 had no
+hook to push from. `Reconcile` was not the hook that mattered. #37's `SelfUpdateCtx` was:
+`Disabled` is a function of fine-grained state, that state changes in `Update`, and the
+declaration belongs three lines from the field it describes rather than a queued request
+and a phase boundary away. `Reconcile` is now one push point among three, not the designed
+one.
+
+**The write is immediate in both phases, and the reasoning is about when resolution runs.**
+A key resolves exactly once, in `route`, before `settle` starts; `Invoke` skips resolution
+entirely. So a declaration made while delivering cannot change the meaning of the key being
+handled, and `settle` always runs a final Apply before returning, so a recorded write would
+have committed before the next key arrived anyway. The only observer that could tell them
+apart is a query asked later in the same settle pass — which pulling answered from the
+surface's current state, so immediate is the option that changes nothing.
+`TestADeclarationMadeWhileDeliveringIsVisibleLaterInTheSamePass` is the only place that
+seam is visible, and it exists because nothing else could see it.
+
+**ADR 0014 predicted this would record and it does not.** Its phase rule listed binding
+declaration among the things that "record cleanly and commit at Apply". The corrected rule
+is in its amendment: Update's operations record only when something downstream needs the
+tree to hold still, and a declaration is not structure.
+
+**The drift is accepted, not mitigated, and it has a test that says so.**
+`TestASurfaceThatChangesStateWithoutDeclaringKeepsWhatItLastSaid` pins the thing pulling
+made impossible. Two mitigations were weighed and rejected: froth requesting a reconcile
+after any delivery to a binding-declaring surface, which breaks #41's invariant and runs a
+structural callback per keystroke; and `Binder` surviving as a one-time seed read at Mount,
+which keeps every deletion but leaves a method whose later return values are silently
+ignored. Reasoning in ADR 0008's amendment.
+
+**`n.panicked` changed meaning and needed a test it did not have.** Pulling skipped a
+quarantined surface by not making the call. Storing means skipping a *read of live data* —
+the declarations sit on the node until the destroy commits at the next Apply — so the skip
+is now load-bearing rather than incidental.
+`TestAQuarantinedSurfaceStopsContributingItsBindings` pins it, and removing the guard fails
+it.
+
+**The stored set is copied.** Pulling handed froth a fresh answer each time and had nothing
+to alias; storing means a surface can write through the slice it passed. `Keys` is cloned
+too, which is what `StockBindings` already did for the same reason.
+
+**Two tests died and one of them is a real loss.**
+`TestASurfaceThatPanicsAnsweringAQueryDuringApplyIsRemoved` pinned the zero-token bug from
+#40 — quarantine reading the phase rather than being handed one. `Bindings` was the only
+callback froth made from an arbitrary phase, so the bug is now unreachable and the test
+with it. The `f.current()` mechanism stays and is still used by the teardown walk, but it
+no longer has a regression test of its own.
+`TestASurfaceQuarantinedMidFrameIsNotDrawnInIt` went the same way: nothing calls into a
+second surface during Render any more, so a surface can no longer be quarantined mid-frame
+by somebody else.
+
+**Push exposed a bug in `Update` that predates it, and Apply now runs before routing.** A
+message is addressed against the tree, and `route` was reading one that had never been
+applied: on a fresh instance the root is registered but not mounted, so it has declared
+nothing and has not had its chance to move focus. Pull hid half of this, because an
+unmounted surface still answered `Bindings()` — asking a surface to declare before `Mount`
+was itself dubious, and push made the answer honest and the bug visible. The other half was
+never hidden: a first-ever key press has always gone to the root rather than to what `Mount`
+focused. `Update` now runs `f.apply` before `f.route`, sharing one budget with the settle
+that follows, and `settle` gained a `settleWith` for that.
+
+Blast radius is exactly the broken case. Every message after the first finds the new Apply a
+no-op early-return, because `settle` always ends on one. Non-key messages were never
+affected at all: `route` sends everything that is not a key to the root unconditionally, and
+the root is a live handle from `New`, so an async result arriving first landed correctly and
+was delivered after the root's `Mount` in any case. Found by the review;
+`TestTheFirstMessageIsAddressedAgainstAMountedTree` pins both faces and both subtests fail
+without the new call.
+
+**`SetBindings` takes a slice, not a variadic, and the call sites decided it.** Variadic
+was written first and was worse at every one of the seven: five are multi-element literals,
+where variadic forces `froth.Binding{` to be spelled per element instead of once, and two
+pass a computed set, which variadic makes `bindings()...`. The slice form is also what the
+old `Bindings()` returned, so the surfaces that moved kept the literal they already had.
+`Create`'s variadic option list is not the same case: there zero arguments is the common
+call, and here a surface with no bindings simply does not call it.
+
+**Both dynamic examples were verified by scaffolding, and nothing pins them in CI.** A
+throwaway test drove each through the public API and asserted that `Disabled` follows the
+filter's text and that the arrow-key set follows `bd.bare`; deleting the re-declare line
+failed both. The tests were then deleted, per the working agreement. The examples remain
+untested by construction, so a future change that drops a `SetBindings` call in one of them
+will be caught by reading rather than by the suite.
+
+**Every example surface that declared bindings changed, and two of them are the point.**
+`panes/filter.go` recomputes `Disabled` from text that changes on almost every key, so its
+`Update` calls the handler and then declares — one call after the fact rather than one per
+branch, because the branches are what would drift. `dir-nav/root.go` swaps the arrow-key
+set on `actionArrowMode` and declares in that case arm. The other four are static and
+declare once in `Mount`, including two leaves that grew a `Mount` for nothing else — which
+is the cost of killing `Binder`, paid where a reader can see it.

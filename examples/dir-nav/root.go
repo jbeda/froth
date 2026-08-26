@@ -62,13 +62,18 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	self.Create(&banner{bd: rt.bd})
 
 	self.SetLayout(shell{s: &rt.bd.splits})
+	self.SetBindings(rt.bindings())
 	ac.At(detail).Focus()
 }
 
-// Declaring the four directional actions replaces froth's shift+arrow keys for
-// them outright — there is no second override table — so the two modes are two
-// answers to one question rather than two sets of keys that both work.
-func (rt *root) Bindings() []froth.Binding {
+// bindings is the whole declaration, computed from the board. Declaring the
+// four directional actions replaces froth's shift+arrow keys for them outright
+// — there is no second override table — so the two modes are two answers to one
+// question rather than two sets of keys that both work.
+//
+// It is a method rather than a literal at each push site because there are two
+// of them, and two literals would be two chances to disagree.
+func (rt *root) bindings() []froth.Binding {
 	bs := []froth.Binding{
 		{Action: actionQuit, Keys: []string{"q", "ctrl+c"}, Help: "quit", SurvivesModal: true},
 		{Action: actionEnterScope, Keys: []string{"g"}, Help: "focus the scope"},
@@ -104,6 +109,11 @@ func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 		uc.At(rt.rcol.scope).Focus()
 	case actionArrowMode:
 		rt.bd.bare = !rt.bd.bare
+		// Nothing recomputes a declaration, so the surface whose state decided
+		// it says so. Forgetting this line is the drift push accepts: the mode
+		// would flip on screen and the arrow keys would go on meaning what they
+		// meant before.
+		uc.Self().SetBindings(rt.bindings())
 	case actionNarrow:
 		rt.resize(-1, false)
 	case actionWiden:

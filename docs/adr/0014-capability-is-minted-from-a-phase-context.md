@@ -211,3 +211,32 @@ guarantees this ADR spent a design on would then be advisory: an illegal call wo
 a report and a missing surface rather than a stack trace at the call site. Reporting the two
 under different diagnostic kinds was rejected for the same reason — it distinguishes them in
 the hook while still not stopping the program.
+
+## Amendment: `SetBindings` is self, in both phases, and it does not record
+
+Settled while building #30, which moved bindings from a callback froth makes to a set a
+surface pushes. Two corrections, one to the table and one to the phase rule.
+
+**`SetBindings` is a self-tier operation and the table's row for it is the one it already
+had.** The self row lists *"declare bindings"*, and the reasoning holds without adjustment:
+a declaration is a property of the surface itself, so it names no target, and a context
+mintable for a child could not carry it without letting a surface declare shortcuts on
+somebody else's behalf. It sits beside `SetLayout` on `SelfApplyCtx` for the same reason
+`SetLayout` sits there.
+
+**It is on `SelfUpdateCtx` as well, and it takes effect at once.** The phase rule above
+says *"Update offers the operations that return nothing"*, and lists binding declaration
+among the things that *"record cleanly and commit at Apply"*. The first half is right and
+the second is wrong. Nothing structural changes, and resolution for the key press being
+handled has already run — a key resolves once, in `route`, before the settle loop starts —
+so there is no ordering a delay would protect. The only observer that could tell the
+difference is a query asked later in the same settle pass, and pulling already answered
+that one from the surface's current state.
+
+So the rule the phases follow is sharper than "Update records": **Update offers the
+operations that return nothing, and they record only when something downstream needs the
+tree to hold still.** `Focus`, `Destroy` and `Reconcile` do. A declaration does not.
+
+Update was given it rather than Apply alone because `Disabled` is a function of fine-grained
+state, and the handler that changed that state is the honest place to say so. See
+[ADR 0008](./0008-shortcuts-resolve-to-actions.md)'s amendment for the drift this accepts.

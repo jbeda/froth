@@ -114,11 +114,19 @@ func (f *Froth) trip(b *budget, detail string) {
 // hanging. See iterationCap for why the budget is the size it is.
 func (f *Froth) settle() tea.Cmd {
 	b := budget{left: iterationCap}
+	return f.settleWith(&b)
+}
+
+// settleWith is settle against a budget the caller already holds, for when
+// something has been spent before the first delivery. One budget per message
+// rather than per call is what keeps a cascade that starts in Apply and
+// continues through Deliver bounded by one cap.
+func (f *Froth) settleWith(b *budget) tea.Cmd {
 	var cmds []tea.Cmd
 
 	for {
-		f.apply(&b)
-		if len(f.queue) == 0 || !f.drain(&b, &cmds) {
+		f.apply(b)
+		if len(f.queue) == 0 || !f.drain(b, &cmds) {
 			break
 		}
 	}

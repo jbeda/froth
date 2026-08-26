@@ -43,6 +43,12 @@ type node struct {
 	layout   Layout
 	meta     meta
 
+	// bindings are the shortcuts this surface has declared, as it last declared
+	// them. A surface pushes the whole set with SetBindings and froth stores it,
+	// so resolution and the two binding queries are reads of froth's own state
+	// rather than three questions asked of the surface.
+	bindings []Binding
+
 	// mounted says the mount step has reached this surface, and so that there
 	// is something for Unmount to undo. A surface created and destroyed within
 	// one Apply can leave without ever having been mounted.

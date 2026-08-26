@@ -1,7 +1,6 @@
 package froth_test
 
 import (
-	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -191,41 +190,11 @@ func TestFrothsOwnBindingsAreReportedUntilSomethingTakesThemOver(t *testing.T) {
 	root.bindings = []froth.Binding{
 		{Action: froth.ActionFocusNext, Keys: []string{"n"}, Help: "next"},
 	}
+	f.Update(declareMsg{})
 
 	if got, want := keysOf(f.Query().LiveBindings(), froth.ActionFocusNext), []string{"n"}; !slices.Equal(got, want) {
 		t.Errorf("keys for %s after a declaration = %q, want %q: declaring a "+
 			"froth action replaces froth's keys for it", froth.ActionFocusNext, got, want)
-	}
-}
-
-// asker answers Bindings() by asking froth what the live bindings are, which is
-// the one thing a query must not let a surface do.
-type asker struct {
-	speaker
-	q froth.Query
-}
-
-func (a *asker) Bindings() []froth.Binding {
-	a.q.LiveBindings()
-	return a.bindings
-}
-
-func TestAQueryAskedFromInsideOneAnswersNothingAndSaysSo(t *testing.T) {
-	var got []froth.Diagnostic
-	root := &asker{speaker: speaker{letter: ".", bindings: binds("x", "X")}}
-	f := froth.New(context.Background(), root,
-		froth.OnDiagnostic(func(d froth.Diagnostic) { got = append(got, d) }))
-	root.q = f.Query()
-	f.Update(tea.WindowSizeMsg{Width: 2, Height: 1})
-
-	f.Update(press("x"))
-
-	if len(got) == 0 || got[0].Kind != froth.DiagReentrantQuery {
-		t.Fatalf("diagnostics = %v, want one of kind %q", got, froth.DiagReentrantQuery)
-	}
-	if want := "X"; f.View().Content != want {
-		t.Errorf("View().Content = %q, want %q: the outer resolution should "+
-			"still have delivered the action", f.View().Content, want)
 	}
 }
 
@@ -425,48 +394,6 @@ func TestEveryLiveBindingIsAlsoListedAsAnAction(t *testing.T) {
 	}
 }
 
-// counting is what makes "one set of declarations" checkable: a surface asked
-// twice could answer differently, and the two views would drift with nothing to
-// catch it.
-type counting struct {
-	speaker
-	asked int
-}
-
-func (c *counting) Bindings() []froth.Binding {
-	c.asked++
-	return c.bindings
-}
-
-func TestOneViewAsksEachSurfaceForItsBindingsExactlyOnce(t *testing.T) {
-	left := &counting{speaker: speaker{letter: "l", bindings: binds("x", "L")}}
-	root := &bindRoot{
-		speaker: speaker{letter: ".", bindings: binds("q", "Q")},
-		kids:    []froth.Surface{left, &speaker{letter: "r"}},
-	}
-	f := bindTree(t, root)
-	f.Update(focusMsg{to: root.handles[0]})
-
-	for _, c := range []struct {
-		name string
-		ask  func()
-	}{
-		{"LiveBindings", func() { f.Query().LiveBindings() }},
-		{"Actions", func() { f.Query().Actions() }},
-		{"a key press", func() { f.Update(press("x")) }},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			left.asked = 0
-			c.ask()
-			if left.asked != 1 {
-				t.Errorf("Bindings() was asked %d times, want 1: both views and "+
-					"resolution read one walk, and a second walk is how they "+
-					"start describing different worlds", left.asked)
-			}
-		})
-	}
-}
-
 // A key every one of whose declarations is shadowed leaves the one behind it
 // with nothing, and the listing says so rather than inventing a key. It reads
 // the same as a keyless declaration because it amounts to the same thing.
@@ -490,5 +417,80 @@ func TestAFullyShadowedDeclarationIsListedWithNoKeys(t *testing.T) {
 	}
 	if reports(f.Query().LiveBindings(), "R") {
 		t.Error("R is offered as a shortcut with no key that reaches it")
+	}
+}
+
+// declarer is a root that declares bindings when told to and, in a later
+// delivery of the same settle pass, asks froth what is live. It is how the
+// immediacy of a declaration made during Deliver becomes observable at all: a
+// query asked after the pass is over cannot tell an immediate write from one
+// that waited for Apply.
+type declarer struct {
+	bindings []froth.Binding
+	live     []string
+}
+
+type declareThenAskMsg struct{}
+
+type askMsg struct{}
+
+func (d *declarer) Render(*froth.RenderCtx, froth.Rect) string { return "." }
+
+func (d *declarer) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	switch msg.(type) {
+	case declareThenAskMsg:
+		uc.Self().SetBindings(d.bindings)
+		uc.Self().Post(askMsg{})
+	case askMsg:
+		d.live = keysOf(uc.Query().LiveBindings(), "Q")
+	}
+}
+
+func TestADeclarationMadeWhileDeliveringIsVisibleLaterInTheSamePass(t *testing.T) {
+	root := &declarer{bindings: binds("q", "Q")}
+	f := newSized(t, root, 1, 1)
+
+	f.Update(declareThenAskMsg{})
+
+	if got, want := root.live, []string{"q"}; !slices.Equal(got, want) {
+		t.Errorf("keys for Q asked later in the same pass = %q, want %q: a "+
+			"declaration takes effect at once, which is what pulling did",
+			got, want)
+	}
+}
+
+// mutator declares from a slice it keeps and then writes through it, which is
+// the aliasing a stored declaration has to survive: pulling handed froth a
+// fresh answer every time and had nothing to alias.
+type mutator struct {
+	speaker
+	bs []froth.Binding
+}
+
+type scribbleMsg struct{}
+
+func (m *mutator) Mount(ac *froth.ApplyCtx) { ac.Self().SetBindings(m.bs) }
+
+func (m *mutator) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	if _, ok := msg.(scribbleMsg); ok {
+		m.bs[0].Disabled = true
+		m.bs[0].Keys[0] = "z"
+		return
+	}
+	m.speaker.Update(uc, msg)
+}
+
+func TestWritingThroughADeclaredSliceChangesNothing(t *testing.T) {
+	root := &mutator{
+		speaker: speaker{letter: "."},
+		bs:      binds("q", "Q"),
+	}
+	f := newSized(t, root, 1, 1)
+
+	f.Update(scribbleMsg{})
+
+	if got, want := keysOf(f.Query().LiveBindings(), "Q"), []string{"q"}; !slices.Equal(got, want) {
+		t.Errorf("keys for Q = %q, want %q: froth stored the caller's slice "+
+			"rather than a copy of it", got, want)
 	}
 }

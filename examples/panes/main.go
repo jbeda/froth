@@ -34,11 +34,11 @@
 // declares froth's actions with the keys it wants, which takes them over
 // entirely:
 //
-//	func (rt *root) Bindings() []froth.Binding {
-//		return []froth.Binding{
+//	func (rt *root) Mount(ac *froth.ApplyCtx) {
+//		ac.Self().SetBindings([]froth.Binding{
 //			{Action: froth.ActionFocusLeft, Keys: []string{"left"}, Help: "focus left"},
 //			{Action: froth.ActionFocusRight, Keys: []string{"right"}, Help: "focus right"},
-//		}
+//		})
 //	}
 //
 // One keystroke shows what the update loop buys: the focused pane posts what it

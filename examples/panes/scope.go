@@ -51,6 +51,23 @@ type scopePane struct {
 func (g *scopePane) Mount(ac *froth.ApplyCtx) {
 	g.live = map[string]froth.Handle{}
 	ac.Self().SetLayout(stack{})
+	// The scope is on the focus chain while one of its controls has focus, and
+	// it is deeper than the root, so its g wins over the root's while focus is
+	// inside. The same is what makes + and - the scope's rather than anybody
+	// else's.
+	ac.Self().SetBindings([]froth.Binding{{
+		Action: actionLeaveScope,
+		Keys:   []string{"g"},
+		Help:   "leave the scope",
+	}, {
+		Action: actionAddItem,
+		Keys:   []string{"+", "="},
+		Help:   "add an item",
+	}, {
+		Action: actionRemoveItem,
+		Keys:   []string{"-"},
+		Help:   "remove the focused item",
+	}})
 	g.add()
 	g.add()
 	// The scope has an opinion about focus only once somebody has asked it for
@@ -123,25 +140,6 @@ func (g *scopePane) removeFocused(uc *froth.UpdateCtx) {
 		g.focused = ""
 	}
 	g.labels = slices.Delete(g.labels, i, i+1)
-}
-
-// The scope is on the focus chain while one of its controls has focus, and it
-// is deeper than the root, so its g wins over the root's while focus is inside.
-// The same is what makes + and - the scope's rather than anybody else's.
-func (g *scopePane) Bindings() []froth.Binding {
-	return []froth.Binding{{
-		Action: actionLeaveScope,
-		Keys:   []string{"g"},
-		Help:   "leave the scope",
-	}, {
-		Action: actionAddItem,
-		Keys:   []string{"+", "="},
-		Help:   "add an item",
-	}, {
-		Action: actionRemoveItem,
-		Keys:   []string{"-"},
-		Help:   "remove the focused item",
-	}}
 }
 
 func (g *scopePane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
@@ -231,8 +229,8 @@ type control struct{ label string }
 
 // The control says what happened and does not know who acts on it. Both keys
 // post a message that travels; the surfaces above decide where each one stops.
-func (c *control) Bindings() []froth.Binding {
-	return []froth.Binding{{
+func (c *control) Mount(ac *froth.ApplyCtx) {
+	ac.Self().SetBindings([]froth.Binding{{
 		Action: actionNote,
 		Keys:   []string{"n"},
 		Help:   "send a note to the root",
@@ -240,7 +238,7 @@ func (c *control) Bindings() []froth.Binding {
 		Action: actionTally,
 		Keys:   []string{"t"},
 		Help:   "send a note the scope takes",
-	}}
+	}})
 }
 
 func (c *control) Render(rc *froth.RenderCtx, r froth.Rect) string {
