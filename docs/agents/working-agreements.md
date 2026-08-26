@@ -96,6 +96,14 @@ A later session coined "claim" and used it thirty times before noticing `binding
 had a `claim()` for a different concept. If a new term seems needed it goes in `CONTEXT.md`
 or it does not get used.
 
+**Vocabulary lands before the ADR; identifiers wait for call sites.** "Propose names last"
+is right about identifiers and wrong about vocabulary, and the M4 design session found the
+line. A term an ADR uses in prose — the three geometries — has to be settled *before* that
+ADR is written, or the ADR becomes the one document using different words and every ticket
+downstream coins its own. A name for a type or method — `LayoutFunc`, `SetBindings` —
+waits, because the call sites judge it: #30 wrote `SetBindings` variadic before all seven
+call sites showed a slice was better. Ask which kind it is before deferring it.
+
 ## Prior-art surveys
 
 The highest-value thing a design session can spend tokens on. Every reversal that improved a

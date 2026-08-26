@@ -19,3 +19,12 @@ depth-first, and an earlier sibling's whole subtree stays below a later sibling.
 correction — **ordinals start at 1, not 0.** `NewCompositor` wraps the layers it is
 given in an implicit root layer at Z 0, so an ordinal of 0 ties with it, and that tie
 is exactly the undefined order the ordinals exist to avoid.
+
+## What this decided for hit-testing
+
+`Compositor.Hit(x, y)` exists and would resolve a click for free. froth does not use it, and
+this ADR is the reason: it would make the compositor the authority on what is on top. It is
+also bounding-rect only, so it answers nothing froth cannot answer from its own placements.
+`Handle.String()` stays a diagnostic string and is never a routing key. See
+[ADR 0018](./0018-a-surface-occupies-the-rectangle-its-output-makes.md) for what a click
+resolves against instead.

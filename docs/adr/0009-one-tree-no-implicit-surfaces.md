@@ -104,3 +104,35 @@ give one child different ambient values, which every declarative system does by 
 two Environment slots provide it with no node at all. Revive this if some *other* capability
 turns out to be expressible only by interposing a surface — and note that adding a stock
 container later breaks nothing, while removing one would.
+
+## Amendment: what the chrome survey confirmed, and what chrome was narrowed to
+
+Ten systems surveyed on chrome (`docs/research/chrome.md`), which moves both halves of the
+consequence above from assertion to evidence.
+
+**Chrome-as-a-sibling-view is a real design, and this ADR forecloses it.** Turbo Vision's
+`TFrame` is an ordinary `TView` inserted as a child of `TWindow` at the window's full extent.
+It consumes no layout space and there is no client-rect concept anywhere; application authors
+inset content by hand, and `TRect r(getExtent()); r.grow(-1,-1);` appears in every framed
+window in the tree. That is the cheapest chrome model anyone has shipped, and froth cannot
+take it, because it is exactly the inner/outer duality this ADR exists to prevent.
+
+**The system that tried the cheap model reversed it.** Terminal.Gui v1 had no general chrome
+and smuggled a private `ContentView` into `Window` to fake an inner rect. Its own comments are
+the evidence: *"The 'client area' … is a rectangle deflated by one or more rows/columns from
+`View.Bounds`. A this time there is no API to determine this rectangle."*, and
+`// TODO: Merge these classes` over the duplication. v2 replaced `Bounds` with `Viewport` and
+promoted the adornments to first-class. (The rationale is inferred from those comments; no
+maintainer statement was found.)
+
+So chrome is drawn by froth from handle metadata, consumes space from the outside, and splits
+a **surface rect** into chrome and a **client rect** — the vocabulary is in `CONTEXT.md`.
+
+**Chrome was narrowed at the same time.** Default chromeless and opt-in per surface, matching
+tview, whose border is off by default and which no widget turns on internally. And its size
+never changes with focus: Textual #877 is a filed bug about focus-border reflow, and both
+mature systems solve it deliberately — Turbo Vision switches glyphs single-to-double, Textual
+carries `$border` and `$border-blurred` for exactly this.
+
+Chrome has no ADR of its own because it has no code. When it gets one, this amendment and
+`CONTEXT.md`'s `Chrome` entry are what it is built from.
