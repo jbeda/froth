@@ -110,9 +110,8 @@ func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	case actionArrowMode:
 		rt.bd.bare = !rt.bd.bare
 		// Nothing recomputes a declaration, so the surface whose state decided
-		// it says so. Forgetting this line is the drift push accepts: the mode
-		// would flip on screen and the arrow keys would go on meaning what they
-		// meant before.
+		// it says so. Leave this line out and the mode flips on screen while the
+		// arrow keys go on meaning what they meant before.
 		uc.Self().SetBindings(rt.bindings())
 	case actionNarrow:
 		rt.resize(-1, false)

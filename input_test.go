@@ -140,10 +140,10 @@ func TestDeclaringAgainReplacesTheSetBefore(t *testing.T) {
 	}
 }
 
-// The drift push accepts, stated as a test rather than only as prose. Nothing
-// recomputes a declaration, so a surface whose state moves on and that does not
-// declare again goes on answering to what it last said. Pulling could not do
-// this; the price is paid here and is the whole trade in #30.
+// Declaring is the only thing that changes a declaration. A surface whose state
+// moves on and does not declare again goes on answering to what it last said,
+// which is the one thing being asked for its bindings made impossible — so the
+// trade is pinned by a test rather than left in prose.
 func TestASurfaceThatChangesStateWithoutDeclaringKeepsWhatItLastSaid(t *testing.T) {
 	root := &bindRoot{
 		speaker: speaker{letter: ".", bindings: binds("q", "Q")},
