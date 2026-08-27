@@ -17,11 +17,10 @@ type Surface interface {
 	// Render draws the surface's client area at the size it has been offered.
 	// It is called once per frame, at final geometry.
 	//
-	// It is offered a size and not a rect because a surface cannot position
-	// itself — its parent's layout has already decided that — so it draws in
-	// its own coordinates and froth never translates them. What it returns is
-	// clipped to the size and padded out to a rectangle; drawing less than the
-	// offer is how a surface occupies less than it was given.
+	// A surface draws in its own coordinates, from 0,0; where it sits on screen
+	// is its parent's layout's decision. What it returns is clipped to the size
+	// offered, and drawing less than that is how a surface occupies less than
+	// it was given.
 	Render(rc *RenderCtx, s Size) string
 
 	// Update handles one message addressed to this surface. It may change only
