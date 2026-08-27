@@ -36,8 +36,8 @@ type askTwiceMsg struct{}
 // the two requests come from two deliveries rather than from one handler.
 type relayMsg struct{}
 
-func (s *tabs) Render(rc *froth.RenderCtx, r froth.Rect) string {
-	return strings.Repeat(".", r.W)
+func (s *tabs) Render(rc *froth.RenderCtx, size froth.Size) string {
+	return strings.Repeat(".", size.W)
 }
 
 func (s *tabs) Update(uc *froth.UpdateCtx, msg tea.Msg) {
@@ -108,7 +108,7 @@ type tab struct {
 	kid  froth.Surface
 }
 
-func (t *tab) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (t *tab) Render(rc *froth.RenderCtx, s froth.Size) string {
 	if rc.Focused() {
 		return strings.ToUpper(t.name)
 	}
@@ -392,7 +392,7 @@ func TestAReconcileCannotRestructureASurfaceItDoesNotOwn(t *testing.T) {
 // reacher reconciles by reaching for its grandchild, which is not its to name.
 type reacher struct{ kid *tab }
 
-func (r *reacher) Render(*froth.RenderCtx, froth.Rect) string { return "." }
+func (r *reacher) Render(*froth.RenderCtx, froth.Size) string { return "." }
 
 func (r *reacher) Update(uc *froth.UpdateCtx, _ tea.Msg) { uc.Self().Reconcile() }
 

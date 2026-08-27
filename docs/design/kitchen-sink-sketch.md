@@ -136,7 +136,7 @@ Required — two methods, and every concrete type in this sketch satisfies them:
 
 ```go
 type Surface interface {
-    Render(rc *RenderCtx, r Rect) string
+    Render(rc *RenderCtx, s Size) string
     Update(uc *UpdateCtx, msg tea.Msg)
 }
 ```
@@ -189,9 +189,9 @@ type Surface[M Component[M]] struct {
     Cursor func(M) *tea.Cursor
 }
 
-func (s *Surface[M]) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (s *Surface[M]) Render(rc *froth.RenderCtx, size froth.Size) string {
     if s.Size != nil {
-        s.Size(&s.M, r.W, r.H)          // froth is immediate-mode: size every frame
+        s.Size(&s.M, size.W, size.H)    // froth is immediate-mode: size every frame
     }
     if s.Cursor != nil {
         if c := s.Cursor(s.M); c != nil {
@@ -255,8 +255,8 @@ func newSessionList() *sessionList {
     return &sessionList{rows: bubbleadapt.List(list.New(nil, sessionDelegate{}, 0, 0))}
 }
 
-func (s *sessionList) Render(rc *froth.RenderCtx, r froth.Rect) string {
-    return s.rows.Render(rc, r)          // sizes, views, claims cursor
+func (s *sessionList) Render(rc *froth.RenderCtx, size froth.Size) string {
+    return s.rows.Render(rc, size)       // sizes, views, claims cursor
 }
 
 func (s *sessionList) Bindings() []froth.Binding {
@@ -679,7 +679,7 @@ func (d *confirmDialog) Mount(ac *froth.ApplyCtx) {
     ac.SetLayout(layout.Row(layout.End, layout.Gap(2)))
 }
 
-func (d *confirmDialog) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (d *confirmDialog) Render(rc *froth.RenderCtx, s froth.Size) string {
     return rc.Env(ThemeKey).Prompt(d.label)
     // buttons are children; froth composites them over this body
 }
@@ -829,8 +829,8 @@ delivers `CaptureLostMsg` first.
 ```go
 type editor struct{ in bubbleadapt.Surface[textinput.Model] }
 
-func (e *editor) Render(rc *froth.RenderCtx, r froth.Rect) string {
-    return e.in.Render(rc, r)   // adapter claims the cursor from in.M.Cursor()
+func (e *editor) Render(rc *froth.RenderCtx, s froth.Size) string {
+    return e.in.Render(rc, s)   // adapter claims the cursor from in.M.Cursor()
 }
 
 func (e *editor) Update(uc *froth.UpdateCtx, msg tea.Msg) {
@@ -856,7 +856,7 @@ runtime one. Every context can read the Environment and report the caller's own 
 
 | Context | Phase | Also offers |
 |---|---|---|
-| `*RenderCtx` | Render | `Cursor(Point)` — claim the terminal cursor · `Rect()` · `Focused()` — whether this surface holds focus · `FocusWithin()` — whether focus is at or below it |
+| `*RenderCtx` | Render | `Cursor(Point)` — claim the terminal cursor · `Focused()` — whether this surface holds focus · `FocusWithin()` — whether focus is at or below it |
 | `*MeasureCtx` | Measure | nothing beyond the common set; deliberately the narrowest |
 | `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Focus(Handle)` / `FocusSelf()` · `FocusNext()` / `FocusPrev()` — relative moves froth resolves, which `tab` and `shift+tab` reach without a surface calling them · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `Self().Reconcile()` · `Rect()` |
 | `*ApplyCtx` | Apply | `Create(Surface, ...Option) Handle` — a child of self · `Destroy(Handle)` · `SetLayout(Layout)` · `Focus(Handle)` / `FocusSelf()` · `Post(Handle, tea.Msg)` · `Capture()` · `Produce(next, ...ProducerOpt)` · `Root()` · `Sender()` — the handle that raised the intent being applied |
@@ -870,6 +870,7 @@ recorded and commit at Apply; the same calls on an `*ApplyCtx` take effect immed
 ```go
 type Handle struct{ ... }        // opaque, comparable, zero value is "none"
 type Rect   struct{ X, Y, W, H int }
+type Size   struct{ W, H int }
 type Point  struct{ X, Y int }
 func Pt(x, y int) Point
 
@@ -1000,7 +1001,7 @@ falls through, so there is nothing to report.
 
 ```go
 type Surface interface {
-    Render(rc *RenderCtx, r Rect) string
+    Render(rc *RenderCtx, s Size) string
     Update(uc *UpdateCtx, msg tea.Msg)
 }
 ```

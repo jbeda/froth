@@ -22,7 +22,7 @@ type relay struct {
 	renders int
 }
 
-func (r *relay) Render(rc *froth.RenderCtx, rect froth.Rect) string {
+func (r *relay) Render(rc *froth.RenderCtx, s froth.Size) string {
 	r.renders++
 	return strconv.Itoa(r.seen)
 }
@@ -48,7 +48,7 @@ func (r *relay) Mount(ac *froth.ApplyCtx) {
 // is the shortest cascade that never settles.
 type cycler struct{}
 
-func (c *cycler) Render(*froth.RenderCtx, froth.Rect) string { return "cycling" }
+func (c *cycler) Render(*froth.RenderCtx, froth.Size) string { return "cycling" }
 func (c *cycler) Update(uc *froth.UpdateCtx, msg tea.Msg)    { uc.Self().Post(msg) }
 
 func TestAPostedMessageIsHandledInTheSameFrame(t *testing.T) {
@@ -103,7 +103,7 @@ func TestASurfaceCanPostToItself(t *testing.T) {
 // is for.
 type bouncer struct{ seen int }
 
-func (b *bouncer) Render(*froth.RenderCtx, froth.Rect) string { return strconv.Itoa(b.seen) }
+func (b *bouncer) Render(*froth.RenderCtx, froth.Size) string { return strconv.Itoa(b.seen) }
 
 func (b *bouncer) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	b.seen++
@@ -195,7 +195,7 @@ func TestAMountCascadeTripsTheIterationCapAndIsReported(t *testing.T) {
 
 type spawner struct{}
 
-func (s *spawner) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (s *spawner) Render(*froth.RenderCtx, froth.Size) string { return "" }
 func (s *spawner) Update(*froth.UpdateCtx, tea.Msg)           {}
 func (s *spawner) Mount(ac *froth.ApplyCtx)                   { ac.Self().Create(&spawner{}) }
 
@@ -218,7 +218,7 @@ func TestAPostToAHandleThatNamesNothingIsDroppedAndReported(t *testing.T) {
 
 type dropper struct{}
 
-func (d *dropper) Render(*froth.RenderCtx, froth.Rect) string { return "ok" }
+func (d *dropper) Render(*froth.RenderCtx, froth.Size) string { return "ok" }
 func (d *dropper) Update(uc *froth.UpdateCtx, msg tea.Msg)    { uc.At(froth.Handle{}).Post(msg) }
 
 // The hook is application code, so froth calls it with no phase in progress —
@@ -286,7 +286,7 @@ type sender struct {
 	kids []froth.Surface
 }
 
-func (s *sender) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (s *sender) Render(*froth.RenderCtx, froth.Size) string { return "" }
 func (s *sender) Mount(ac *froth.ApplyCtx) {
 	for _, k := range s.kids {
 		ac.Self().Create(k)
@@ -307,7 +307,7 @@ type ordered struct {
 	got  string
 }
 
-func (o *ordered) Render(*froth.RenderCtx, froth.Rect) string { return o.got }
+func (o *ordered) Render(*froth.RenderCtx, froth.Size) string { return o.got }
 func (o *ordered) Mount(ac *froth.ApplyCtx)                   { o.self = ac.Self().Handle() }
 func (o *ordered) Update(_ *froth.UpdateCtx, msg tea.Msg) {
 	m, ok := msg.(orderMsg)
@@ -350,7 +350,7 @@ type focusThenPeek struct {
 	peeked froth.Handle
 }
 
-func (p *focusThenPeek) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (p *focusThenPeek) Render(*froth.RenderCtx, froth.Size) string { return "" }
 func (p *focusThenPeek) Mount(ac *froth.ApplyCtx) {
 	p.self = ac.Self().Handle()
 	p.child = ac.Self().Create(p.kid)

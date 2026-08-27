@@ -13,7 +13,6 @@ import (
 type RenderCtx struct {
 	phaseToken
 	self Handle
-	rect Rect
 }
 
 // Self mints a context on the surface this one belongs to. It names no target,
@@ -48,12 +47,6 @@ func (rc *RenderCtx) Focused() bool {
 func (rc *RenderCtx) FocusWithin() bool {
 	rc.check()
 	return slices.Contains(rc.f.focusChain(), rc.self)
-}
-
-// Rect reports the region this surface is being rendered into.
-func (rc *RenderCtx) Rect() Rect {
-	rc.check()
-	return rc.rect
 }
 
 // UpdateCtx is a surface's handle on froth during Deliver, when it is handling

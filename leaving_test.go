@@ -35,7 +35,7 @@ func (l *leaver) note(what string) {
 	}
 }
 
-func (l *leaver) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (l *leaver) Render(rc *froth.RenderCtx, s froth.Size) string {
 	l.renders++
 	if l.panicIn == "Render" {
 		panic("render broke")

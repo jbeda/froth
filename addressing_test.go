@@ -31,7 +31,7 @@ type prober struct {
 	onDraw  func(rc *froth.RenderCtx)
 }
 
-func (p *prober) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (p *prober) Render(rc *froth.RenderCtx, s froth.Size) string {
 	if p.onDraw != nil {
 		p.onDraw(rc)
 	}

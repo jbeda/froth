@@ -183,7 +183,7 @@ func (g *scopePane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 
 // The scope is never the focused surface while one of its controls is — but it
 // is on the chain above it, which is what FocusWithin asks and Focused cannot.
-func (g *scopePane) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (g *scopePane) Render(rc *froth.RenderCtx, s froth.Size) string {
 	border := lipgloss.Color("240")
 	if rc.FocusWithin() {
 		border = lipgloss.Color("212")
@@ -203,8 +203,8 @@ func (g *scopePane) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(border).
 		Padding(0, 1).
-		Width(r.W).
-		Height(r.H).
+		Width(s.W).
+		Height(s.H).
 		Render(body)
 }
 
@@ -241,7 +241,7 @@ func (c *control) Mount(ac *froth.ApplyCtx) {
 	}})
 }
 
-func (c *control) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (c *control) Render(rc *froth.RenderCtx, s froth.Size) string {
 	if rc.Focused() {
 		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")).

@@ -22,7 +22,7 @@ func (t *toolbar) Mount(ac *froth.ApplyCtx) {
 	self.SetLayout(buttons{s: &t.bd.splits})
 }
 
-func (t *toolbar) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (t *toolbar) Render(*froth.RenderCtx, froth.Size) string { return "" }
 func (t *toolbar) Update(*froth.UpdateCtx, tea.Msg)           {}
 
 // sidebar is the list down the left. Its rows are surfaces rather than lines in
@@ -39,7 +39,7 @@ func (s *sidebar) Mount(ac *froth.ApplyCtx) {
 	self.SetLayout(rows{s: &s.bd.splits})
 }
 
-func (s *sidebar) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (s *sidebar) Render(*froth.RenderCtx, froth.Size) string { return "" }
 func (s *sidebar) Update(*froth.UpdateCtx, tea.Msg)           {}
 
 // rightCol is two panels with the scope beneath them. Two, so a move rightwards
@@ -60,5 +60,5 @@ func (rc *rightCol) Mount(ac *froth.ApplyCtx) {
 	self.SetLayout(stack{s: &rc.bd.splits})
 }
 
-func (rc *rightCol) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (rc *rightCol) Render(*froth.RenderCtx, froth.Size) string { return "" }
 func (rc *rightCol) Update(*froth.UpdateCtx, tea.Msg)           {}

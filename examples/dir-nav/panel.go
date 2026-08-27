@@ -18,13 +18,13 @@ type panel struct {
 	bd     *board
 }
 
-func (p *panel) Render(rc *froth.RenderCtx, r froth.Rect) string {
-	if r.Empty() {
+func (p *panel) Render(rc *froth.RenderCtx, s froth.Size) string {
+	if s.Empty() {
 		return ""
 	}
 	focused := rc.Focused()
 	if focused {
-		p.bd.saw(spot{region: p.region, index: p.index, name: p.name, rect: r})
+		p.bd.saw(spot{region: p.region, index: p.index, name: p.name, size: s})
 	}
 
 	// The marker's column is reserved whether or not it is drawn: focus changes
@@ -43,8 +43,8 @@ func (p *panel) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(border).
 		Padding(0, 1).
-		Width(r.W).
-		Height(r.H).
+		Width(s.W).
+		Height(s.H).
 		Render(content)
 }
 
@@ -57,12 +57,12 @@ type control struct {
 	bd   *board
 }
 
-func (c *control) Render(rc *froth.RenderCtx, r froth.Rect) string {
-	if r.Empty() {
+func (c *control) Render(rc *froth.RenderCtx, s froth.Size) string {
+	if s.Empty() {
 		return ""
 	}
 	if rc.Focused() {
-		c.bd.saw(spot{region: regScope, name: c.name, rect: r})
+		c.bd.saw(spot{region: regScope, name: c.name, size: s})
 		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")).
 			Bold(true).

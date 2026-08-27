@@ -52,7 +52,7 @@ Three things have to hold, or it is reaching inside:
   right. It never says froth *calls* it, calls it with the right inputs, or does anything
   with the answer.
 
-Two qualify so far:
+Three qualify so far:
 
 - **`Layout`** — an interface users implement, so its space-and-measures to rects mapping
   is published API rather than an internal detail. Testing it directly is testing a
@@ -64,6 +64,15 @@ Two qualify so far:
   answer back out of a composited string, which is a lot of fixture between the assertion
   and the thing asserted. The rule is in ADR 0013 and the milestone log; which surfaces
   are candidates at all, and what a key press does, stay at the seam.
+- **Clipping what a surface drew** — `clip` in `clip.go` takes a string and the size the
+  surface was offered and returns what reaches the compositor plus the drawn rect it
+  makes. The rule is [ADR 0018](./adr/0018-a-surface-occupies-the-rectangle-its-output-makes.md):
+  the string is truncated to the offer, padded out to a solid rectangle, and measured in
+  columns rather than bytes. The cases that matter are ragged lines and wide graphemes
+  straddling the edge, none of which a composited string can be read back for — padding is
+  invisible in the frame, because the compositor clears a layer's box either way. That
+  froth clips every surface's output, and what the drawn rect is then used for, stay at
+  the seam.
 
 What still does not qualify, and the test to apply: if the assertion would break when an
 internal representation changed but froth's behaviour did not, it belongs at the seam

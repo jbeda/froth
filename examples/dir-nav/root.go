@@ -192,23 +192,23 @@ func clamp(n, lo, hi int) int { return min(max(n, lo), max(lo, hi)) }
 // Render draws the ground the board sits on: a field of dots, so the space the
 // layouts leave between and around the panels is visible rather than black.
 // Seeing the gaps is most of seeing why a move went where it did.
-func (rt *root) Render(_ *froth.RenderCtx, r froth.Rect) string {
-	if r.Empty() {
+func (rt *root) Render(_ *froth.RenderCtx, s froth.Size) string {
+	if s.Empty() {
 		return ""
 	}
-	if tooSmall(r) {
+	if tooSmall(s) {
 		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")).
-			Width(r.W).
-			Height(r.H).
+			Width(s.W).
+			Height(s.H).
 			Render(fmt.Sprintf("dir-nav needs a window of at least %d×%d; this one is "+
 				"%d×%d.\n\nArranging the board any smaller would hand surfaces rects "+
 				"with no cells in them, and navigation across those is a layout bug "+
-				"rather than anything worth judging.", minW, minH, r.W, r.H))
+				"rather than anything worth judging.", minW, minH, s.W, s.H))
 	}
 
-	row := strings.Repeat("·", r.W)
-	rows := make([]string, r.H)
+	row := strings.Repeat("·", s.W)
+	rows := make([]string, s.H)
 	for i := range rows {
 		rows[i] = row
 	}

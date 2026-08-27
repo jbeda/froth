@@ -41,8 +41,8 @@ func (s *scope) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	}
 }
 
-func (s *scope) Render(rc *froth.RenderCtx, r froth.Rect) string {
-	if r.Empty() {
+func (s *scope) Render(rc *froth.RenderCtx, size froth.Size) string {
+	if size.Empty() {
 		return ""
 	}
 	border := lipgloss.Color("240")
@@ -53,7 +53,7 @@ func (s *scope) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(border).
 		Padding(0, 1).
-		Width(r.W).
-		Height(r.H).
+		Width(size.W).
+		Height(size.H).
 		Render("Actions\n\na focus scope: g in\nand out, arrows never")
 }

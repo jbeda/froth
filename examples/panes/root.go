@@ -99,9 +99,9 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	ac.At(leftH).Focus()
 }
 
-func (rt *root) Render(rc *froth.RenderCtx, r froth.Rect) string {
-	row := strings.Repeat("·", r.W)
-	rows := make([]string, r.H)
+func (rt *root) Render(rc *froth.RenderCtx, s froth.Size) string {
+	row := strings.Repeat("·", s.W)
+	rows := make([]string, s.H)
 	for i := range rows {
 		rows[i] = row
 	}

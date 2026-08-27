@@ -15,7 +15,7 @@ type stasher struct {
 	got any
 }
 
-func (s *stasher) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (s *stasher) Render(rc *froth.RenderCtx, size froth.Size) string {
 	if s.uc != nil {
 		func() {
 			defer func() { s.got = recover() }()
@@ -43,7 +43,7 @@ func TestRetainedContextPanicsWhenUsedInALaterPhase(t *testing.T) {
 // permits.
 type reenterer struct{ f *froth.Froth }
 
-func (r *reenterer) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (r *reenterer) Render(*froth.RenderCtx, froth.Size) string { return "" }
 func (r *reenterer) Update(uc *froth.UpdateCtx, msg tea.Msg)    { r.f.View() }
 
 func TestCallingBackIntoFrothFromASurfacePanics(t *testing.T) {
@@ -69,7 +69,7 @@ func TestAConstructedContextPanicsWithADiagnostic(t *testing.T) {
 	var got any
 	func() {
 		defer func() { got = recover() }()
-		(&froth.RenderCtx{}).Rect()
+		(&froth.RenderCtx{}).Focused()
 	}()
 
 	msg := panicText(got)

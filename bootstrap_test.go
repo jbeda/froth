@@ -28,17 +28,17 @@ func TestPostedMessageReachesTheRoot(t *testing.T) {
 	}
 }
 
-func TestRootRendersAtTheFullTerminalRect(t *testing.T) {
+func TestRootRendersAtTheFullTerminalSize(t *testing.T) {
 	p := &pane{title: "x"}
 	f := newSized(t, p, 40, 12)
 	f.View()
 
-	if got, want := p.gotRec, (froth.Rect{X: 0, Y: 0, W: 40, H: 12}); got != want {
-		t.Errorf("root rect = %+v, want %+v", got, want)
+	if got, want := p.gotSize, (froth.Size{W: 40, H: 12}); got != want {
+		t.Errorf("root size = %+v, want %+v", got, want)
 	}
 }
 
-func TestResizeChangesTheRectWithNoMessageToTheSurface(t *testing.T) {
+func TestResizeChangesTheSizeWithNoMessageToTheSurface(t *testing.T) {
 	p := &pane{title: "x"}
 	f := newSized(t, p, 40, 12)
 	f.View()
@@ -46,8 +46,8 @@ func TestResizeChangesTheRectWithNoMessageToTheSurface(t *testing.T) {
 	f.Update(tea.WindowSizeMsg{Width: 10, Height: 4})
 	f.View()
 
-	if got, want := p.gotRec, (froth.Rect{X: 0, Y: 0, W: 10, H: 4}); got != want {
-		t.Errorf("root rect after resize = %+v, want %+v", got, want)
+	if got, want := p.gotSize, (froth.Size{W: 10, H: 4}); got != want {
+		t.Errorf("root size after resize = %+v, want %+v", got, want)
 	}
 	if p.count != 0 {
 		t.Errorf("surface saw %d messages; a resize must not be delivered as one", p.count)
@@ -86,7 +86,7 @@ func TestModelCopiedByValueSharesOneInstance(t *testing.T) {
 // A surface returns work by handing commands to its context.
 type runner struct{ cmd tea.Cmd }
 
-func (r *runner) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (r *runner) Render(*froth.RenderCtx, froth.Size) string { return "" }
 func (r *runner) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	if _, ok := msg.(bumpMsg); ok {
 		uc.Run(r.cmd)

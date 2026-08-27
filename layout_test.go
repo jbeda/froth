@@ -41,13 +41,14 @@ func TestLayoutPlacesChildrenSideBySide(t *testing.T) {
 	}
 	f := newSized(t, root, 4, 2)
 
-	if got, want := f.View().Content, "aabb\n...."; got != want {
+	frame := f.Composite(f.Root())
+	if got, want := frame.Content, "aabb\n...."; got != want {
 		t.Errorf("View().Content = %q, want %q", got, want)
 	}
-	if got, want := a.rect, (froth.Rect{X: 0, Y: 0, W: 2, H: 2}); got != want {
+	if got, want := frame.Rects[a.self], (froth.Rect{X: 0, Y: 0, W: 2, H: 2}); got != want {
 		t.Errorf("first child rect = %+v, want %+v", got, want)
 	}
-	if got, want := b.rect, (froth.Rect{X: 2, Y: 0, W: 2, H: 2}); got != want {
+	if got, want := frame.Rects[b.self], (froth.Rect{X: 2, Y: 0, W: 2, H: 2}); got != want {
 		t.Errorf("second child rect = %+v, want %+v", got, want)
 	}
 }
@@ -66,8 +67,7 @@ func TestANestedLayoutArrangesWithinItsContainersRect(t *testing.T) {
 	}
 	f := newSized(t, root, 8, 1)
 
-	f.View()
-	if got, want := deep.rect, (froth.Rect{X: 4, Y: 0, W: 2, H: 1}); got != want {
+	if got, want := f.Composite(f.Root()).Rects[deep.self], (froth.Rect{X: 4, Y: 0, W: 2, H: 1}); got != want {
 		t.Errorf("grandchild rect = %+v, want %+v", got, want)
 	}
 }

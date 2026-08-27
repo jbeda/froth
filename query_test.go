@@ -242,7 +242,7 @@ func TestStockBindingsHandsBackACopy(t *testing.T) {
 // rendered with rather than through an instance it was handed.
 type counter struct{}
 
-func (counter) Render(rc *froth.RenderCtx, _ froth.Rect) string {
+func (counter) Render(rc *froth.RenderCtx, s froth.Size) string {
 	return fmt.Sprint(len(rc.Query().LiveBindings()))
 }
 func (counter) Update(*froth.UpdateCtx, tea.Msg) {}
@@ -434,7 +434,7 @@ type declareThenAskMsg struct{}
 
 type askMsg struct{}
 
-func (d *declarer) Render(*froth.RenderCtx, froth.Rect) string { return "." }
+func (d *declarer) Render(*froth.RenderCtx, froth.Size) string { return "." }
 
 func (d *declarer) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	switch msg.(type) {

@@ -57,7 +57,7 @@ func (c *climber) Mount(ac *froth.ApplyCtx) {
 	}
 }
 
-func (c *climber) Render(*froth.RenderCtx, froth.Rect) string {
+func (c *climber) Render(*froth.RenderCtx, froth.Size) string {
 	return c.name + ":" + strconv.Itoa(c.acted)
 }
 
@@ -93,7 +93,7 @@ func (d *deaf) Mount(ac *froth.ApplyCtx) {
 		ac.Self().Create(k)
 	}
 }
-func (d *deaf) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (d *deaf) Render(*froth.RenderCtx, froth.Size) string { return "" }
 func (d *deaf) Update(*froth.UpdateCtx, tea.Msg)           {}
 
 // chain builds root → mid → leaf, the smallest tree with something between the
@@ -353,7 +353,7 @@ type generic struct {
 }
 
 func (g *generic) Mount(ac *froth.ApplyCtx)                   { g.self = ac.Self().Handle() }
-func (g *generic) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (g *generic) Render(*froth.RenderCtx, froth.Size) string { return "" }
 
 func (g *generic) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	*g.trace = append(*g.trace, "generic")

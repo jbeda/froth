@@ -38,7 +38,7 @@ func match(actions []froth.ChainBinding, typed string) (froth.ChainBinding, bool
 	return froth.ChainBinding{}, false
 }
 
-func (fl *filter) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (fl *filter) Render(rc *froth.RenderCtx, s froth.Size) string {
 	focused := rc.Focused()
 
 	border := lipgloss.Color("240")
@@ -56,8 +56,8 @@ func (fl *filter) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(border).
 		Padding(0, 1).
-		Width(r.W).
-		Height(r.H).
+		Width(s.W).
+		Height(s.H).
 		Render(body)
 }
 

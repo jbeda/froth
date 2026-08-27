@@ -29,7 +29,7 @@ type speaker struct {
 // discipline a real surface follows for a Disabled field that tracks state.
 func (s *speaker) Mount(ac *froth.ApplyCtx) { ac.Self().SetBindings(s.bindings) }
 
-func (s *speaker) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (s *speaker) Render(rc *froth.RenderCtx, size froth.Size) string {
 	if s.last != "" {
 		return s.last
 	}
@@ -88,9 +88,9 @@ func (r *bindRoot) Mount(ac *froth.ApplyCtx) {
 	ac.Self().SetLayout(under{})
 }
 
-func (r *bindRoot) Render(rc *froth.RenderCtx, rect froth.Rect) string {
-	return r.speaker.Render(rc, rect) + strings.Repeat(".", rect.W-1) +
-		"\n" + strings.Repeat(".", rect.W)
+func (r *bindRoot) Render(rc *froth.RenderCtx, s froth.Size) string {
+	return r.speaker.Render(rc, s) + strings.Repeat(".", s.W-1) +
+		"\n" + strings.Repeat(".", s.W)
 }
 
 func (r *bindRoot) Update(uc *froth.UpdateCtx, msg tea.Msg) {

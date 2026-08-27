@@ -102,10 +102,13 @@ func (f *Froth) Composite(h Handle) Frame {
 }
 
 // A placement is one surface's contribution to a frame: what it drew, where,
-// and how far up the stack.
+// and how far up the stack. drawn is the size of the rectangle its output makes,
+// which is never larger than rect and is smaller for a surface that underfills
+// what it was offered. See ADR 0018.
 type placement struct {
 	h       Handle
 	rect    Rect
+	drawn   Size
 	content string
 	z       int
 }
@@ -145,7 +148,7 @@ func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placemen
 	if n.panicked {
 		return
 	}
-	content, ok := f.callRender(token, n, h, r)
+	content, drawn, ok := f.callRender(token, n, h, r)
 	if !ok {
 		// It drew nothing and its subtree is not reachable through it. The
 		// destroy quarantine recorded commits at the next Apply; Render cannot
@@ -153,7 +156,7 @@ func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placemen
 		// with a hole where the surface was.
 		return
 	}
-	*out = append(*out, placement{h: h, rect: r, content: content, z: len(*out) + 1})
+	*out = append(*out, placement{h: h, rect: r, drawn: drawn, content: content, z: len(*out) + 1})
 
 	// A container with no layout stacks its children at its own whole rect,
 	// which is what a surface that never calls SetLayout gets, and which needs
@@ -172,9 +175,10 @@ func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placemen
 }
 
 // callRender draws one surface under quarantine, reporting whether it returned.
-func (f *Froth) callRender(token phaseToken, n *node, h Handle, r Rect) (content string, ok bool) {
+func (f *Froth) callRender(token phaseToken, n *node, h Handle, r Rect) (content string, drawn Size, ok bool) {
 	defer f.quarantine(h, "Render")
-	return clip(n.surface.Render(&RenderCtx{phaseToken: token, self: h, rect: r}, r), r.Size()), true
+	content, drawn = clip(n.surface.Render(&RenderCtx{phaseToken: token, self: h}, r.Size()), r.Size())
+	return content, drawn, true
 }
 
 // arrange asks a container's layout where its children go. It is only called

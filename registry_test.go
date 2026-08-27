@@ -18,7 +18,7 @@ type parent struct {
 	body    string
 }
 
-func (p *parent) Render(rc *froth.RenderCtx, r froth.Rect) string { return p.body }
+func (p *parent) Render(rc *froth.RenderCtx, s froth.Size) string { return p.body }
 
 func (p *parent) Update(uc *froth.UpdateCtx, msg tea.Msg) {}
 
@@ -36,11 +36,11 @@ type block struct {
 	ch   string
 	w, h int
 	self froth.Handle
-	rect froth.Rect
+	size froth.Size
 }
 
-func (b *block) Render(rc *froth.RenderCtx, r froth.Rect) string {
-	b.rect = r
+func (b *block) Render(rc *froth.RenderCtx, s froth.Size) string {
+	b.size = s
 	rows := make([]string, b.h)
 	for i := range rows {
 		rows[i] = strings.Repeat(b.ch, b.w)
@@ -125,14 +125,14 @@ func TestAnEarlierSiblingsSubtreeStaysBelowALaterSibling(t *testing.T) {
 	}
 }
 
-func TestChildrenRenderAtTheParentsRect(t *testing.T) {
+func TestChildrenRenderAtTheParentsSize(t *testing.T) {
 	kid := &block{ch: "k", w: 1, h: 1}
 	root := &parent{body: "x", kids: []froth.Surface{kid}}
 	f := newSized(t, root, 8, 3)
 	f.View()
 
-	if got, want := kid.rect, (froth.Rect{W: 8, H: 3}); got != want {
-		t.Errorf("child rect = %+v, want %+v", got, want)
+	if got, want := kid.size, (froth.Size{W: 8, H: 3}); got != want {
+		t.Errorf("child size = %+v, want %+v", got, want)
 	}
 }
 
@@ -141,7 +141,7 @@ func TestChildrenRenderAtTheParentsRect(t *testing.T) {
 // walked past. However a surface got into the tree, it mounts before it draws.
 type stash struct{ ac **froth.ApplyCtx }
 
-func (s *stash) Render(*froth.RenderCtx, froth.Rect) string { return ".." }
+func (s *stash) Render(*froth.RenderCtx, froth.Size) string { return ".." }
 func (s *stash) Update(*froth.UpdateCtx, tea.Msg)           {}
 func (s *stash) Mount(ac *froth.ApplyCtx)                   { *s.ac = ac }
 
@@ -150,7 +150,7 @@ type latecomer struct {
 	kid froth.Surface
 }
 
-func (l *latecomer) Render(*froth.RenderCtx, froth.Rect) string { return "" }
+func (l *latecomer) Render(*froth.RenderCtx, froth.Size) string { return "" }
 func (l *latecomer) Update(*froth.UpdateCtx, tea.Msg)           {}
 func (l *latecomer) Mount(*froth.ApplyCtx)                      { (*l.ac).Self().Create(l.kid) }
 

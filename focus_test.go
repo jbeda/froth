@@ -49,7 +49,7 @@ type focusable struct {
 	bumps int
 }
 
-func (x *focusable) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (x *focusable) Render(rc *froth.RenderCtx, s froth.Size) string {
 	if rc.Focused() {
 		return strings.ToUpper(x.letter)
 	}
@@ -311,14 +311,14 @@ func TestAMoveMadeDuringApplyHasHappenedByTheNextMountInThatApply(t *testing.T) 
 // focusAsker records where focus was when it mounted.
 type focusAsker struct{ sawFocus froth.Handle }
 
-func (x *focusAsker) Render(*froth.RenderCtx, froth.Rect) string { return "a" }
+func (x *focusAsker) Render(*froth.RenderCtx, froth.Size) string { return "a" }
 func (x *focusAsker) Update(*froth.UpdateCtx, tea.Msg)           {}
 func (x *focusAsker) Mount(ac *froth.ApplyCtx)                   { x.sawFocus = ac.Query().Focus() }
 
 // focuserOnMount focuses a handle from Apply, where the move commits at once.
 type focuserOnMount struct{ to froth.Handle }
 
-func (x *focuserOnMount) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (x *focuserOnMount) Render(rc *froth.RenderCtx, s froth.Size) string {
 	if rc.Focused() {
 		return "X"
 	}
@@ -371,8 +371,8 @@ type optRoot struct {
 	handles []froth.Handle
 }
 
-func (r *optRoot) Render(rc *froth.RenderCtx, rect froth.Rect) string {
-	return strings.Repeat(".", rect.W)
+func (r *optRoot) Render(rc *froth.RenderCtx, s froth.Size) string {
+	return strings.Repeat(".", s.W)
 }
 
 func (r *optRoot) Update(uc *froth.UpdateCtx, msg tea.Msg) {
@@ -891,7 +891,7 @@ func (b *withinBox) Mount(ac *froth.ApplyCtx) {
 	ac.Self().SetLayout(underneath{})
 }
 
-func (b *withinBox) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (b *withinBox) Render(rc *froth.RenderCtx, s froth.Size) string {
 	if rc.FocusWithin() {
 		return "+"
 	}

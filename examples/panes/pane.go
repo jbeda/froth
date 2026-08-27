@@ -54,7 +54,7 @@ func (p *pane) Unmount(*froth.ApplyCtx) {
 	}
 }
 
-func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (p *pane) Render(rc *froth.RenderCtx, s froth.Size) string {
 	focused := rc.Focused()
 
 	title := p.title
@@ -99,8 +99,8 @@ func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(border).
 		Padding(0, 1).
-		Width(r.W).
-		Height(r.H).
+		Width(s.W).
+		Height(s.H).
 		Render(content)
 }
 

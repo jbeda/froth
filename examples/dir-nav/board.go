@@ -18,14 +18,18 @@ const (
 )
 
 // A spot is where focus is: which region, which surface within it, its name, and
-// the rect it was given. The rect is here because the rule being judged reads
-// rects and nothing else, and the geometry on screen stops matching the
+// the size it was offered. The size is here because the rule being judged reads
+// geometry and nothing else, and the geometry on screen stops matching the
 // geometry in your head after a few size keys.
+//
+// It is a size rather than a rect because that is all a surface is told: where
+// it sits is its layout's decision, and Render is offered no coordinates it
+// could act on.
 type spot struct {
 	region region
 	index  int
 	name   string
-	rect   froth.Rect
+	size   froth.Size
 }
 
 // board is what the surfaces share. It carries the splits the layouts read, and

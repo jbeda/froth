@@ -1358,3 +1358,41 @@ branch, because the branches are what would drift. `dir-nav/root.go` swaps the a
 set on `actionArrowMode` and declares in that case arm. The other four are static and
 declare once in `Mount`, including two leaves that grew a `Mount` for nothing else — which
 is the cost of killing `Binder`, paid where a reader can see it.
+
+## M4 — Modals and mouse (in progress)
+
+### #44 — `Render` is offered a size, and a drawn rect follows from what it returns
+
+**Shipped.** `Surface.Render(rc *RenderCtx, s Size) string`, with `RenderCtx.Rect` gone.
+`clip` now pads a surface's ragged lines out to its longest one and returns the size of
+the rectangle that makes, which `placement` keeps as its drawn rect.
+
+**The churn was the reason it went first, and it was almost all fixtures.** Every `Render`
+in the suite and both dynamic examples changed signature; three tests changed meaning.
+Two in `layout_test.go` asserted a child's position by having the surface stash the rect it
+was handed, and they now read it from `Frame.Rects` — which is the answer ADR 0005's
+amendment points at, and a better test besides, because it asserts on what froth publishes
+rather than on what a fixture recorded. `registry_test.go`'s `block` stashes a size.
+
+**No surface lost anything it was using.** The position had one real consumer,
+`examples/dir-nav`'s banner, which printed `"%s at %d,%d %d×%d"` for the focused surface
+and now prints `"%s %d×%d"`. The board's `spot` carries a size. Judging a directional move
+still works, because the geometry a move surprises you about is the size of the boxes; where
+they sit is the layout's arithmetic, which the board's own splits already say.
+
+**Padding is invisible in the frame, which is why it needs a direct test.** `uv.StyledString.Draw`
+clears a layer's box before painting it, so the composited string is byte-identical with the
+padding and without it — the whole suite passed unchanged, which is the evidence for ADR
+0018's round-trip claim rather than a gap in it. `clip_test.go` is therefore in package
+`froth`, a third entry on `docs/testing.md`'s self-contained list, and it names Lip Gloss to
+assert that froth's drawn rect is what the compositor measures from the same string. That is
+the one place outside `render.go` that knows the back end, and it is there because the
+agreement is the assumption.
+
+**A truncated line is measured again rather than assumed.** `ansi.Truncate` to a width can
+return a narrower line when a wide grapheme straddles the edge, so taking the offered width
+as the drawn width would have over-reported by a column for exactly the case `clip`'s
+existing comment exists to handle.
+
+**Nothing reads the drawn rect yet.** #53 does, and the wiring test — that froth clips every
+surface's output and resolves a click against what it drew — belongs there.

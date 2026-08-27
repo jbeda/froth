@@ -119,5 +119,6 @@ The rule itself is tested in `direction_test.go`, where the board's geometry can
 
 No library code either. Two frictions this example hit are filed rather than worked into froth
 — **#25**, a layout cannot be told anything about a child, so `shell` reads its six children by
-index; and **#26**, a surface can learn its rect only during `Render`, so the layout has to
-stash the space it last divided for the key handler to clamp against. Both are M7 (#27).
+index; and **#26**, a surface can learn its geometry only during `Render` — and only its
+size, never where it sits — so the layout has to stash the space it last divided for the key
+handler to clamp against. Both are M7 (#27).

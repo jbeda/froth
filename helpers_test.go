@@ -12,13 +12,13 @@ import (
 
 // pane is the minimal surface: two methods, state on a pointer receiver.
 type pane struct {
-	title  string
-	count  int
-	gotRec froth.Rect
+	title   string
+	count   int
+	gotSize froth.Size
 }
 
-func (p *pane) Render(rc *froth.RenderCtx, r froth.Rect) string {
-	p.gotRec = r
+func (p *pane) Render(rc *froth.RenderCtx, s froth.Size) string {
+	p.gotSize = s
 	return p.title + ":" + strings.Repeat("*", p.count)
 }
 
@@ -51,7 +51,7 @@ func newWatched(t *testing.T, root froth.Surface, w, h int) (*froth.Froth, *[]fr
 
 type fixed struct{ content string }
 
-func (x *fixed) Render(*froth.RenderCtx, froth.Rect) string { return x.content }
+func (x *fixed) Render(*froth.RenderCtx, froth.Size) string { return x.content }
 func (x *fixed) Update(*froth.UpdateCtx, tea.Msg)           {}
 
 // The application model is copied by value on every Bubble Tea update; froth is

@@ -80,7 +80,7 @@ type shell struct{ s *splits }
 
 func (l shell) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
 	rects := make([]froth.Rect, len(children))
-	if len(children) != 6 || tooSmall(space) {
+	if len(children) != 6 || tooSmall(space.Size()) {
 		return rects
 	}
 
@@ -204,8 +204,8 @@ func (scopeInner) Arrange(space froth.Rect, children []froth.Child) []froth.Rect
 }
 
 // tooSmall reports whether the screen is below the size the board needs.
-func tooSmall(space froth.Rect) bool {
-	return space.W < minW || space.H < minH
+func tooSmall(size froth.Size) bool {
+	return size.W < minW || size.H < minH
 }
 
 // within reports r if it fits inside space, and an empty rect if it does not. A

@@ -14,9 +14,15 @@ import tea "charm.land/bubbletea/v2"
 // two methods are all froth requires; everything else a surface can do is an
 // optional interface discovered by type assertion.
 type Surface interface {
-	// Render draws the surface's client area into the rect it has been given.
+	// Render draws the surface's client area at the size it has been offered.
 	// It is called once per frame, at final geometry.
-	Render(rc *RenderCtx, r Rect) string
+	//
+	// It is offered a size and not a rect because a surface cannot position
+	// itself — its parent's layout has already decided that — so it draws in
+	// its own coordinates and froth never translates them. What it returns is
+	// clipped to the size and padded out to a rectangle; drawing less than the
+	// offer is how a surface occupies less than it was given.
+	Render(rc *RenderCtx, s Size) string
 
 	// Update handles one message addressed to this surface. It may change only
 	// this surface, and returns work through uc rather than as a value.

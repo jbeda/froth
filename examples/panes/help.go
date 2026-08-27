@@ -17,7 +17,7 @@ import (
 // choice. froth reports the binding either way and says nothing about colour.
 type helpBar struct{}
 
-func (helpBar) Render(rc *froth.RenderCtx, r froth.Rect) string {
+func (helpBar) Render(rc *froth.RenderCtx, s froth.Size) string {
 	key := lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
 	desc := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	off := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
@@ -39,7 +39,7 @@ func (helpBar) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		if bar != "" {
 			w += lipgloss.Width(sep)
 		}
-		if width+w > r.W {
+		if width+w > s.W {
 			break
 		}
 		if bar != "" {
@@ -48,7 +48,7 @@ func (helpBar) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		bar, width = bar+part, width+w
 	}
 
-	return lipgloss.NewStyle().Width(r.W).MaxHeight(r.H).Render(bar)
+	return lipgloss.NewStyle().Width(s.W).MaxHeight(s.H).Render(bar)
 }
 
 func (helpBar) Update(*froth.UpdateCtx, tea.Msg) {}

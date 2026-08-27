@@ -16,13 +16,13 @@ type filter struct {
 	bd   *board
 }
 
-func (f *filter) Render(rc *froth.RenderCtx, r froth.Rect) string {
-	if r.Empty() {
+func (f *filter) Render(rc *froth.RenderCtx, s froth.Size) string {
+	if s.Empty() {
 		return ""
 	}
 	focused := rc.Focused()
 	if focused {
-		f.bd.saw(spot{region: regFilter, name: "Filter", rect: r})
+		f.bd.saw(spot{region: regFilter, name: "Filter", size: s})
 	}
 
 	border := lipgloss.Color("240")
@@ -33,8 +33,8 @@ func (f *filter) Render(rc *froth.RenderCtx, r froth.Rect) string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(border).
 		Padding(0, 1).
-		Width(r.W).
-		Height(r.H).
+		Width(s.W).
+		Height(s.H).
 		Render("filter: " + f.text)
 }
 
