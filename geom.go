@@ -1,7 +1,9 @@
 package froth
 
+import "fmt"
+
 // Rect is a region of the terminal in cells, with its origin at the top left of
-// the screen.
+// the screen. It is a position and an extent rather than two corners.
 type Rect struct {
 	X, Y, W, H int
 }
@@ -19,6 +21,9 @@ type Point struct {
 // Pt is shorthand for a Point.
 func Pt(x, y int) Point { return Point{X: x, Y: y} }
 
+// Origin reports r's top left corner.
+func (r Rect) Origin() Point { return Point{X: r.X, Y: r.Y} }
+
 // Size reports r's extent.
 func (r Rect) Size() Size { return Size{W: r.W, H: r.H} }
 
@@ -28,9 +33,12 @@ func (r Rect) Empty() bool { return r.Size().Empty() }
 // Empty reports whether s has no cells.
 func (s Size) Empty() bool { return s.W <= 0 || s.H <= 0 }
 
-// The far edges and centres, in the same screen coordinates as X and Y. A rect
-// is a position and an extent rather than two corners, so the arithmetic is
-// written once here instead of at every comparison.
+func (r Rect) String() string  { return fmt.Sprintf("%s at %s", r.Size(), r.Origin()) }
+func (s Size) String() string  { return fmt.Sprintf("%d×%d", s.W, s.H) }
+func (p Point) String() string { return fmt.Sprintf("%d,%d", p.X, p.Y) }
+
+// The far edges and centres, in the same screen coordinates as X and Y. The
+// arithmetic is written once here instead of at every comparison.
 func (r Rect) right() int  { return r.X + r.W }
 func (r Rect) bottom() int { return r.Y + r.H }
 func (r Rect) midX() int   { return r.X + r.W/2 }

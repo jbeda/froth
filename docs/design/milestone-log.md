@@ -1394,10 +1394,16 @@ four-column offer over a parent's field and asserts the fourth column is still t
 Removing the padding does not fail it — the compositor clears the box either way, which is the
 point above — but padding out to the client rect, ADR 0018's rejected option, does.
 
-**`Size` gained an `Empty`, which the ticket did not ask for.** Every `Render` that guarded on
-`r.Empty()` needed the same guard on what it is now offered, and `clip`'s own early return is
-the same question. It is public API for the same reason `Rect.Empty` is, and `Rect.Empty` now
-delegates to it.
+**`geom.go` gained what the ticket did not ask for, and it is a gap the ticket exposed.**
+`Size.Empty` first: every `Render` that guarded on `r.Empty()` needed the same guard on what it
+is now offered, and `clip`'s early return is the same question, so `Rect.Empty` now delegates
+to it. Then `Origin`, the counterpart of the `Size` accessor that already existed — without it
+a `Rect` decomposed one way and not the other, and `Point` was public API nothing could reach.
+Then `String` on all three, because `Handle`, `Diagnostic` and `phase` all have one and
+geometry is what a layout diagnostic will be about: a rect prints `40×12 at 0,0`.
+
+Deliberately absent: containment. A click needs `Contains`, and #53 is where it earns a name
+next to the thing that calls it.
 
 **A truncated line is measured again rather than assumed.** `ansi.Truncate` to a width can
 return a narrower line when a wide grapheme straddles the edge, so taking the offered width
