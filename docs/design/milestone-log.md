@@ -1382,12 +1382,22 @@ they sit is the layout's arithmetic, which the board's own splits already say.
 
 **Padding is invisible in the frame, which is why it needs a direct test.** `uv.StyledString.Draw`
 clears a layer's box before painting it, so the composited string is byte-identical with the
-padding and without it — the whole suite passed unchanged, which is the evidence for ADR
-0018's round-trip claim rather than a gap in it. `clip_test.go` is therefore in package
-`froth`, a third entry on `docs/testing.md`'s self-contained list, and it names Lip Gloss to
-assert that froth's drawn rect is what the compositor measures from the same string. That is
-the one place outside `render.go` that knows the back end, and it is there because the
-agreement is the assumption.
+padding and without it. The suite passing unchanged is *not* evidence for that — no fixture in
+it was ragged — so `clip_test.go` is in package `froth`, a third entry on `docs/testing.md`'s
+self-contained list, and it names Lip Gloss to assert that froth's drawn rect is what the
+compositor measures from the same string. That is the one place outside `render.go` that knows
+the back end, and it is there because the agreement is the assumption. Found by the review.
+
+**The suite gained its first ragged surface, and it pins the rejected option rather than the
+padding.** `TestASurfaceOccupiesWhatItDrewAndNotWhatItWasOffered` draws three columns of a
+four-column offer over a parent's field and asserts the fourth column is still the parent's.
+Removing the padding does not fail it — the compositor clears the box either way, which is the
+point above — but padding out to the client rect, ADR 0018's rejected option, does.
+
+**`Size` gained an `Empty`, which the ticket did not ask for.** Every `Render` that guarded on
+`r.Empty()` needed the same guard on what it is now offered, and `clip`'s own early return is
+the same question. It is public API for the same reason `Rect.Empty` is, and `Rect.Empty` now
+delegates to it.
 
 **A truncated line is measured again rather than assumed.** `ansi.Truncate` to a width can
 return a narrower line when a wide grapheme straddles the edge, so taking the offered width

@@ -136,6 +136,24 @@ func TestChildrenRenderAtTheParentsSize(t *testing.T) {
 	}
 }
 
+// A surface occupies the rectangle its own output makes, not the one it was
+// offered. The child here draws three columns of a four-column offer and two
+// lines of two, so the fourth column stays the parent's and the short line's
+// tail is the child's own blank cell rather than either.
+//
+// The tail is what the case turns on. Padding a surface out to what it was
+// offered would blank the fourth column too, and a surface that does not fill
+// its offer is the ordinary case for a float or a modal.
+func TestASurfaceOccupiesWhatItDrewAndNotWhatItWasOffered(t *testing.T) {
+	kid := &fixed{content: "a\nbbb"}
+	root := &parent{body: "....\n....", kids: []froth.Surface{kid}}
+	f := newSized(t, root, 4, 2)
+
+	if got, want := f.View().Content, "a  .\nbbb."; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
 // An ApplyCtx stays valid for the whole mount pass, so a surface can be handed
 // one by another surface and create a child under a node the pass has already
 // walked past. However a surface got into the tree, it mounts before it draws.

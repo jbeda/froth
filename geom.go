@@ -23,7 +23,7 @@ func Pt(x, y int) Point { return Point{X: x, Y: y} }
 func (r Rect) Size() Size { return Size{W: r.W, H: r.H} }
 
 // Empty reports whether r has no cells.
-func (r Rect) Empty() bool { return r.W <= 0 || r.H <= 0 }
+func (r Rect) Empty() bool { return r.Size().Empty() }
 
 // Empty reports whether s has no cells.
 func (s Size) Empty() bool { return s.W <= 0 || s.H <= 0 }
