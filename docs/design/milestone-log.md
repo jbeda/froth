@@ -1479,8 +1479,8 @@ does not copy it.
 **Two parks and two watches.** ADR 0019 parks the subtree hit-target flag and self-suppressed
 targetability; ADR 0016 parks a sender on a delivered message, as the rejected half of a rule
 `CLAUDE.md` already states; ADR 0002 parks an `IsMounted` accessor. ADR 0019 also carries an
-explicit instruction to revisit `ParentFlags` during #52.
+explicit instruction to revisit `ParentFlags` during #53.
 
-**Nothing was built.** The tickets that consume this are #48, #49, #51, #52, #53 and #55, plus
+**Nothing was built.** The tickets that consume this are #48, #49, #51, #53 and #55, plus
 a new one for the `CreateOption` migration, which touches 28 call sites across six example files
 and five test files and is not in M4's original slicing.

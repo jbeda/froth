@@ -176,7 +176,7 @@ has two flags of which one is immutable, so a single value would make an illegal
 representable and then need policing at runtime — which `phase.go` explicitly avoids by giving
 each phase its own context type. `CreateOption` is also `func(*meta)` and so can carry
 something that is not a boolean, which the modal work is the likeliest source of. **Revisit
-during #52**: if the creator's side reaches three or four flags, or any of them needs
+during #53**: if the creator's side reaches three or four flags, or any of them needs
 read-modify-write, the symmetric version wins.
 
 ## Parked: a surface that is the hit target for its whole subtree
