@@ -1412,3 +1412,75 @@ existing comment exists to handle.
 
 **Nothing reads the drawn rect yet.** #53 does, and the wiring test — that froth clips every
 surface's output and resolves a click against what it drew — belongs there.
+
+### #47 — How many focus axes, and what a click can reach
+
+A design session with four prior-art surveys, no code. It produced
+[ADR 0019](../adr/0019-focus-is-admitted-on-two-axes-and-a-click-must-find-you-first.md),
+an amendment to [ADR 0011](../adr/0011-a-focus-scope-is-closed-to-traversal.md), three
+`CONTEXT.md` entries (Flags, Click focus, Mouse transparent), and four survey files in
+`docs/research/focus-axes-*.md` covering Win32, the web platform, Qt/GTK4/Android/Flutter,
+and Textual/Terminal.Gui/tview/prompt_toolkit/Ratatui.
+
+**The answer is not three axes.** The ticket and the parked comment on #1 both proposed
+walkable / focusable-by-name / clickable as a trichotomy. It is one universal capability and
+two independent admissions, because the web's three-layer shape only earns its form when the
+base can be false — and froth, having deferred any notion of a disabled surface, has a base
+that is always true. A subset of a set that is always everything is a plain boolean.
+
+**Three of froth's own recorded claims were recall dressed as citation, and all three were
+wrong.** The `WM_GETDLGCODE` quotes on #1 describe the arrow walk, not the tab walk — the tab
+walk queries only the outgoing control and filters on visible/enabled/`WS_TABSTOP`. "The prior
+art is unanimous" on container focus memory is contradicted by two independent surveys: only
+GTK4 and Flutter restore from it, and the ARIA practices name three re-entry conventions
+rather than one. And Textual #877 is a one-day-old closed report about a CSS descendant
+selector, not a focus-border reflow bug; it had reached ADR 0009, `chrome.md` and `HANDOFF.md`,
+and was corrected in all three.
+
+**The `WM_GETDLGCODE` shape died on evidence rather than on principle.** #47 asked for it to be
+weighed rather than dismissed, since #9 had rejected the same idea and Win32's version survived
+thirty years. It survived as keystroke routing: one documented focusability veto out of eleven
+values, arrow walk only. ADR 0004 forbids the synchronous ask independently, so the two
+arguments arrive at the same place from opposite directions.
+
+**#28 was in scope and the answer is no.** #47 required the axes to answer it. Tested against
+the composite-control case and they turn out to be near-inverses: a composite button wants the
+mouse to treat it as one thing and has no focusable members, while every canonical #28 case —
+sidebar, radio group, tab bar — needs clicks to reach the individual members. The distinguishing
+question is whether the children are independently addressable. #28 is unblocked, since its
+vocabulary dependency is now settled, and unanswered.
+
+**The mouse "one thing" flag was designed, named, and then parked when the identifier check
+found the name taken.** `CONTEXT.md` has defined Capture since M2 as a claim on all mouse input
+regardless of what lies under the cursor — nearly the opposite. The session used the word for
+an hour. The flag was parked in ADR 0019 for an unrelated and better reason: it is redundant
+with subtree-scoped `MouseTransparent` set at the child's create site, and froth has no
+composite control to justify it. Every `TabStop` in both examples is on a leaf.
+
+**Flags moved from `CreateOption` to the type.** `TabStop()` and `TextSink()` as create options
+put the declaration at every call site, where a caller who forgets produces a text field the
+keyboard cannot reach and the component author cannot prevent it. They become fields of a
+`Flags` value the surface's type declares through a context-free method froth calls during
+`Create` and stores — Win32's window-class defaults, reached through the optional-interface
+pattern `surface.go` already describes. Because it takes no context it can run inside `Create`,
+which closes the window in which a child sat in the tree with zero-valued flags.
+
+**The ownership rule was derived from a failure, not chosen.** Two authors plus whole-set
+replacement silently clobber whichever order froth picks, and fixing the create-time order does
+not help because the next `SetFlags` clobbers again. Removing the overlap dissolves the question:
+`Flags` is the surface's, `FocusScope` and `MouseTransparent` are the creator's, and every flag
+has exactly one initial author.
+
+**Modal clicks needed nothing new.** `CONTEXT.md` already says a modal takes input for its
+parent's whole subtree, and a click is input. Win32 solves the same problem by disabling the
+owner subtree, verified against MSDN — which needs the disabled concept froth deferred, so froth
+does not copy it.
+
+**Two parks and two watches.** ADR 0019 parks the subtree hit-target flag and self-suppressed
+targetability; ADR 0016 parks a sender on a delivered message, as the rejected half of a rule
+`CLAUDE.md` already states; ADR 0002 parks an `IsMounted` accessor. ADR 0019 also carries an
+explicit instruction to revisit `ParentFlags` during #52.
+
+**Nothing was built.** The tickets that consume this are #48, #49, #51, #52, #53 and #55, plus
+a new one for the `CreateOption` migration, which touches 28 call sites across six example files
+and five test files and is not in M4's original slicing.

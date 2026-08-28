@@ -214,3 +214,29 @@ ask again.
 **A surface that asks and implements no `Reconcile` is reported and nothing is queued.**
 The method is the opt-in, so the request names a callback that does not exist — a missing
 method rather than a condition, and the same reasoning as an untaken rising message.
+
+## Parked: an accessor for whether a surface is mounted
+
+`Create` returns a live handle to an unmounted surface: the child is registered and queued,
+and the mount step reaches it later in the same Apply. Between those two points it is in the
+tree having declared nothing — zero-valued flags, no bindings, no layout. An `IsMounted` on
+a handle would let a caller see that state rather than have to know it.
+
+Not built, because the state is unobservable to everyone who would ask. Apply's drain does
+not return while anything is waiting to be mounted, so outside Apply every surface in the
+tree is mounted; inside it, the only code holding the handle is the code that created the
+child a line earlier and therefore already knows. froth's own instance of the problem — the
+root registered but not yet mounted on a fresh instance — is solved by ordering an Apply
+before the first message is routed, not by a check.
+
+Exposing it would also invite branching on it, and there is nothing to branch to: a caller
+cannot yield inside Apply and wait. That turns a guarantee the phase order already provides
+into a runtime condition callers can get wrong, which is what the phases exist to prevent.
+
+If the gap does become observable, the fix is a diagnostic at the point of the read rather
+than a predicate every caller must remember — the same shape as setFocus reporting a target
+that is not in the tree instead of offering a way to test for one.
+
+Revive it on a caller that can hold a handle to an unmounted surface and cannot know it from
+context. That set is empty today and stops being empty if a surface can be handed a
+stranger's handle and read state through it. Bring that case, not the accessor.

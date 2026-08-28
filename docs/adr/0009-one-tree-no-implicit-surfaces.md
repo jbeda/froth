@@ -130,9 +130,15 @@ a **surface rect** into chrome and a **client rect** — the vocabulary is in `C
 
 **Chrome was narrowed at the same time.** Default chromeless and opt-in per surface, matching
 tview, whose border is off by default and which no widget turns on internally. And its size
-never changes with focus: Textual #877 is a filed bug about focus-border reflow, and both
-mature systems solve it deliberately — Turbo Vision switches glyphs single-to-double, Textual
-carries `$border` and `$border-blurred` for exactly this.
+never changes with focus: both mature systems solve focus indication without resizing, and
+deliberately — Turbo Vision switches glyphs single-to-double, Textual carries `$border` and
+`$border-blurred` for exactly this. Chrome that appeared on focus would shift the client rect
+under a surface that had already laid out against it, which is the failure those conventions
+avoid.
+
+This paragraph originally cited Textual #877 as a filed bug about focus-border reflow. It is
+not one — see the correction in `docs/research/chrome.md`. The narrowing does not rest on it,
+and the two conventions above are cited independently.
 
 Chrome has no ADR of its own because it has no code. When it gets one, this amendment and
 `CONTEXT.md`'s `Chrome` entry are what it is built from.

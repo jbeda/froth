@@ -45,7 +45,7 @@ because they qualify how much weight the rest of that system's answers should ca
 | System | Chrome first-class? | Who declares | Consumes layout space | Draw gets | Focus indication | Hit test over chrome | Regret/redesign evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Ratatui** | Yes, but as an ordinary widget (`Block`), not a framework layer | The construction call site (`.block(Block::bordered()...)`) | Yes — `Block::inner()` computes it | **Outer** rect; widget shrinks itself | None — no focus concept at all | None — no mouse routing at all | `block::Title` removed 0.30; measurement-vs-chrome bug class (#1233); `inner()`/`outer()` friction (#211, #1914) |
-| **Textual** | Yes, genuinely — CSS, rendered by the framework outside the widget's draw | Widget class `DEFAULT_CSS`; instance/app CSS; occasionally the parent (`keyline`) | Yes — `gutter` = padding+border; `box-sizing: border-box` default | **Inner** (content-relative) | Framework-drawn, via CSS pseudo-classes and `$border`/`$border-blurred` | Outer rect wins; widget must convert via `get_content_offset` | Focus-border reflow (#877); border/outline can't coexist (#1475); breaking min/max sizing change; `compact` opt-out (#5778) |
+| **Textual** | Yes, genuinely — CSS, rendered by the framework outside the widget's draw | Widget class `DEFAULT_CSS`; instance/app CSS; occasionally the parent (`keyline`) | Yes — `gutter` = padding+border; `box-sizing: border-box` default | **Inner** (content-relative) | Framework-drawn, via CSS pseudo-classes and `$border`/`$border-blurred` | Outer rect wins; widget must convert via `get_content_offset` | Border/outline can't coexist (#1475); breaking min/max sizing change; `compact` opt-out (#5778) |
 | **Turbo Vision** | Yes, but only for `TWindow` — chrome is a *sibling view*, not a view property | The view's own class hierarchy, via a virtual-base factory hook (`TWindowInit`) | **No** — no inner-rect concept; author manually insets (`r.grow(-1,-1)`) | **Outer**/full-extent; frame draws its own border rows/cols | Framework-drawn, by `TFrame` reading `sfActive` pushed down from `TWindow::setState` | Outer, ordinary z-order hit test — frame is just the sibling under those cells | No RFC found; frame carries interaction behavior, not just paint |
 | **Terminal.Gui v2** | Yes, and universal — every `View` has Margin/Border/Padding adornments | The view itself (usually a themeable class default); any caller can set it on any view | Yes, explicit — `Frame` (outer) vs `Viewport` (inner), via `Thickness` | **Inner** (`Viewport`); clip narrowed before content draw | Framework-drawn by `BorderView`, keyed on `Adornment.Parent.HasFocus`; focus can change border geometry | Adornment's own `AdornmentView`, frame-relative coords; bubbling skips the framed view to its `SuperView` | v1→v2 total redesign of the adornment model (rationale [UNVERIFIED], inferred from v1 code comments) |
 | **tview** | Yes, structurally — `Box` superclass every widget embeds, chrome opt-in via `SetBorder` | Caller/creator, via setters on the constructed widget; containers don't impose chrome | Yes — `GetInnerRect()`; 1 cell/side when `border == true` | **Outer** for `Box`'s own chrome pass, **inner** (`GetInnerRect`) for subclass content | Framework-drawn, centrally, in `Box.DrawForSubclass`, via `p.HasFocus()` | **Outer**-inclusive by default (`InRect`); `InInnerRect` exists but is opt-in | None found in source; not exhaustively searched in issues [UNVERIFIED] |
@@ -1084,11 +1084,23 @@ behavior is that it does not, but this was not confirmed against a primary sourc
 
 ### Textual
 
-- **Focus borders caused layout shift / disappearing content** — issue #877
-  (closed): adding a border only on `:focus` shrinks the content area on focus. The
-  present-day resolution is visible in shipped CSS: every focusable built-in reserves
-  the border in the blurred state and changes only the colour. A design convention
-  enforced by discipline, not by the framework.
+- **A border applied only on `:focus` shrinks the content area on focus**, because
+  `box-sizing: border-box` is the default and the border is charged to the widget's own
+  box. The present-day convention is visible in shipped CSS: every focusable built-in
+  reserves the border in the blurred state and changes only the colour, via
+  `$border`/`$border-blurred`. Enforced by discipline, not by the framework — nothing
+  in Textual prevents a widget from adding chrome on focus.
+
+  **Correction.** This entry previously cited `Textualize/textual#877` as a filed bug
+  about focus-border reflow. That is not what #877 is: its title is *"Applying border on
+  focus CSS removes content"*, it was opened 2022-10-12 and closed the next day with no
+  labels, one bot comment, and no maintainer explanation in the thread. The report's CSS
+  uses a descendant selector (`Focusable :focus`, not `Focusable:focus`), which would not
+  match the widget at all — consistent with the quick close, but the thread states no
+  cause, so the outcome is **[UNVERIFIED]** and #877 is not usable as evidence about
+  Textual's focus model. Verified against the GitHub API on 2026-08-27. The convention
+  above stands on its own sources (`theme.py`, `docs/guide/design.md`), which were never
+  #877.
 - **`border` and `outline` cannot coexist on the same edge** — issue #1475 (closed,
   documented as a limitation). Maintainer `rodrigogiraoserrao`:
   > "This is a current (documented) limitation of Textual: `border` and `outline`
@@ -1426,7 +1438,8 @@ Collected `[UNVERIFIED]` flags from all four source surveys, verbatim in substan
 | 20 | Textual `src/textual/theme.py:154, 265, 290, 355, 379, 403, 462, 491`, `docs/guide/design.md:260-267` | `$border`/`$border-blurred` focus-indication convention |
 | 21 | Textual `docs/guide/styles.md:43, 114-116, 244-320`; `docs/styles/border.md`; `docs/styles/outline.md`; `docs/styles/box_sizing.md` | Border costs 2 rows/cols; border-box rationale; outline overlays content; border+outline exclusion |
 | 22 | Textual `CHANGELOG.md:624, 1126, 2035, 2091, 2326, 2733, 2860-2861` | Compact widgets; keyline; breaking min/max change; border-title feature history |
-| 23 | GitHub issues/PRs Textualize/textual #877, #1475 (+comments), #3687, #3712, #4410, #4522, #5634, #5778, #5952, #6132 | Focus-border reflow, border/outline exclusion (rodrigogiraoserrao quote), sizing breaking change, measurement bugs, compact-widget motivation |
+| 23 | GitHub issues/PRs Textualize/textual #1475 (+comments), #3687, #3712, #4410, #4522, #5634, #5778, #5952, #6132 | Border/outline exclusion (rodrigogiraoserrao quote), sizing breaking change, measurement bugs, compact-widget motivation |
+| 24 | GitHub issue Textualize/textual #877, re-checked via `gh api` 2026-08-27 | Title, dates, labels and comment count only — the thread states no cause and supports no claim about focus-border reflow |
 
 ### Turbo Vision / Terminal.Gui
 

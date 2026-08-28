@@ -66,3 +66,21 @@ Precedent agrees on the bound: Android's `FocusFinder` and the WICG spatial-navi
 proposal both search within a container rather than the whole screen. Neither has a
 satisfying answer to what happens at the edge, which is why this one is chosen on purpose
 rather than left to fall out.
+
+## Amendment: the redirect is keyed on admission, not on direction of approach
+
+The rule above made entering conditional on where focus already was: a move to a scope from
+outside entered it, and the same move from inside was literal. That is superseded. Focus moved
+to a surface **admitting focus by no route** redirects into it; a surface admitting focus by
+any route — `TabStop` or `ClickFocus` — takes the move literally. See
+[ADR 0019](./0019-focus-is-admitted-on-two-axes-and-a-click-must-find-you-first.md).
+
+One predicate, no dependence on where focus was, and the "only from outside" exemption is
+gone. This rule was proposed in review while building #12 and rejected then for a reason that
+no longer holds: keyed on `TabStop` alone it left an unwalkable container permanently
+unfocusable. A surface can now admit clicks without joining the walk, so naming such a
+container is a move that can land.
+
+What a dialog sees is unchanged — a scope declaring no admissions still redirects onto what it
+remembers, or its first tab stop. What changes is `Focus(scope)` from inside, which no longer
+lands on a scope surface that admits nothing at all.

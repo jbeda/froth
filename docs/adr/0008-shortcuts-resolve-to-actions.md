@@ -380,6 +380,15 @@ If it is built, note the trap: the obvious spelling is `Bindings()` on `HandleRe
 which is the exact name this amendment deleted from `Surface`. Different receiver, so it
 compiles; a reader would have to be told why.
 
+**Flags went the other way, and it is not precedent for bindings.**
+[ADR 0019](./0019-focus-is-admitted-on-two-axes-and-a-click-must-find-you-first.md) gives
+`Flags` a `GetFlags` alongside `SetFlags`. The argument above turns on bindings being
+*computed* from a surface's own state, which makes recomputation self-healing and a stored
+base a journal. Flags are computed from nothing — they are the state, froth holds the
+authoritative copy because the surface's type declared it there, and no recomputation exists
+for a read to spoil. Reading a declaration back is safe exactly when there is no source of
+truth outside froth, which is true of flags and false of bindings.
+
 ## Parked: registering an action
 
 Help text lives on `Binding`, so the same identity declared in two places can carry two

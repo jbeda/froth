@@ -289,3 +289,28 @@ flag and one `reversed()`, scoped to bindings rather than to all delivery, about
 The general capture phase is not the thing to reach for — the DOM has one nobody defends in
 print, WPF's is documented with repeated cautions and a workarounds article, and GTK4 uses
 its capture phase only for globally scoped accelerators. Revive on a concrete case.
+
+## Parked: a sender on a delivered message
+
+`Post` names a recipient and carries no sender. A surface receiving a message cannot ask who
+sent it, so a message needing a reply address holds that handle in a field its sender fills
+in. Adding a froth-supplied `From` would let a recipient answer, authorise, or discriminate
+by sender without the sender having said anything.
+
+Not parked as an open question, because it is the rejected half of a rule `CLAUDE.md` states
+outright: when froth could either remember something on a caller's behalf or make the caller
+carry it, froth makes the caller carry it, and *"a message that needs a reply address holds
+the handle in a field rather than froth recording who sent it"* is the example it gives. The
+explicit version says what the dependency is at the place a reader is already looking, and a
+sender froth attaches to every message is a dependency no call site mentions.
+
+It also has a cost beyond style. A rising message is offered to a chain of surfaces, so
+`From` would have to mean the original poster rather than the previous hop, and the two are
+easy to confuse at a use site. And the tail delivers untaken messages to the instance, where
+a sender may already be destroyed — so the field would be a handle that names nothing, which
+is the state ADR 0001 asks callers to expect and most readers of a `From` field would not.
+
+Revive it on a case where the recipient genuinely cannot be told: something froth knows and
+the sender cannot state about itself. Authorisation is the shape most likely to produce one —
+a surface that must act only on a request from its own parent, where a sender-filled field is
+forgeable by any other surface holding the handle. Bring that case, not the mechanism.

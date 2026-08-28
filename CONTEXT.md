@@ -221,6 +221,31 @@ _Avoid_: catalog, command list, registry
 A surface that consumes ordinary typing. While one is focused, bare printable keys
 are never matched as shortcuts; modified chords still are.
 
+**Flags**:
+What a surface declares about how it takes part in focus and input: whether
+traversal may land on it, whether a click may focus it, whether it consumes
+typing. A surface's type declares them as it enters the tree and the surface may
+restate them; froth stores the answer rather than asking again. What a *creator*
+says about a child — that it is a focus scope, that it is mouse transparent — is
+not among them, because those are facts about the composition rather than about
+the surface.
+
+**Click focus**:
+Admission for the mouse: a click on this surface moves focus to it. Independent
+of traversal in both directions — a surface may take focus from a click and not
+from tab, or from tab and not from a click. A click on a surface without it moves
+focus nowhere at all; froth does not look for an ancestor that would have taken
+it.
+_Avoid_: clickable, hit target, mouse focus
+
+**Mouse transparent**:
+A surface the hit walk skips, so a click reaches whatever lies beneath it in Z.
+Its subtree goes with it. Its creator declares it, because it says how the
+surface is being used rather than what the surface is. It is not visual
+transparency, and it is not Capture — that is a claim on all input everywhere,
+this is a refusal to be found here.
+_Avoid_: click-through, pointer-events, ignore mouse
+
 **Float**:
 A surface placed against the screen rather than by its parent's layout, which
 never sees it among the children it arranges. Everything else about it is
