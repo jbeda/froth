@@ -50,11 +50,11 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 		region: regDetail,
 		body:   legend,
 		bd:     rt.bd,
-	}, froth.TabStop())
+	})
 
 	rt.rcol = &rightCol{bd: rt.bd, out: detail}
 	self.Create(rt.rcol)
-	self.Create(&filter{bd: rt.bd}, froth.TabStop(), froth.TextSink())
+	self.Create(&filter{bd: rt.bd})
 
 	// The banner is created last so it renders last, which is what lets it
 	// report on the frame the other surfaces have just recorded into. The shell

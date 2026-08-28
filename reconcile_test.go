@@ -95,7 +95,7 @@ func (s *tabs) match(ac *froth.ApplyCtx) {
 		if _, ok := s.live[name]; ok {
 			continue
 		}
-		s.live[name] = ac.Self().Create(&tab{name: name, log: s.log}, froth.TabStop())
+		s.live[name] = ac.Self().Create(&tab{name: name, log: s.log})
 	}
 }
 
@@ -116,6 +116,8 @@ func (t *tab) Render(rc *froth.RenderCtx, s froth.Size) string {
 }
 
 func (t *tab) Update(*froth.UpdateCtx, tea.Msg) {}
+
+func (t *tab) Declare() froth.Flags { return froth.Flags{TabStop: true} }
 
 func (t *tab) Mount(ac *froth.ApplyCtx) {
 	t.self = ac.Self().Handle()
@@ -360,7 +362,7 @@ func TestAReconcileDestroysAnAlreadyMountedChildAtOnce(t *testing.T) {
 func TestAReconcileCanFocusASurfaceItJustCreated(t *testing.T) {
 	s := &tabs{}
 	s.onReconcile = func(s *tabs, ac *froth.ApplyCtx) {
-		h := ac.Self().Create(&tab{name: "n"}, froth.TabStop())
+		h := ac.Self().Create(&tab{name: "n"})
 		ac.Child(h).Focus()
 	}
 	f := newSized(t, s, 3, 1)

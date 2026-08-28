@@ -16,6 +16,7 @@ import (
 type speaker struct {
 	letter   string
 	bindings []froth.Binding
+	flags    froth.Flags
 	last     string
 
 	// takes are the actions this speaker ends the walk for. A speaker given
@@ -28,6 +29,8 @@ type speaker struct {
 // at mount and again whenever a test says the set has changed, which is the
 // discipline a real surface follows for a Disabled field that tracks state.
 func (s *speaker) Mount(ac *froth.ApplyCtx) { ac.Self().SetBindings(s.bindings) }
+
+func (s *speaker) Declare() froth.Flags { return s.flags }
 
 func (s *speaker) Render(rc *froth.RenderCtx, size froth.Size) string {
 	if s.last != "" {
@@ -68,7 +71,6 @@ func (under) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
 type bindRoot struct {
 	speaker
 	kids    []froth.Surface
-	opts    [][]froth.CreateOption
 	handles []froth.Handle
 }
 
@@ -78,12 +80,8 @@ type declareMsg struct{}
 
 func (r *bindRoot) Mount(ac *froth.ApplyCtx) {
 	r.speaker.Mount(ac)
-	for i, k := range r.kids {
-		var opts []froth.CreateOption
-		if i < len(r.opts) {
-			opts = r.opts[i]
-		}
-		r.handles = append(r.handles, ac.Self().Create(k, opts...))
+	for _, k := range r.kids {
+		r.handles = append(r.handles, ac.Self().Create(k))
 	}
 	ac.Self().SetLayout(under{})
 }
@@ -340,8 +338,8 @@ func TestOneBindingCanCarrySeveralKeys(t *testing.T) {
 
 // Text sinks
 //
-// sink is the option list for a surface that consumes ordinary typing.
-var sink = []froth.CreateOption{froth.TextSink()}
+// sink is what a surface declares when it consumes ordinary typing.
+var sink = froth.Flags{TextSink: true}
 
 // typed is a key press as a terminal delivers ordinary typing: the character it
 // produced, in Text as well as Code.
@@ -353,8 +351,7 @@ func sinkTree(t *testing.T, bound []froth.Binding) (*froth.Froth, *bindRoot) {
 	t.Helper()
 	root := &bindRoot{
 		speaker: speaker{letter: ".", bindings: bound},
-		kids:    []froth.Surface{&speaker{letter: "f"}, &speaker{letter: "o"}},
-		opts:    [][]froth.CreateOption{sink},
+		kids:    []froth.Surface{&speaker{letter: "f", flags: sink}, &speaker{letter: "o"}},
 	}
 	f := bindTree(t, root)
 	f.Update(focusMsg{to: root.handles[0]})
@@ -376,10 +373,9 @@ func TestATextSinkSuppressesItsOwnBindingsToo(t *testing.T) {
 	root := &bindRoot{
 		speaker: speaker{letter: "."},
 		kids: []froth.Surface{
-			&speaker{letter: "f", bindings: binds("q", "Q")},
+			&speaker{letter: "f", bindings: binds("q", "Q"), flags: sink},
 			&speaker{letter: "o"},
 		},
-		opts: [][]froth.CreateOption{sink},
 	}
 	f := bindTree(t, root)
 	f.Update(focusMsg{to: root.handles[0]})
@@ -501,11 +497,10 @@ func (d *deep) Mount(ac *froth.ApplyCtx) {
 
 func TestATextSinkAboveTheFocusedSurfaceSuppressesNothing(t *testing.T) {
 	leaf := &speaker{letter: "l"}
-	mid := &deep{speaker: speaker{letter: "p"}, kid: leaf}
+	mid := &deep{speaker: speaker{letter: "p", flags: sink}, kid: leaf}
 	root := &bindRoot{
 		speaker: speaker{letter: ".", bindings: binds("q", "Q")},
 		kids:    []froth.Surface{mid},
-		opts:    [][]froth.CreateOption{sink},
 	}
 	f := newSized(t, root, 1, 3)
 	f.View()
@@ -575,8 +570,7 @@ func navRow(t *testing.T, bindings []froth.Binding, letters string) (*froth.Frot
 	t.Helper()
 	root := &bindRoot{speaker: speaker{letter: ".", bindings: bindings}}
 	for _, c := range letters {
-		root.kids = append(root.kids, &focusable{letter: string(c)})
-		root.opts = append(root.opts, []froth.CreateOption{froth.TabStop()})
+		root.kids = append(root.kids, &focusable{letter: string(c), flags: stop})
 	}
 	return bindTree(t, root), root
 }
@@ -703,10 +697,9 @@ func TestASurfacesOwnBindingOnTabBeatsFroths(t *testing.T) {
 func TestTabStillNavigatesWhileATextSinkHasFocus(t *testing.T) {
 	root := &bindRoot{
 		speaker: speaker{letter: "."},
-		kids:    []froth.Surface{&focusable{letter: "l"}, &focusable{letter: "r"}},
-		opts: [][]froth.CreateOption{
-			{froth.TabStop(), froth.TextSink()},
-			{froth.TabStop()},
+		kids: []froth.Surface{
+			&focusable{letter: "l", flags: froth.Flags{TabStop: true, TextSink: true}},
+			&focusable{letter: "r", flags: stop},
 		},
 	}
 	f := bindTree(t, root)

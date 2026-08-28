@@ -5,9 +5,9 @@
 // The root draws a field of dots behind them, visible in the one-cell gap the
 // layout leaves between the panes.
 //
-// Focus is one handle held by froth. Tab moves it between the surfaces created
-// with froth.TabStop(); the notes pane is created without it, so the walk passes
-// over it while it keeps its place in the row and its share of the space. No
+// Focus is one handle held by froth. Tab moves it between the surfaces whose
+// types declare TabStop; the notes pane declares none, so the walk passes over
+// it while it keeps its place in the row and its share of the space. No
 // surface implements traversal and none binds tab: tab and shift-tab are froth's
 // own bindings, and an application rebinds or disables them by declaring them
 // like any other. froth is the last stop on an action's walk rather than the
@@ -53,8 +53,8 @@
 // holds focus and climbs to the root, which takes it. Anything on the way could
 // have taken it first.
 //
-// The filter field along the top is created with froth.TextSink(), and it is
-// what the two halves of that quit binding are for. While it holds focus, "q"
+// The filter field along the top declares itself a text sink, and that is what
+// the two halves of that quit binding are for. While it holds focus, "q"
 // is ordinary typing and lands in the field; "ctrl+c" is a chord, so it still
 // resolves to the root and quits. Tab it away and "q" is a shortcut again.
 //

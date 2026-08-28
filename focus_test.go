@@ -44,10 +44,13 @@ func (r *focusRoot) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 type focusable struct {
 	letter string
 	toward *froth.Handle // where a key sends focus; nil to keep it
+	flags  froth.Flags
 
 	keys  []string
 	bumps int
 }
+
+func (x *focusable) Declare() froth.Flags { return x.flags }
 
 func (x *focusable) Render(rc *froth.RenderCtx, s froth.Size) string {
 	if rc.Focused() {
@@ -363,13 +366,17 @@ func (cells) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
 // optRoot creates each of its children with the option list it was given for
 // that child, and asks froth to move focus when told to. It is the fixture for
 // everything about create options: an option is only ever passed at creation,
-// so a test that wants one has to own the surface that creates.
+// so a test that wants one has to own the surface that creates. What a child
+// declares about itself the child carries, because that is where it lives.
 type optRoot struct {
 	kids    []froth.Surface
 	opts    [][]froth.CreateOption
+	flags   froth.Flags
 	lay     froth.Layout // cells when nil
 	handles []froth.Handle
 }
+
+func (r *optRoot) Declare() froth.Flags { return r.flags }
 
 func (r *optRoot) Render(rc *froth.RenderCtx, s froth.Size) string {
 	return strings.Repeat(".", s.W)
@@ -405,23 +412,31 @@ func (r *optRoot) Mount(ac *froth.ApplyCtx) {
 	ac.Self().SetLayout(cells{})
 }
 
-// tabRow builds a row of one-cell surfaces, each created with the options given
-// for it. The letters are lower case unless the surface holds focus, so the
-// frame reads as "l m r" with the focused one shouting.
-func tabRow(t *testing.T, letters string, opts ...[]froth.CreateOption) (*froth.Froth, *optRoot) {
+// tabRow builds a row of one-cell surfaces, each declaring the flags given for
+// it. The letters are lower case unless the surface holds focus, so the frame
+// reads as "l m r" with the focused one shouting.
+func tabRow(t *testing.T, letters string, flags ...froth.Flags) (*froth.Froth, *optRoot) {
 	t.Helper()
-	root := &optRoot{opts: opts}
-	for _, c := range letters {
-		root.kids = append(root.kids, &focusable{letter: string(c)})
+	root := &optRoot{}
+	for i, c := range letters {
+		var fl froth.Flags
+		if i < len(flags) {
+			fl = flags[i]
+		}
+		root.kids = append(root.kids, &focusable{letter: string(c), flags: fl})
 	}
 	f := newSized(t, root, len(letters), 1)
 	f.View()
 	return f, root
 }
 
-// stop is the option list for a surface traversal should land on. Traversal is
-// opt-in, so a test that wants a stop has to say so.
-var stop = []froth.CreateOption{froth.TabStop()}
+// stop is what a surface declares when traversal should land on it. Traversal
+// is opt-in, so a test that wants a stop has to say so.
+var stop = froth.Flags{TabStop: true}
+
+// clickOnly admits focus from a click and not from the walk, which is the pair
+// of admissions being independent in the direction that is easy to get wrong.
+var clickOnly = froth.Flags{ClickFocus: true}
 
 func TestTraversalMovesFocusInChildOrderAndWraps(t *testing.T) {
 	f, _ := tabRow(t, "lmr", stop, stop, stop)
@@ -452,7 +467,7 @@ func TestTraversalBackwardsWalksTheOtherWayAndWraps(t *testing.T) {
 }
 
 func TestASurfaceThatIsNotATabStopIsPassedOver(t *testing.T) {
-	f, _ := tabRow(t, "lmr", stop, nil, stop)
+	f, _ := tabRow(t, "lmr", stop, froth.Flags{}, stop)
 
 	f.Update(tabMsg{})
 	if got, want := f.View().Content, "Lmr"; got != want {
@@ -470,7 +485,7 @@ func TestASurfaceThatIsNotATabStopIsPassedOver(t *testing.T) {
 // Being outside traversal is not being reordered, and not being hidden: the
 // surface is still where its parent's layout put it.
 func TestASurfaceOutsideTraversalKeepsItsPosition(t *testing.T) {
-	f, root := tabRow(t, "lmr", stop, nil, stop)
+	f, root := tabRow(t, "lmr", stop, froth.Flags{}, stop)
 
 	rects := f.Composite(f.Root()).Rects
 	if got, want := rects[root.handles[1]], (froth.Rect{X: 1, Y: 0, W: 1, H: 1}); got != want {
@@ -484,7 +499,7 @@ func TestASurfaceOutsideTraversalKeepsItsPosition(t *testing.T) {
 // TabStop says where the keyboard walks, not who may hold focus. A surface a
 // container focuses by name still gets it.
 func TestASurfaceOutsideTraversalCanStillBeFocusedByName(t *testing.T) {
-	f, root := tabRow(t, "lmr", stop, nil, stop)
+	f, root := tabRow(t, "lmr", stop, froth.Flags{}, stop)
 
 	f.Update(focusMsg{to: root.handles[1]})
 
@@ -496,8 +511,8 @@ func TestASurfaceOutsideTraversalCanStillBeFocusedByName(t *testing.T) {
 // A container never has to be a stop to keep its contents reachable: its
 // children are walked whether or not traversal can land on it.
 func TestChildrenOfANonStopSurfaceAreStillTraversed(t *testing.T) {
-	inner := &focusable{letter: "i"}
-	wrapper := &optRoot{kids: []froth.Surface{inner}, opts: [][]froth.CreateOption{stop}}
+	inner := &focusable{letter: "i", flags: stop}
+	wrapper := &optRoot{kids: []froth.Surface{inner}}
 	root := &optRoot{kids: []froth.Surface{wrapper}}
 	f := newSized(t, root, 1, 1)
 	f.View()
@@ -513,22 +528,22 @@ func TestChildrenOfANonStopSurfaceAreStillTraversed(t *testing.T) {
 // same thing twice — or builds an option list in a loop that repeats itself —
 // gets what it asked for once.
 func TestPassingTheSameOptionTwiceSaysWhatPassingItOnceSaid(t *testing.T) {
-	f, _ := tabRow(t, "lm",
-		[]froth.CreateOption{froth.TabStop(), froth.TabStop()},
-		stop)
+	f, _, _ := scopedRow(t,
+		[]froth.CreateOption{froth.FocusScope(), froth.FocusScope()},
+		froth.Flags{})
 
-	f.Update(tabMsg{})
-	f.Update(tabMsg{})
-
-	if got, want := f.View().Content, "lM"; got != want {
-		t.Errorf("View().Content = %q, want %q", got, want)
+	want := []string{"Abcd", "abcD", "Abcd"}
+	for i, w := range want {
+		f.Update(tabMsg{})
+		if got := f.View().Content; got != w {
+			t.Errorf("after %d moves, View().Content = %q, want %q", i+1, got, w)
+		}
 	}
 }
 
-// Traversal is opt-in, so a surface whose creator said nothing about it is not
-// a stop. An empty list and a nil list say the same nothing.
-func TestASurfaceCreatedWithNoOptionsIsNotATabStop(t *testing.T) {
-	f, _ := tabRow(t, "lm", []froth.CreateOption{}, stop)
+// Traversal is opt-in, so a surface whose type declares nothing is not a stop.
+func TestASurfaceThatDeclaresNothingIsNotATabStop(t *testing.T) {
+	f, _ := tabRow(t, "lm", froth.Flags{}, stop)
 
 	f.Update(tabMsg{})
 	f.Update(tabMsg{})
@@ -603,17 +618,18 @@ func (l columns) Arrange(space froth.Rect, children []froth.Child) []froth.Rect 
 var scope = []froth.CreateOption{froth.FocusScope()}
 
 // scopedRow builds "a [b c] d": two stops either side of a two-stop container,
-// created with the options it is given. It returns the instance, the outer root
-// and that container, which is what a test names to move focus into it.
-func scopedRow(t *testing.T, inner []froth.CreateOption) (*froth.Froth, *optRoot, *optRoot) {
+// created with the options it is given and declaring the flags it is given. It
+// returns the instance, the outer root and that container, which is what a test
+// names to move focus into it.
+func scopedRow(t *testing.T, inner []froth.CreateOption, mid froth.Flags) (*froth.Froth, *optRoot, *optRoot) {
 	t.Helper()
 	middle := &optRoot{
-		kids: []froth.Surface{&focusable{letter: "b"}, &focusable{letter: "c"}},
-		opts: [][]froth.CreateOption{stop, stop},
+		kids:  []froth.Surface{&focusable{letter: "b", flags: stop}, &focusable{letter: "c", flags: stop}},
+		flags: mid,
 	}
 	root := &optRoot{
-		kids: []froth.Surface{&focusable{letter: "a"}, middle, &focusable{letter: "d"}},
-		opts: [][]froth.CreateOption{stop, inner, stop},
+		kids: []froth.Surface{&focusable{letter: "a", flags: stop}, middle, &focusable{letter: "d", flags: stop}},
+		opts: [][]froth.CreateOption{nil, inner, nil},
 		lay:  columns{w: []int{1, 2, 1}},
 	}
 	f := newSized(t, root, 4, 1)
@@ -622,7 +638,7 @@ func scopedRow(t *testing.T, inner []froth.CreateOption) (*froth.Froth, *optRoot
 }
 
 func TestTraversalInsideAFocusScopeCyclesAtItsEnds(t *testing.T) {
-	f, root, _ := scopedRow(t, scope)
+	f, root, _ := scopedRow(t, scope, froth.Flags{})
 	f.Update(focusMsg{to: root.handles[1]})
 
 	// Focus entered the scope, so it starts on the scope's first stop rather
@@ -645,7 +661,7 @@ func TestTraversalInsideAFocusScopeCyclesAtItsEnds(t *testing.T) {
 // above one steps over the scope surface and everything under it. Reaching a
 // scope is an explicit move, which is what opening a dialog already is.
 func TestTraversalAboveAScopeStepsOverItAndItsContents(t *testing.T) {
-	f, _, _ := scopedRow(t, scope)
+	f, _, _ := scopedRow(t, scope, froth.Flags{})
 
 	want := []string{"Abcd", "abcD", "Abcd"}
 	for i, w := range want {
@@ -659,7 +675,7 @@ func TestTraversalAboveAScopeStepsOverItAndItsContents(t *testing.T) {
 // Without the flag the same tree is one walk: the middle surface is an ordinary
 // container and its children are stops in the row like any other.
 func TestWithoutTheFlagTheSameSubtreeIsWalkedThrough(t *testing.T) {
-	f, _, _ := scopedRow(t, nil)
+	f, _, _ := scopedRow(t, nil, froth.Flags{})
 
 	want := []string{"Abcd", "aBcd", "abCd", "abcD", "Abcd"}
 	for i, w := range want {
@@ -674,17 +690,16 @@ func TestWithoutTheFlagTheSameSubtreeIsWalkedThrough(t *testing.T) {
 // scope above it exactly as that one's does against the root.
 func TestANestedScopeTraversesWithinItselfAndItsBoundaryHolds(t *testing.T) {
 	inner := &optRoot{
-		kids: []froth.Surface{&focusable{letter: "c"}, &focusable{letter: "d"}},
-		opts: [][]froth.CreateOption{stop, stop},
+		kids: []froth.Surface{&focusable{letter: "c", flags: stop}, &focusable{letter: "d", flags: stop}},
 	}
 	outer := &optRoot{
-		kids: []froth.Surface{&focusable{letter: "b"}, inner, &focusable{letter: "e"}},
-		opts: [][]froth.CreateOption{stop, scope, stop},
+		kids: []froth.Surface{&focusable{letter: "b", flags: stop}, inner, &focusable{letter: "e", flags: stop}},
+		opts: [][]froth.CreateOption{nil, scope},
 		lay:  columns{w: []int{1, 2, 1}},
 	}
 	root := &optRoot{
-		kids: []froth.Surface{&focusable{letter: "a"}, outer},
-		opts: [][]froth.CreateOption{stop, scope},
+		kids: []froth.Surface{&focusable{letter: "a", flags: stop}, outer},
+		opts: [][]froth.CreateOption{nil, scope},
 		lay:  columns{w: []int{1, 4}},
 	}
 	f := newSized(t, root, 5, 1)
@@ -721,7 +736,7 @@ func TestANestedScopeTraversesWithinItselfAndItsBoundaryHolds(t *testing.T) {
 // Restoration: the scope remembers the child focus was on, and coming back
 // lands there rather than at the first stop.
 func TestFocusReenteringAScopeLandsWhereItLeft(t *testing.T) {
-	f, root, _ := scopedRow(t, scope)
+	f, root, _ := scopedRow(t, scope, froth.Flags{})
 	f.Update(focusMsg{to: root.handles[1]})
 	f.Update(tabMsg{})
 	if got, want := f.View().Content, "abCd"; got != want {
@@ -740,7 +755,7 @@ func TestFocusReenteringAScopeLandsWhereItLeft(t *testing.T) {
 // else. It is never an answer to where focus is: that is one handle, and the
 // chain is derived from it.
 func TestARememberedChildIsNotFocused(t *testing.T) {
-	f, root, scoped := scopedRow(t, scope)
+	f, root, scoped := scopedRow(t, scope, froth.Flags{})
 	f.Update(focusMsg{to: root.handles[1]})
 	f.Update(tabMsg{})
 
@@ -763,12 +778,11 @@ func TestARememberedChildIsNotFocused(t *testing.T) {
 // landing on it.
 func TestARememberedChildOutsideTraversalFallsBackToTheFirstStop(t *testing.T) {
 	scoped := &optRoot{
-		kids: []froth.Surface{&focusable{letter: "b"}, &focusable{letter: "c"}},
-		opts: [][]froth.CreateOption{stop, nil},
+		kids: []froth.Surface{&focusable{letter: "b", flags: stop}, &focusable{letter: "c"}},
 	}
 	root := &optRoot{
-		kids: []froth.Surface{&focusable{letter: "a"}, scoped},
-		opts: [][]froth.CreateOption{stop, scope},
+		kids: []froth.Surface{&focusable{letter: "a", flags: stop}, scoped},
+		opts: [][]froth.CreateOption{nil, scope},
 		lay:  columns{w: []int{1, 2}},
 	}
 	f := newSized(t, root, 3, 1)
@@ -792,7 +806,7 @@ func TestARememberedChildOutsideTraversalFallsBackToTheFirstStop(t *testing.T) {
 // same rule that puts its children there: everything about a scope belongs to
 // the scope, including the surface that declares it.
 func TestAScopeThatIsATabStopIsAStopWithinItselfOnly(t *testing.T) {
-	f, _, scoped := scopedRow(t, []froth.CreateOption{froth.FocusScope(), froth.TabStop()})
+	f, _, scoped := scopedRow(t, scope, stop)
 
 	// The walk above it steps over it, flag or no flag.
 	f.Update(tabMsg{})
@@ -822,8 +836,8 @@ func TestAScopeThatIsATabStopIsAStopWithinItselfOnly(t *testing.T) {
 func TestFocusMovedToAScopeWithNoStopInItStaysOnTheScope(t *testing.T) {
 	empty := &optRoot{kids: []froth.Surface{&focusable{letter: "b"}}}
 	root := &optRoot{
-		kids: []froth.Surface{&focusable{letter: "a"}, empty},
-		opts: [][]froth.CreateOption{stop, scope},
+		kids: []froth.Surface{&focusable{letter: "a", flags: stop}, empty},
+		opts: [][]froth.CreateOption{nil, scope},
 		lay:  columns{w: []int{1, 1}},
 	}
 	f, diags := newWatched(t, root, 2, 1)
@@ -848,17 +862,16 @@ func TestFocusMovedToAScopeWithNoStopInItStaysOnTheScope(t *testing.T) {
 // first one.
 func TestRestorationFallingBackOntoANestedScopeEntersIt(t *testing.T) {
 	inner := &optRoot{
-		kids: []froth.Surface{&focusable{letter: "c"}, &focusable{letter: "d"}},
-		opts: [][]froth.CreateOption{stop, nil},
+		kids: []froth.Surface{&focusable{letter: "c", flags: stop}, &focusable{letter: "d"}},
 	}
 	outer := &optRoot{
-		kids: []froth.Surface{&focusable{letter: "b"}, inner},
-		opts: [][]froth.CreateOption{stop, scope},
+		kids: []froth.Surface{&focusable{letter: "b", flags: stop}, inner},
+		opts: [][]froth.CreateOption{nil, scope},
 		lay:  columns{w: []int{1, 2}},
 	}
 	root := &optRoot{
-		kids: []froth.Surface{&focusable{letter: "a"}, outer},
-		opts: [][]froth.CreateOption{stop, scope},
+		kids: []froth.Surface{&focusable{letter: "a", flags: stop}, outer},
+		opts: [][]froth.CreateOption{nil, scope},
 		lay:  columns{w: []int{1, 3}},
 	}
 	f := newSized(t, root, 4, 1)

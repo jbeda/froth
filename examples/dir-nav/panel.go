@@ -50,6 +50,11 @@ func (p *panel) Render(rc *froth.RenderCtx, s froth.Size) string {
 
 func (p *panel) Update(*froth.UpdateCtx, tea.Msg) {}
 
+// Declare is how a surface says what it is. A panel is somewhere the keyboard
+// walk lands, and its creator does not get a say: every panel on this board is
+// a stop, and nobody assembling one has to remember that.
+func (p *panel) Declare() froth.Flags { return froth.Flags{TabStop: true} }
+
 // control is a one-line surface inside the scope, where there is no room for a
 // border.
 type control struct {
@@ -72,3 +77,5 @@ func (c *control) Render(rc *froth.RenderCtx, s froth.Size) string {
 }
 
 func (c *control) Update(*froth.UpdateCtx, tea.Msg) {}
+
+func (c *control) Declare() froth.Flags { return froth.Flags{TabStop: true} }

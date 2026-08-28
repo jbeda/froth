@@ -36,8 +36,9 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	}})
 
 	left := &pane{
-		title: "left",
-		torn:  rt.torn,
+		title:   "left",
+		tabStop: true,
+		torn:    rt.torn,
 		body: "Every key you press arrives here while this pane has focus, " +
 			"and at no other surface.\n\n" +
 			"Neither pane knows where focus is except by asking about itself, " +
@@ -48,8 +49,9 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 			"The notes pane is skipped.",
 	}
 	right := &pane{
-		title: "right",
-		torn:  rt.torn,
+		title:   "right",
+		tabStop: true,
+		torn:    rt.torn,
 		body: "froth: focus is one handle, raw keys go to it, and froth " +
 			"walks it.\n\n" +
 			"tab and shift-tab are froth's own bindings. The action rises " +
@@ -72,7 +74,7 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 		report: rt.report,
 		note:   rt.note,
 		torn:   rt.torn,
-		body: "This pane was created without froth.TabStop(), so tab never " +
+		body: "This pane declares no tab stop, so tab never " +
 			"lands here — but it still sits third in the row, still gets its " +
 			"share of the space, and could still be given focus by name. " +
 			"Being outside the keyboard walk is not being moved and not " +
@@ -83,15 +85,15 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	}
 
 	self := ac.Self()
-	self.Create(&filter{}, froth.TabStop(), froth.TextSink())
+	self.Create(&filter{})
 	self.Create(helpBar{})
-	leftH, rightH := self.Create(left, froth.TabStop()), self.Create(right, froth.TabStop())
+	leftH, rightH := self.Create(left), self.Create(right)
 	self.Create(notes)
 
-	// The scope is created without TabStop, so tab neither lands on it nor
-	// walks into it. It is reached by name, which is what the root's g binding
-	// does — and the same key inside the scope reaches the scope first and
-	// takes focus back out.
+	// The scope declares no tab stop, so tab neither lands on it nor walks
+	// into it. It is reached by name, which is what the root's g binding does —
+	// and the same key inside the scope reaches the scope first and takes focus
+	// back out.
 	rt.scope = self.Create(&scopePane{out: leftH}, froth.FocusScope())
 
 	left.sibling, right.sibling = rightH, leftH

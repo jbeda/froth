@@ -100,8 +100,9 @@ func (r router) Post(msg tea.Msg) {
 // update. During Apply — which is where structural change commits — it happens
 // at once.
 //
-// A surface created with FocusScope is entered rather than focused: the move
-// lands on the child the scope last had focus on, or on its first tab stop.
+// A surface created with FocusScope is entered rather than focused, unless it
+// admits focus itself: the move lands on the child the scope last had focus
+// on, or on its first tab stop.
 func (r router) Focus() {
 	r.check()
 	if r.f.reg.get(r.h) == nil {
@@ -112,6 +113,24 @@ func (r router) Focus() {
 		return
 	}
 	r.f.pendingFocus, r.f.focusPending = r.h, true
+}
+
+func (r router) setFlags(fl Flags) {
+	r.check()
+	n := r.f.reg.get(r.h)
+	if n == nil {
+		return
+	}
+	n.meta.flags = fl
+}
+
+func (r router) getFlags() Flags {
+	r.check()
+	n := r.f.reg.get(r.h)
+	if n == nil {
+		return Flags{}
+	}
+	return n.meta.flags
 }
 
 // A ReadCtx is what Render mints, for a surface's own handle, one of its
@@ -137,6 +156,18 @@ func (sc SelfUpdateCtx) Destroy() { sc.destroy() }
 //
 // See SelfApplyCtx.SetBindings for the rest.
 func (sc SelfUpdateCtx) SetBindings(bs []Binding) { sc.setBindings(bs) }
+
+// SetFlags replaces what this surface declared about itself, whole set at a
+// time: a field left zero is off, whatever it was before. Read the current set
+// with GetFlags to change one and leave the rest.
+//
+// It reaches only the surface's own flags. What its creator said about it —
+// FocusScope, MouseTransparent — is not here and cannot be clobbered from here.
+func (sc SelfUpdateCtx) SetFlags(fl Flags) { sc.setFlags(fl) }
+
+// GetFlags reports what this surface last declared about itself, which is its
+// type's declaration until it replaces it.
+func (sc SelfUpdateCtx) GetFlags() Flags { return sc.getFlags() }
 
 // Reconcile asks froth to call this surface's Reconcile during the next Apply.
 // Asking more than once before froth gets there reconciles once, so a handler
@@ -165,6 +196,18 @@ type ChildCtx struct{ router }
 // at the next Apply when called during Deliver.
 func (cc ChildCtx) Destroy() { cc.destroy() }
 
+// SetMouseTransparent takes this child, and everything below it, out of the
+// walk that finds what a click belongs to, or puts it back. It is the creator's
+// to say, which is why it is here and not on the child's own context.
+func (cc ChildCtx) SetMouseTransparent(v bool) {
+	cc.check()
+	n := cc.f.reg.get(cc.h)
+	if n == nil {
+		return
+	}
+	n.meta.mouseTransparent = v
+}
+
 // An AnyCtx names any live surface, whoever owns it. It carries what can be
 // done to a stranger — reaching it, not restructuring it — which is why
 // Query.Focus handing out a handle to a surface the caller never created is
@@ -175,9 +218,11 @@ type AnyCtx struct{ router }
 // parent: a surface creates a child of itself, so "own yourself and your
 // immediate children" is structural rather than validated.
 //
-// The options say what froth should know about the child and are recorded
-// against its handle for its lifetime: creation is the only moment a surface's
-// creator gets to describe it. Passing none means every flag is off.
+// The options say how the child sits in the composition and are recorded
+// against its handle: creation is the only moment a surface's creator gets to
+// describe it, and only MouseTransparent can be changed afterwards. What the
+// child is rather than where it sits comes from its own type, through Declarer,
+// which froth asks here.
 //
 // The child is mounted before the frame it was created for is drawn.
 //
@@ -185,7 +230,22 @@ type AnyCtx struct{ router }
 // whose surface has died.
 func (sc SelfApplyCtx) Create(s Surface, opts ...CreateOption) Handle {
 	sc.check()
-	return sc.f.reg.add(sc.h, s, opts...)
+	h := sc.f.reg.add(sc.h, s, opts...)
+	sc.f.declareFlags(h, s)
+	return h
+}
+
+// declareFlags asks a Declarer what its surface is and stores the answer, here
+// rather than later so that a child is never in the tree with flags it did not
+// choose. A surface that panics answering leaves by the ordinary quarantine
+// route with every flag off, which is what it would have had anyway.
+func (f *Froth) declareFlags(h Handle, s Surface) {
+	d, ok := s.(Declarer)
+	if !ok {
+		return
+	}
+	defer f.quarantine(h, "Declare")
+	f.reg.get(h).meta.flags = d.Declare()
 }
 
 // Destroy takes this surface out of the tree, along with everything below it,
@@ -218,6 +278,14 @@ func (sc SelfApplyCtx) SetLayout(l Layout) {
 // be offered — declares again, from wherever the state changed. That is usually
 // Update, which has SetBindings for exactly this reason.
 func (sc SelfApplyCtx) SetBindings(bs []Binding) { sc.setBindings(bs) }
+
+// SetFlags replaces what this surface declared about itself. See
+// SelfUpdateCtx.SetFlags.
+func (sc SelfApplyCtx) SetFlags(fl Flags) { sc.setFlags(fl) }
+
+// GetFlags reports what this surface last declared about itself. See
+// SelfUpdateCtx.GetFlags.
+func (sc SelfApplyCtx) GetFlags() Flags { return sc.getFlags() }
 
 // mintSelf builds the read set for the surface holding the phase context. It names
 // no target and so cannot fail.

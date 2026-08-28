@@ -147,13 +147,12 @@ func TestADisabledBindingIsReportedWithItsKeysAndStillDoesNotFire(t *testing.T) 
 }
 
 func TestATextSinkTakesTypingOutOfTheQueryEverywhere(t *testing.T) {
-	field := &speaker{letter: "f"}
+	field := &speaker{letter: "f", flags: sink}
 	root := &bindRoot{
 		speaker: speaker{letter: ".", bindings: []froth.Binding{
 			{Action: "Q", Keys: []string{"q", "ctrl+c"}, Help: "quit"},
 		}},
 		kids: []froth.Surface{field, &speaker{letter: "r"}},
-		opts: [][]froth.CreateOption{{froth.TextSink()}},
 	}
 	f := bindTree(t, root)
 
@@ -298,13 +297,12 @@ func TestTheListingKeepsAnActionNobodyBoundAKeyTo(t *testing.T) {
 }
 
 func TestATextSinkLeavesTheListingAlone(t *testing.T) {
-	field := &speaker{letter: "f"}
+	field := &speaker{letter: "f", flags: sink}
 	root := &bindRoot{
 		speaker: speaker{letter: ".", bindings: []froth.Binding{
 			{Action: "Q", Keys: []string{"q", "ctrl+c"}, Help: "quit"},
 		}},
 		kids: []froth.Surface{field, &speaker{letter: "r"}},
-		opts: [][]froth.CreateOption{{froth.TextSink()}},
 	}
 	f := bindTree(t, root)
 	f.Update(focusMsg{to: root.handles[0]})
@@ -370,14 +368,13 @@ func TestEachListedActionNamesTheSurfaceThatDeclaredIt(t *testing.T) {
 // One set of declarations, two questions. Anything a key press would fire is
 // something the listing offers, or help and a palette describe different worlds.
 func TestEveryLiveBindingIsAlsoListedAsAnAction(t *testing.T) {
-	left := &speaker{letter: "l", bindings: binds("x", "L")}
+	left := &speaker{letter: "l", bindings: binds("x", "L"), flags: sink}
 	root := &bindRoot{
 		speaker: speaker{letter: ".", bindings: []froth.Binding{
 			{Action: "R", Keys: []string{"x", "q"}, Help: "root"},
 			{Action: "D", Keys: []string{"d"}, Help: "off", Disabled: true},
 		}},
 		kids: []froth.Surface{left, &speaker{letter: "r"}},
-		opts: [][]froth.CreateOption{{froth.TextSink()}},
 	}
 	f := bindTree(t, root)
 	f.Update(focusMsg{to: root.handles[0]})

@@ -75,3 +75,17 @@ type Unmounter interface {
 type Reconciler interface {
 	Reconcile(ac *ApplyCtx)
 }
+
+// A Declarer says what its surface is: whether traversal may land on it,
+// whether a click may focus it, whether it consumes typing. froth asks the
+// type once, during Create, and stores the answer; a surface whose state moves
+// on restates the whole set with SetFlags.
+//
+// It takes no context and returns a value, which is what lets froth ask it
+// while the surface is entering the tree: there is nothing it could re-enter.
+// Answering must not depend on anything the surface has not been given yet.
+//
+// A surface that implements neither this nor SetFlags has every flag off.
+type Declarer interface {
+	Declare() Flags
+}

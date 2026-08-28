@@ -29,6 +29,15 @@ type leaver struct {
 	updates, renders, unmounts int
 }
 
+// A leaver is a tab stop unless it was built as one that is not: what it is
+// belongs to the surface, so the parent creating it says nothing about it.
+func (l *leaver) Declare() froth.Flags {
+	if l.panicIn == "Declare" {
+		panic("declare broke")
+	}
+	return froth.Flags{TabStop: !l.noStop}
+}
+
 func (l *leaver) note(what string) {
 	if l.log != nil {
 		*l.log = append(*l.log, what+":"+l.name)
@@ -60,11 +69,7 @@ func (l *leaver) Mount(ac *froth.ApplyCtx) {
 	l.self = ac.Self().Handle()
 	ac.Self().SetBindings(l.declares)
 	for _, k := range l.kids {
-		var opts []froth.CreateOption
-		if kl, ok := k.(*leaver); !ok || !kl.noStop {
-			opts = append(opts, froth.TabStop())
-		}
-		l.kidHs = append(l.kidHs, ac.Self().Create(k, opts...))
+		l.kidHs = append(l.kidHs, ac.Self().Create(k))
 	}
 	l.note("mount")
 	if l.panicIn == "Mount" {
@@ -440,7 +445,7 @@ type checkMsg struct{}
 // removed by the ordinary destroy path, and never called again — including its
 // own teardown, which is code from the same surface that has already failed.
 func TestASurfaceThatPanicsIsReportedAndRemoved(t *testing.T) {
-	for _, in := range []string{"Update", "Render", "Mount"} {
+	for _, in := range []string{"Update", "Render", "Mount", "Declare"} {
 		t.Run(in, func(t *testing.T) {
 			kid := &leaver{name: "kid", panicIn: in}
 			root := &leaver{name: "root", kids: []froth.Surface{kid}}

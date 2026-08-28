@@ -21,7 +21,7 @@ type scope struct {
 func (s *scope) Mount(ac *froth.ApplyCtx) {
 	self := ac.Self()
 	for _, name := range []string{"Reply", "Forward", "Archive"} {
-		self.Create(&control{name: name, bd: s.bd}, froth.TabStop())
+		self.Create(&control{name: name, bd: s.bd})
 	}
 	self.SetLayout(scopeInner{})
 	// The scope is on the focus chain while one of its controls holds focus,

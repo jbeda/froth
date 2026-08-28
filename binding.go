@@ -267,7 +267,7 @@ func (f *Froth) chainBindings() []chainEntry {
 	focused := f.focused()
 	var sink bool
 	if n := f.reg.get(focused); n != nil {
-		sink = n.meta.textSink
+		sink = n.meta.flags.TextSink
 	}
 
 	// Two sets of claims rather than one: a key a text sink takes as typing is

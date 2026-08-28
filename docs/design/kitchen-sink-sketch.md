@@ -810,7 +810,7 @@ func (p *palette) Update(uc *froth.UpdateCtx, msg tea.Msg) {
             return
         }
     }
-    p.filter.Update(uc, msg)             // created with froth.TextSink()
+    p.filter.Update(uc, msg)             // its type declares TextSink
 }
 ```
 
@@ -913,13 +913,16 @@ froth.Z(n)             // stacking among siblings; default 0, ties by creation o
 froth.Clip()           // clip children to this surface's rect
 froth.Modal()          // take input for the parent's whole subtree
 froth.FocusScope()     // keyboard navigation cycles within this subtree
-froth.TextSink()       // bare printable keys are not matched as shortcuts here
+froth.MouseTransparent() // skipped by the hit walk, along with its subtree
 froth.RepliesTo(h)     // where uc.Reply() sends
 froth.AutoRaise()      // raise among siblings on focus; off by default
-froth.TabStop()        // admit to keyboard navigation; off by default
 ```
 
-**Built so far (M2):** `TabStop`, `TextSink` and `FocusScope`, all three of which work.
+What a surface is rather than how it sits — `TabStop`, `ClickFocus`, `TextSink` — is not
+here: its own type declares it, as `Flags`. See
+[ADR 0019](../adr/0019-focus-is-admitted-on-two-axes-and-a-click-must-find-you-first.md).
+
+**Built so far:** `FocusScope` and `MouseTransparent`.
 The rest waits for the milestones that give it a consumer — a layout that weighs children, modality, a
 stacking order a surface can set — because a flag stored against semantics nobody has
 had to implement is a guess later code has to honour.

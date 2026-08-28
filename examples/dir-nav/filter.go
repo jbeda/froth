@@ -40,6 +40,13 @@ func (f *filter) Render(rc *froth.RenderCtx, s froth.Size) string {
 
 // Only a press is typing: a release is the same key arriving a second time, and
 // answering both would put every character in twice.
+// Being a text sink is what this surface is, so it says so itself rather than
+// leaving its creator to remember: a filter field nobody marked would match
+// every letter typed into it against somebody's shortcuts.
+func (f *filter) Declare() froth.Flags {
+	return froth.Flags{TabStop: true, TextSink: true}
+}
+
 func (f *filter) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	k, ok := msg.(tea.KeyPressMsg)
 	if !ok {

@@ -45,8 +45,7 @@ func grid(t *testing.T, w, h int, letters string, rects ...froth.Rect) (*froth.F
 func gridRoot(letters string, rects []froth.Rect) *optRoot {
 	root := &optRoot{lay: atRects{rects: rects}}
 	for _, c := range letters {
-		root.kids = append(root.kids, &focusable{letter: string(c)})
-		root.opts = append(root.opts, stop)
+		root.kids = append(root.kids, &focusable{letter: string(c), flags: stop})
 	}
 	return root
 }
@@ -119,9 +118,10 @@ func TestADirectionWithNoCandidateLeavesFocusWhereItIs(t *testing.T) {
 func TestASurfaceOutsideTraversalIsNotADirectionalTarget(t *testing.T) {
 	root := &optRoot{
 		kids: []froth.Surface{
-			&focusable{letter: "a"}, &focusable{letter: "n"}, &focusable{letter: "b"},
+			&focusable{letter: "a", flags: stop},
+			&focusable{letter: "n"},
+			&focusable{letter: "b", flags: stop},
 		},
-		opts: [][]froth.CreateOption{stop, nil, stop},
 		lay: atRects{rects: []froth.Rect{
 			{X: 0, Y: 0, W: 1, H: 1}, // a
 			{X: 2, Y: 0, W: 1, H: 1}, // n  nearer, but not a stop
@@ -142,7 +142,7 @@ func TestASurfaceOutsideTraversalIsNotADirectionalTarget(t *testing.T) {
 // A scope bounds an arrow key exactly as it bounds tab, and the wall is silent
 // in both directions: the geometrically obvious target is simply not a candidate.
 func TestAFocusScopeBoundsDirectionalMovement(t *testing.T) {
-	f, root, _ := scopedRow(t, scope)
+	f, root, _ := scopedRow(t, scope, froth.Flags{})
 
 	// From outside, the scope's contents are not candidates: right from "a"
 	// steps over "b" and "c" and lands on "d".

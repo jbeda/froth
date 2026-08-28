@@ -17,7 +17,7 @@ type toolbar struct{ bd *board }
 func (t *toolbar) Mount(ac *froth.ApplyCtx) {
 	self := ac.Self()
 	for i, name := range []string{"Compose", "Refresh", "Help"} {
-		self.Create(&panel{name: name, region: regButton, index: i, bd: t.bd}, froth.TabStop())
+		self.Create(&panel{name: name, region: regButton, index: i, bd: t.bd})
 	}
 	self.SetLayout(buttons{s: &t.bd.splits})
 }
@@ -34,7 +34,7 @@ type sidebar struct{ bd *board }
 func (s *sidebar) Mount(ac *froth.ApplyCtx) {
 	self := ac.Self()
 	for i, name := range []string{"Inbox", "Starred", "Drafts", "Sent"} {
-		self.Create(&panel{name: name, region: regRow, index: i, bd: s.bd}, froth.TabStop())
+		self.Create(&panel{name: name, region: regRow, index: i, bd: s.bd})
 	}
 	self.SetLayout(rows{s: &s.bd.splits})
 }
@@ -54,8 +54,8 @@ type rightCol struct {
 
 func (rc *rightCol) Mount(ac *froth.ApplyCtx) {
 	self := ac.Self()
-	self.Create(&panel{name: "Metadata", region: regRight, index: 0, bd: rc.bd}, froth.TabStop())
-	self.Create(&panel{name: "Labels", region: regRight, index: 1, bd: rc.bd}, froth.TabStop())
+	self.Create(&panel{name: "Metadata", region: regRight, index: 0, bd: rc.bd})
+	self.Create(&panel{name: "Labels", region: regRight, index: 1, bd: rc.bd})
 	rc.scope = self.Create(&scope{bd: rc.bd, out: rc.out}, froth.FocusScope())
 	self.SetLayout(stack{s: &rc.bd.splits})
 }

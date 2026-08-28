@@ -99,7 +99,7 @@ func (g *scopePane) match(ac *froth.ApplyCtx) {
 	}
 	for _, label := range g.labels {
 		if _, ok := g.live[label]; !ok {
-			g.live[label] = ac.Self().Create(&control{label: label}, froth.TabStop())
+			g.live[label] = ac.Self().Create(&control{label: label})
 		}
 	}
 	// froth rehomes focus when the surface holding it is destroyed, by its own
@@ -250,6 +250,8 @@ func (c *control) Render(rc *froth.RenderCtx, s froth.Size) string {
 	}
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("  " + c.label)
 }
+
+func (c *control) Declare() froth.Flags { return froth.Flags{TabStop: true} }
 
 func (c *control) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	m, ok := msg.(froth.ActionMsg)

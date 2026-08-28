@@ -71,9 +71,10 @@ func (f *Froth) setFocus(h Handle) {
 		})
 		return
 	}
-	// Moving focus to a scope from outside means entering it; from inside the
-	// same move is literal. See ADR 0011.
-	if f.isFocusScope(h) && !f.reg.descends(f.focused(), h) {
+	// A scope that admits focus by no route is entered rather than landed on;
+	// one that admits it by any route takes the move literally, wherever focus
+	// was. See ADR 0019.
+	if f.isFocusScope(h) && !f.admitsFocus(h) {
 		if to, ok := f.enterFocusScope(h); ok {
 			h = to
 		}
@@ -170,25 +171,33 @@ func (f *Froth) collectFocusScoped(h Handle, out *[]Handle) {
 // admits that surface alone: its children are walked either way, so a container
 // never has to be a stop to keep its contents reachable.
 //
-// The root is never a stop. It is handed to New, which takes instance options
-// rather than create options, so nothing can mark it one.
+// The root is never a stop. It is handed to New rather than created by a
+// surface, and New neither takes create options nor asks its type what it is.
 func (f *Froth) isTabStop(h Handle) bool {
 	n := f.reg.get(h)
-	return n != nil && n.meta.tabStop
+	return n != nil && n.meta.flags.TabStop
+}
+
+// admitsFocus reports whether h takes focus by any route it declares — the
+// keyboard walk or a click. Being focused by name needs no admission at all,
+// so this is narrower than "can hold focus".
+func (f *Froth) admitsFocus(h Handle) bool {
+	n := f.reg.get(h)
+	return n != nil && (n.meta.flags.TabStop || n.meta.flags.ClickFocus)
 }
 
 // enterFocusScope reports where focus lands when it is moved to the scope s: the
-// deepest surface s remembers that is still a stop, and the first stop within s
-// when it remembers nothing usable. It reports false for a scope holding no stop
-// at all, which leaves focus on the scope surface itself.
+// deepest surface s remembers that still admits focus, and the first stop
+// within s when it remembers nothing usable. It reports false for a scope
+// holding no stop at all, which leaves focus on the scope surface itself.
 //
 // The remembered chain is walked deepest-first because that is what "where focus
 // left" means — a dialog remembers a button, not the row the button sits in.
-// Every link is checked against the tree and against still being a stop, so a
-// remembered surface that has died, or that its creator has kept out of
-// traversal, costs a fallback rather than stranding focus. A remembered surface
-// that is itself a scope is entered rather than landed on, so the rule holds
-// however deep restoration reaches.
+// Every link is checked against the tree and against still admitting focus, so
+// a remembered surface that has died, or that has since declared itself out of
+// focus altogether, costs a fallback rather than stranding focus. A remembered
+// surface that is itself a scope is entered rather than landed on, so the rule
+// holds however deep restoration reaches.
 func (f *Froth) enterFocusScope(s Handle) (Handle, bool) {
 	var remembered []Handle
 	for cur := s; ; {
@@ -207,11 +216,15 @@ func (f *Froth) enterFocusScope(s Handle) (Handle, bool) {
 			}
 			continue
 		}
-		if f.isTabStop(h) {
+		if f.admitsFocus(h) {
 			return h, true
 		}
 	}
 
+	// The two loops ask different questions on purpose: restoring puts focus
+	// back where it was and a click is a legitimate way to have got there,
+	// while an unremembered scope is being started fresh and should not open on
+	// a click-only surface. See ADR 0019.
 	for _, h := range f.focusScopeOrder(s) {
 		if f.isTabStop(h) {
 			return h, true

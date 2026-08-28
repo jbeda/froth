@@ -42,7 +42,13 @@ type pane struct {
 	report  *report // nil for a pane that does not draw diagnostics
 	note    *report // nil for a pane that does not draw what rose to the root
 	torn    *report // every pane writes here on the way out; the notes pane draws it
+
+	// tabStop is the one thing about a pane that differs between them: the
+	// notes pane is out of the walk and the other two are in it.
+	tabStop bool
 }
+
+func (p *pane) Declare() froth.Flags { return froth.Flags{TabStop: p.tabStop} }
 
 // Unmount is where a surface releases what froth does not own. This one owns
 // nothing, so it only says it ran — which is the point worth seeing: it runs

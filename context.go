@@ -117,7 +117,7 @@ func (uc *UpdateCtx) At(h Handle) AnyCtx {
 	return AnyCtx{router{uc.mintAt("At", h)}}
 }
 
-// FocusNext moves focus to the next surface created with TabStop, in
+// FocusNext moves focus to the next surface that declared TabStop, in
 // depth-first child order, wrapping at the end. No surface implements the walk.
 //
 // The walk is bounded by the focus scope this surface sits in and never leaves
