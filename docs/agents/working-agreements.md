@@ -120,6 +120,19 @@ arrives with facts.
 
 Finished surveys go in `docs/research/`, not in a scratch directory.
 
+**Survey froth's own record too — it contains recall dressed as citation.** The M4 focus-axes
+session ran four surveys and three of them contradicted something froth had already written
+down as though it were sourced: the `WM_GETDLGCODE` quotes on #1 describe Win32's arrow walk
+and were recorded as the tab walk; "the prior art is unanimous" on container focus memory is
+wrong in two independent surveys; and Textual #877 is a one-day-old closed report about a CSS
+selector, not the focus-border bug that ADR 0009, `chrome.md` and `HANDOFF.md` all cited it as.
+
+None of these came from a survey. Each was written during a session that had the citation
+habit for *other* systems and relaxed it for a claim that felt already known. A parked comment
+that says "verify before this enters an ADR" is doing its job — #47's did, and the check paid.
+Treat an uncited claim in froth's own docs as a hypothesis, especially when a later document
+leans on it: by the time #877 was checked it had propagated to three files.
+
 ## Verifying
 
 **Review with `/mattpocock-skills:code-review` before pushing, and believe it.** Two Opus
