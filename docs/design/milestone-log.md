@@ -1484,3 +1484,38 @@ explicit instruction to revisit `ParentFlags` during #53.
 **Nothing was built.** The tickets that consume this are #48, #49, #51, #53 and #55, plus
 a new one for the `CreateOption` migration, which touches 28 call sites across six example files
 and five test files and is not in M4's original slicing.
+
+### #56 — Flags move from `CreateOption` to the surface's type
+
+Built by a subagent against ADR 0019, with three corrections after review.
+
+**`Declarer` / `Declare() Flags`**, chosen against the call sites rather than in the design
+session. Every existing optional interface is `<Verb>er` with the bare verb as its method, so
+`Declares()` would have been the only third-person one in the set; the return type already says
+what is declared. `ChildCtx.SetMouseTransparent(bool)` takes a bool rather than being a pair of
+verbs, because a creator may put a child back into the hit walk.
+
+**The type-level declaration kept leaves as leaves.** `dir-nav`'s `control`, `panel` and
+`filter` gained `Declare` and no `Mount`, which was the shape the ticket was written to protect:
+a leaf growing an `ApplyCtx` callback to carry one flag would have meant the mechanism was wrong.
+
+**The root's declaration was missed, and the first fix for it was wrong.** `declareFlags` ran
+only from `Create`, so a root's `Declare` was silently ignored — a component would be a text sink
+everywhere except at the root. Reporting a diagnostic was tried first and reverted on evidence:
+it broke four existing tests, because an ordinary component is used both as a child and as a
+root, and an application cannot act on it without deleting a method the component needs
+elsewhere. `New` now asks the root's type and lets a panic escape, since nothing is in progress
+to unwind. ADR 0019 carries the amendment.
+
+**`isTabStop`'s justification was stale in two successive versions.** It said the root is never a
+stop because `New` takes no create options; the subagent updated it to mention the declaration,
+and honouring the root's declaration then made the whole claim false. A root may now declare
+`TabStop` and be a stop within its own scope.
+
+**Every changed predicate was mutation-checked** — the remembered-link union, the redirect rule
+and the root declaration each have a test that fails when the code is reverted to the old rule.
+Two were checked independently at review rather than taken from the build report.
+
+**`ClickFocus` and `MouseTransparent` are stored and read by nobody.** That is what lets the rest
+of M4 slice independently, and it is why ADR 0019's request that the examples carry one surface
+of each admission is deferred: a flag nothing reads is invisible in a running program.

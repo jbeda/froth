@@ -179,6 +179,36 @@ something that is not a boolean, which the modal work is the likeliest source of
 during #53**: if the creator's side reaches three or four flags, or any of them needs
 read-modify-write, the symmetric version wins.
 
+## Amendment: the root's type is asked too, and a panic there escapes
+
+Written while building, and it corrects an omission rather than a decision. Flags are declared
+as a surface enters the tree, and `New` is the root's entry — so `New` asks the root's type and
+stores the answer, exactly as `Create` does for everyone else. Without it a component would be
+a text sink everywhere except at the root, silently.
+
+**A panic in the root's declaration is left to escape `New`.** Nothing is in progress to unwind
+and there is no tree to keep consistent, so the quarantine route that protects a `Create` would
+here queue the root for destroy and leave an instance whose root names nothing — worse than the
+panic. `New` already panics through `bug()` for a nil root; this is the same kind of failure at
+the same moment.
+
+Reporting a diagnostic instead was tried and reverted. It fires for any reusable surface that
+declares flags the moment someone uses it as a root — four tests in the existing suite trip it,
+because an ordinary component is used both as a child and as a root — and the application cannot
+act on it without deleting a method the component needs elsewhere. froth's other diagnostics all
+name something the caller did wrong.
+
+One consequence taken deliberately: a root may now declare `TabStop` and be a stop within its own
+scope. The previous rule that the root can never be one was a consequence of `New` taking no
+create options, not a decision.
+
+**`rehomeFocus` needed no edit.** It delegates to `enterFocusScope`, so the predicate change
+above reaches it for free. This ADR named both, which reads as two changes.
+
+**The cost note asking the examples to carry one surface of each admission is not met**, and
+cannot be until a click can reach one: a declared flag nothing reads is invisible in a running
+program. It belongs with hit-testing.
+
 ## Parked: a surface that is the hit target for its whole subtree
 
 A composite control — a button assembled from an icon surface and a label surface — wants a

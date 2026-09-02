@@ -1,6 +1,7 @@
 package froth_test
 
 import (
+	"slices"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -236,5 +237,26 @@ func TestFocusMovedToAScopeThatAdmitsClicksLandsOnIt(t *testing.T) {
 
 	if got, want := f.View().Content, "abcd"; got != want {
 		t.Errorf("from inside: View().Content = %q, want %q", got, want)
+	}
+}
+
+// declaringRoot declares what it is and is handed to New, which is where a root
+// enters the tree.
+type declaringRoot struct{ speaker }
+
+func (d *declaringRoot) Declare() froth.Flags { return froth.Flags{TextSink: true} }
+
+// New is the root's entry into the tree, so the root's type is asked there.
+// Otherwise a component would be a text sink everywhere except at the root.
+func TestTheRootsTypeIsAskedWhatItIs(t *testing.T) {
+	root := &declaringRoot{speaker: speaker{letter: ".", bindings: binds("q", "Q")}}
+	f, diags := newWatched(t, root, 10, 3)
+
+	if got, want := keysOf(f.Query().LiveBindings(), "Q"), []string{}; !slices.Equal(got, want) {
+		t.Errorf("keys for Q with the root focused = %q, want %q: the root "+
+			"declared itself a text sink, so a bare q is typing there", got, want)
+	}
+	if len(*diags) != 0 {
+		t.Errorf("asking the root what it is reported %v, want nothing", *diags)
 	}
 }

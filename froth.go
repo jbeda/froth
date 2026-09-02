@@ -88,6 +88,13 @@ func New(ctx context.Context, root Surface, opts ...Option) *Froth {
 	}
 	f := &Froth{ctx: ctx, onDiagnostic: o.diagnostic}
 	f.root = f.reg.add(Handle{}, root)
+	// New is the root's entry into the tree, so it is where the root's type is
+	// asked what it is. A panic here is left to escape: nothing is in progress
+	// to unwind and there is no tree to keep consistent, so a surface that
+	// cannot say what it is fails at construction rather than quietly.
+	if d, ok := root.(Declarer); ok {
+		f.reg.get(f.root).meta.flags = d.Declare()
+	}
 	// The root holds focus until something moves it, so an application that
 	// never mentions focus still receives its keys somewhere.
 	f.focus = f.root

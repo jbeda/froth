@@ -167,12 +167,9 @@ func (f *Froth) collectFocusScoped(h Handle, out *[]Handle) {
 	}
 }
 
-// isTabStop reports whether traversal may land on h. Marking a surface a stop
+// isTabStop reports whether traversal may land on h. Declaring a surface a stop
 // admits that surface alone: its children are walked either way, so a container
 // never has to be a stop to keep its contents reachable.
-//
-// The root is never a stop. It is handed to New rather than created by a
-// surface, and New neither takes create options nor asks its type what it is.
 func (f *Froth) isTabStop(h Handle) bool {
 	n := f.reg.get(h)
 	return n != nil && n.meta.flags.TabStop
