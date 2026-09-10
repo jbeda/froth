@@ -133,6 +133,15 @@ that says "verify before this enters an ADR" is doing its job — #47's did, and
 Treat an uncited claim in froth's own docs as a hypothesis, especially when a later document
 leans on it: by the time #877 was checked it had propagated to three files.
 
+**The same failure has a second origin: an invariant derived in-session and then stated as
+general.** #48's ADR amendment claimed *"the only suppressed surface a rising message can
+reach is the modal's own parent."* It was derived with focus inside the modal, holds only
+there, and is false in the case the amendment existed to add. Nothing was misremembered — the
+reasoning was sound for the case it was done on, and the sentence then outgrew it. This is the
+harder one to catch, because the author has just proved it to themselves. The review found it;
+re-reading did not. **Write which case an invariant was derived from, or check it against the
+case you did not have in mind.**
+
 ## Verifying
 
 **Review with `/mattpocock-skills:code-review` before pushing, and believe it.** Two Opus
@@ -143,6 +152,15 @@ Spec caught a real defect. Verify each finding rather than accepting it.
 pinned by nothing. **Count test failures, not build failures** — a mutation that does not
 compile scores as "caught" and is not. #39 ignored that sentence and had a mutation score
 zero for exactly this reason.
+
+**Mutate towards a plausible wrong implementation, not towards a disabled one.** A mutation
+that switches a rule off is the easy one to write and the weakest one to pass: it usually
+trips the first test that covers the feature at all, which says nothing about whether the
+rule's *shape* is pinned. #48's suppression rule looked pinned under "give the suppressed
+declaration no keys" and was not — a declaration with no keys claims none, so that mutation
+missed the shadowing bug completely. The mutation that found the gap kept the claim and
+dropped the listing, which is what a careless implementation would actually have done. Ask
+what the wrong version someone would plausibly write looks like, and mutate to that.
 
 **Restore the mutated files from a copy, never with `git checkout --`.** On #39 the harness
 reverted the files under test to `HEAD` between mutations and destroyed three files of
