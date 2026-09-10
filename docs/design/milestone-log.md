@@ -1519,3 +1519,70 @@ Two were checked independently at review rather than taken from the build report
 **`ClickFocus` and `MouseTransparent` are stored and read by nobody.** That is what lets the rest
 of M4 slice independently, and it is why ADR 0019's request that the examples carry one surface
 of each admission is deferred: a flag nothing reads is invisible in a running program.
+
+### #48 — Modality scoped to a subtree, and the flag that survives it
+
+Settled in a design session, then built. Four things changed against the design as written.
+
+**The scope was wrong in ADR 0008, not merely underspecified.** *"Modality truncates the
+chain"* was reasoned entirely from focus being inside the modal, and `CONTEXT.md` says
+subtree. They differ when focus is behind the dialog, where chain truncation blocks nothing
+at all — and it makes a modal's blocking depend on a focus invariant no code enforces, so
+the first defect is `Focus` on a pane behind the dialog silently ending modality. The
+amendment supersedes the wording and keeps the conclusion: truncation is what the subtree
+rule *does* when focus is inside the modal.
+
+**Two modals at once is the ordinary case, not an error.** `OpenModal` parents to the root,
+so a dialog opening a dialog produces siblings there rather than a nesting. Under a naive
+reading each suppresses the other and two stacked dialogs freeze. The one on top governs,
+by froth's depth-first order over the live tree — the same order `place` assigns Z ordinals
+in, so it agrees with what is drawn without keyboard resolution waiting on a frame.
+
+**The froth-owned exemption is the load-bearing part and was not in the ticket.** Without
+it, a root that rebinds `tab` to another key loses traversal *entirely* inside every modal:
+`frothOwned` withholds froth's stock keys and modality then suppresses the rebinding. The
+survey's Textual reading turned out to be why froth has no third option — Textual keeps tab
+alive under a `ModalScreen` because `Screen.BINDINGS` declares it and `ModalScreen`
+subclasses `Screen`, so the binding is below the cut line. froth's traversal bindings sit
+where Textual's `App` ones do, which is what gets cut.
+
+**Suppressed declarations are skipped whole**, before `narrow` claims keys and before
+`frothOwned` is consulted. Narrowing one to no keys is a different thing and is wrong: it
+still claims its keys and shadows froth's own binding behind it. The mutation that keeps the
+claim and drops the listing is caught by its own test; the one that merely nils the keys is
+not, which is why the two are separate tests rather than one.
+
+**Ten mutations, all caught by test failures rather than build failures.** Including the
+inverse direction — a test that the same key reaches the same surface when nothing is modal,
+so the drop is modality doing it rather than the key never having arrived, and a test that a
+modal parented lower leaves a sibling subtree alone, which the over-blocking mutation is what
+pins.
+
+**`RepliesTo` is contradicted by `CLAUDE.md` and filed against #49.** The sketch's
+`froth.RepliesTo(ac.Sender())` conflicts with *"a surface that depends on knowing who opened
+it takes that handle as a constructor parameter rather than through a create option"*. It is
+only reachable in the intent-routed flow — `uc.OpenModal` knows its opener implicitly — and
+dropping it costs the sideways lifetime edge there. Not decided here.
+
+**Review found three real things, two of them behavioural.** The exemption was keyed on
+`frothOwned` where the rule says *services*: froth publishes `ActionCancel` and implements
+nothing for it, so a surface behind a dialog binding `esc` to `froth.cancel` kept a live
+binding through the modal. `frothServices` is now a shorter list than `frothBindings`, and the
+gap between publishing an identity and implementing one is the reason. A **quarantined modal
+went on governing** — `governingModal` checked `cn == nil` but not `cn.panicked`, unlike
+`chainBindings` and `placeSubtree` — so between a Render panic and the Apply that removes it,
+an invisible surface blocked its whole subtree. Both fixes have a test that fails without them.
+
+**The third was a claim in this ADR that was false, and the shape of the error is the lesson.**
+The amendment asserted *"the only suppressed surface a rising message can reach is the modal's
+own parent"* as a general invariant. It was derived with focus **inside** the modal and holds
+only there: delivery addresses the focused surface, so a `SurvivesModal` binding firing with
+focus **behind** the dialog starts inside the blocked subtree and rises through every suppressed
+ancestor. This is the recall-dressed-as-citation failure the working agreements name, committed
+in a document written the same day it warns about it. The amendment now separates the two cases
+and keeps the correction visible.
+
+**Modality is still invisible in a running program.** No example changed: #48 has no
+`OpenModal` and no destroy-to-close, so anything it added would be a modal that exists from
+mount and never goes away, which is the permanently-visible stand-in #22 already criticises
+in `dir-nav`. That waits for #49 and #55.

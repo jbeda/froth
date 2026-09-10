@@ -52,6 +52,9 @@ type meta struct {
 	// mouseTransparent takes this surface and its subtree out of the hit walk,
 	// so a click passes through to whatever lies beneath it in Z.
 	mouseTransparent bool
+
+	// modal takes input for this surface's parent's whole subtree.
+	modal bool
 }
 
 func (m *meta) apply(opts []CreateOption) {
@@ -84,3 +87,17 @@ func FocusScope() CreateOption { return func(m *meta) { m.focusScope = true } }
 // The creator says it because it describes how the surface is being used rather
 // than what it is. ChildCtx.SetMouseTransparent changes it later.
 func MouseTransparent() CreateOption { return func(m *meta) { m.mouseTransparent = true } }
+
+// Modal makes a surface take input for its parent's whole subtree: a shortcut
+// declared anywhere else in that subtree does not resolve, and a raw key aimed
+// there is dropped. A surface parented to the root is modal to the whole
+// application; one parented lower blocks only that subtree.
+//
+// Two things get past it and nothing else does: a Binding marked SurvivesModal,
+// and any declaration of an action froth services itself. Where several are open
+// over one surface, the one on top governs.
+//
+// There is no setter: closing a modal is destroying it. Being modal says nothing
+// about traversal, so a modal that should also hold the tab walk declares
+// FocusScope as well.
+func Modal() CreateOption { return func(m *meta) { m.modal = true } }

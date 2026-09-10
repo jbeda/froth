@@ -96,3 +96,32 @@ concrete and should be stated rather than discovered: **froth cannot express "mo
 pane, but outliving this pane."** Lifetime and blocking scope ride the same link, so
 choosing subtree-scoped modality also chooses opener-coupled lifetime. If that combination
 is ever wanted, this is the decision to reopen.
+
+## Parked: `Modal()` implying `FocusScope()`
+
+`CONTEXT.md` says *"Dialogs and modals are scopes"*, and the sketch passes both options on
+the same create. They stay independent, and no case was found for the combination that
+separating them permits.
+
+A modal that is not a focus scope lets tab walk focus out of it into the region it blocks,
+where every key is dropped until the user tabs back in. Every construction tried is neutral
+or worse: a modal with nothing focusable inside is better off as a scope, where tab stays
+put rather than escaping; the only shape where escaping is useful is a modal parented below
+the root whose neighbour is outside the blocked subtree, which is the *"modal to this pane,
+but outliving this pane"* the amendment above already records froth as unable to express.
+
+The field couples them universally, but structurally rather than by decision: a modal is a
+window or a screen everywhere else, so focus containment comes free. The web does it by
+making everything outside the dialog inert — *"If new focus target is a focusable area and
+its DOM anchor is inert, then return"*, with the mirror rule for unfocusing — and froth has
+no inert or disabled surface.
+
+They are kept apart on ordering rather than on a case. ADR 0019's reasoning for moving
+`TabStop` onto the type does not reach here: that moved because the *component author* knew
+the answer and the *creator* was the one who could forget, two different people. This is one
+caller writing `froth.Modal()` and `froth.FocusScope()` on one line, and forgetting produces
+a loud failure found in the first minute of use rather than a silent one that ships. Sugar
+stays addable; an implication would not be removable.
+
+Revive it on a case for a modal that is deliberately not a scope, or on the forgotten
+`FocusScope` showing up as a real defect.

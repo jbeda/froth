@@ -32,16 +32,25 @@ type envelope struct {
 //
 // Only a press resolves. A release is the same key arriving a second time, so
 // matching it would fire every action twice.
-func (f *Froth) route(msg tea.Msg) envelope {
+//
+// It reports false for a key that goes nowhere, which is froth's one input drop:
+// an open modal takes input for the subtree it blocks, so a raw key aimed inside
+// that subtree reaches nothing. Resolution above has already offered the press
+// the only two ways past a modal, and a key arriving here matched neither.
+func (f *Froth) route(msg tea.Msg) (envelope, bool) {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
 		if a, ok := f.resolve(k); ok {
-			return f.action(a)
+			return f.action(a), true
 		}
 	}
 	if _, ok := msg.(tea.KeyMsg); ok {
-		return envelope{to: f.focused(), msg: msg}
+		focused := f.focused()
+		if f.blockedByModal(focused) {
+			return envelope{}, false
+		}
+		return envelope{to: focused, msg: msg}, true
 	}
-	return envelope{to: f.root, msg: msg}
+	return envelope{to: f.root, msg: msg}, true
 }
 
 // action addresses an action at the active surface, where the walk that delivers

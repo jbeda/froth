@@ -139,6 +139,8 @@ func (f *Froth) Update(msg tea.Msg) tea.Cmd {
 	b := budget{left: iterationCap}
 	f.apply(&b)
 
-	f.queue = append(f.queue, f.route(msg))
+	if e, ok := f.route(msg); ok {
+		f.queue = append(f.queue, e)
+	}
 	return f.settleWith(&b)
 }

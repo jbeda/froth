@@ -409,3 +409,160 @@ scopes them the same way.
 
 Enforcement buys nothing until independently authored surface libraries can collide, which
 needs a third-party ecosystem that does not exist. Revive it on a real collision.
+
+## Amendment: modality is scoped to a subtree, not to the focus chain
+
+Settled and built as #48, and it supersedes the wording of *"modality truncates the chain"*
+above rather than its conclusion. That amendment reasoned entirely from one case — *"with
+focus inside a modal the chain still runs modal → … → root"* — which is a claim about the
+focus chain. `CONTEXT.md` makes a claim about the tree: a modal *"takes input for its
+parent's whole subtree"*. The two come apart when focus is **outside** the modal and inside
+the subtree it blocks, and on the chain reading nothing is truncated there at all: the
+dialog is open and the application behind it is fully live.
+
+Chain truncation also makes a modal's blocking depend on a focus invariant that no code
+enforces. The first defect it produces is a `Focus` call on a pane behind the dialog
+silently ending the dialog's modality.
+
+**The rule.** For the focused surface, the **blocking** modals are the open modals whose
+parent is an ancestor-or-self of it — equivalently, the modal children of its chain to the
+root, which is why this is a walk up the chain rather than an index froth keeps or a scan
+per key press. The **governing** modal is whichever of those is on top. A declaration is
+suppressed unless it comes from inside the governing modal.
+
+Every case the earlier amendment covered falls out of it: focus inside the modal suppresses
+exactly the surfaces above it, which is truncation; focus behind the modal suppresses the
+whole chain.
+
+**Suppressed declarations are skipped whole**, before `narrow` claims their keys and before
+`frothOwned` is consulted. Narrowing one to no keys is not the same thing and is wrong: a
+declaration that still claimed its keys shadows froth's own binding behind it, so a root
+that had bound `tab` to anything would take traversal down with it inside every modal.
+
+**Both query views reflect it**, because they are two narrowings of the one walk. A
+suppressed declaration is absent rather than listed with no keys — unlike a `Disabled` one,
+which is listed so an application can grey it. The difference is that a disabled binding
+belongs to a live surface which could enable it a keystroke later, while a suppressed one
+belongs to a surface nothing can reach; and `Invoke` gates on nothing, so listing it offers
+a palette a way to reach into the blocked subtree.
+
+### The two ways past, and why one of them is a rule
+
+`SurvivesModal` is unchanged. The second is new: **any declaration of an action froth
+services is exempt.** *"The line is what froth services"* is this ADR's own, and froth
+services traversal, so traversal stays reachable however it was bound.
+
+Serviced, not merely owned. froth publishes `ActionCancel`'s identity and implements nothing
+for it, so a surface declaring that one is an application talking to itself under a froth name
+and is suppressed like any other. Keying the exemption on ownership instead would exempt it,
+and neither the rule's words nor its reason reaches that far.
+
+Without it, froth's stock `tab` is reachable and an application's *rebinding* of
+`focus.next` is not — because `frothOwned` sets `taken` and withholds froth's keys for an
+action the modal then suppresses. The result is no tab anywhere inside any modal for an
+application that did something ordinary. Exempting the declaration keeps the rebinding
+working on its own key, so a modal changes which keys resolve and never which key an action
+answers to.
+
+**froth is not in Textual's position here, and that is why this has to be a rule.** Textual
+keeps `tab` alive under a `ModalScreen` with no escape mechanism at all: `Screen.BINDINGS`
+declares `tab` → `app.focus_next`, `ModalScreen` subclasses `Screen` and so inherits it, and
+`_modal_binding_chain` truncates *inclusive* of the modal node. The binding is below the cut
+line. froth has no `Screen`; its traversal bindings sit in `frothBindings`, matched after the
+chain — the analogue of Textual's `App` namespace, which is exactly what gets cut. Textual
+keeps `tab` by declaration placement; froth has to keep it by rule, and has no third option.
+
+Textual's actual escape hatch, `priority=True`, is not copied and should not be. It is a
+second pass over the *untruncated* chain, run before the truncated one, which is the shape
+the amendment above forbids and for the reason it gives: `Footer` reads the truncated chain,
+so stock `ctrl+p` fires under a modal and vanishes from the help. It also reverses
+precedence, running App-first, which `SurvivesModal` deliberately does not.
+
+### A raw key aimed at a blocked surface is dropped
+
+Suppressing the shortcuts and not the typing would be worse than doing nothing: a blocked
+text field would go on receiving every keystroke while the shortcuts around it died. This
+amendment's predecessor already committed to *"bindings as well as raw keys"* and said
+nothing about where the key goes instead.
+
+It goes nowhere. **This is froth's only input drop** — everything else either resolves,
+delivers, or reports. Two alternatives were rejected. Delivering it to the modal is the
+literal reading of *"takes input for"* and is Win32's and GTK's shape, but the keystroke was
+aimed by a user looking at the surface behind the dialog, so a dialog with a text field
+would silently eat typing meant for something else, and there is no principled destination
+inside the modal in any case. Reporting a diagnostic fires once per keypress for as long as
+the state lasts, and names the *user* pressing a key rather than the caller doing something
+wrong, which every other froth diagnostic does.
+
+Posted messages are untouched: a `Post` carries its own destination and never goes through
+routing, which is what lets an async result land behind an open modal with no special
+handling.
+
+### Delivery does not truncate, and what that does and does not cost
+
+The rule above is unchanged and its reason is unchanged. What it costs depends on where focus
+is, and the two cases are worth separating because only one of them is benign.
+
+**With focus inside the modal, nothing leaks.** The rise runs from inside the modal outwards,
+and the only suppressed surface it passes is the modal's own parent — everything above that
+parent is outside the blocked region and ordinary. So a surviving binding reaches its declarer
+and touches nothing else that modality took out of play.
+
+**With focus behind the modal, it does leak, and this is stated rather than defended.**
+Delivery addresses the focused surface, so an action from a `SurvivesModal` binding starts
+*inside* the blocked subtree and rises through every suppressed ancestor, any of which may take
+it. Truncating delivery is not the fix — it is what the rule above already rejects, since a
+surviving binding would then resolve and never arrive. The state is the one #51 exists to
+remove by keeping focus inside an open modal, and until it does, an application that both marks
+a binding as surviving and leaves focus behind a dialog can have a blocked surface act.
+
+An earlier draft of this amendment claimed the first case as a general invariant. It is not one,
+and the correction is kept rather than deleted because the claim is the kind that reads as
+settled.
+
+### Several modals at once
+
+froth permits it and does not arbitrate. *"Only one modal at a time"* is application policy
+in the sketch, enforced by routing through an intent, and it is not a rule froth can enforce
+once any surface may open a root-parented modal directly.
+
+It is also the ordinary case rather than a mistake: `OpenModal` parents to the root, so a
+dialog opening a dialog produces two **siblings** there rather than a nesting, which is the
+stacking #51 already expects. Under a naive reading each would suppress the other's bindings
+and two stacked dialogs would freeze.
+
+The governing modal is the one on top, and stacking is froth's depth-first order over the
+live tree — the order `place` assigns Z ordinals in. So the governing modal is the one drawn
+over the others, decided without keyboard resolution waiting on a frame having been drawn.
+An alternative formulation, *a modal blocked by another modal goes inert*, reaches the same
+answers but needs a depth-first tiebreak anyway to escape a circular case between two
+siblings.
+
+The cost taken deliberately: two accidentally-opened modals produce a confusing screen and
+no diagnostic, because froth declining to have a modal policy means declining to call the
+second one an error.
+
+## Parked: `SurvivesModal` on the action rather than the binding
+
+`Action` is a bare string, so survival lives on each `Binding`. Two surfaces declaring one
+action can therefore disagree about whether it survives, with nothing to reconcile them —
+survival is a property of what the action *is*, not of a particular declaration of it. The
+three surveyed systems that curate a survivor list all key it by identity: VS Code's is a
+list of command ids, Cocoa's is nil-target items resolving to `NSApp`. Only Textual and
+Flutter put it on the declarer, which is where froth is.
+
+The sharpest argument for moving it is that **froth already does the identity-scoped version
+and applies it only to itself.** The froth-owned exemption above is survival keyed on action
+identity; `SurvivesModal` is survival keyed on declaration. One mechanism, two spellings,
+split by who owns the action.
+
+Not built. It needs the registry parked below — identity, help text, and whatever else
+describes an action rather than a key — which is real mechanism inside a ticket scoped as the
+input-scoping half alone. It would also move the decision away from the declarer, so a
+third-party surface shipping an action that must survive could no longer say so; six of eight
+surveyed systems work that way, but froth chose Textual's camp deliberately and this is a
+reversal rather than a refinement.
+
+Revive it on the asymmetry becoming visible in use: an application wanting one of its own
+actions to survive everywhere it is declared, and having to say so at every declaration —
+or two declarations of one action disagreeing. Bring that, not the tidiness.

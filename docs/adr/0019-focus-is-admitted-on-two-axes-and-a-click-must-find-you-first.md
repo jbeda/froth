@@ -171,13 +171,17 @@ same way.
 Environment values *substitute*, so position decides; booleans want *suppression*, which is a
 different mechanism wearing the same clothes, and no case needs it.
 
-**A `ParentFlags` struct, mirroring `Flags`.** Rejected for now only because the creator's side
-has two flags of which one is immutable, so a single value would make an illegal state
-representable and then need policing at runtime — which `phase.go` explicitly avoids by giving
-each phase its own context type. `CreateOption` is also `func(*meta)` and so can carry
-something that is not a boolean, which the modal work is the likeliest source of. **Revisit
-during #53**: if the creator's side reaches three or four flags, or any of them needs
-read-modify-write, the symmetric version wins.
+**A `ParentFlags` struct, mirroring `Flags`.** Rejected because the creator's side has flags of
+which some are immutable, so a single whole-set value would make an illegal state representable
+and then need policing at runtime — which `phase.go` explicitly avoids by giving each phase its
+own context type.
+
+The revisit this once deferred has happened, and it resolved the same way. `Modal()` made the
+creator's side three — `FocusScope`, `MouseTransparent`, `Modal`, of which only
+`MouseTransparent` is mutable — which is the count that was to trigger it. The mixed mutability
+is what decides it, and three does not improve on two: whole-set replacement over a set two of
+whose members are fixed for life is the wrong shape whatever the count. Nothing on the creator's
+side has wanted read-modify-write. `CreateOption` stays.
 
 ## Amendment: the root's type is asked too, and a panic there escapes
 

@@ -77,6 +77,21 @@ var frothBindings = []Binding{
 	{Action: ActionCancel, Help: "back out of what is in front"},
 }
 
+// frothServiced is every action froth implements itself, which service switches
+// on. It is a shorter list than frothBindings: froth publishes ActionCancel's
+// identity and implements nothing for it, so a surface declaring that one is an
+// application talking to itself under a froth name.
+//
+// The distinction only matters to modality, which exempts a declaration of a
+// serviced action so that froth's own behaviour stays reachable however an
+// application bound it. Nothing is owed to an identity froth merely publishes.
+var frothServiced = []Action{
+	ActionFocusNext, ActionFocusPrev,
+	ActionFocusLeft, ActionFocusRight, ActionFocusUp, ActionFocusDown,
+}
+
+func frothServices(a Action) bool { return slices.Contains(frothServiced, a) }
+
 // frothOwned reports whether an action is one of froth's identities, and so one
 // a declaration takes over rather than merely shares a name with.
 func frothOwned(a Action) bool {
@@ -286,6 +301,7 @@ func (f *Froth) chainBindings() []chainEntry {
 	}
 
 	chain := f.chainTo(focused)
+	modal, underModal := f.governingModal(focused)
 	for i := len(chain) - 1; i >= 0; i-- {
 		n := f.reg.get(chain[i])
 		if n == nil {
@@ -294,7 +310,16 @@ func (f *Froth) chainBindings() []chainEntry {
 		if n.panicked {
 			continue
 		}
+		// A modal takes input for the subtree it blocks, so nothing declared
+		// outside it in that subtree resolves. See ADR 0008 for the two
+		// exemptions and why they are the only two.
+		suppressed := underModal && !f.reg.descends(chain[i], modal)
 		for _, d := range n.bindings {
+			// Skipped whole rather than narrowed to nothing: one that still
+			// claimed its keys would shadow froth's own binding behind it.
+			if suppressed && !d.SurvivesModal && !frothServices(d.Action) {
+				continue
+			}
 			// Any declaration of a froth action takes it over, a disabled one
 			// included — which is what makes disabling a froth binding as inert
 			// as disabling an application one. It counts even when the
