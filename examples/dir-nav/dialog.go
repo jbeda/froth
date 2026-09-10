@@ -21,9 +21,9 @@ const (
 // from inside it.
 //
 // It goes on g, on esc, and on a control being picked. It carries the handle of
-// the surface that opened it because that surface holds its handle and has to
-// be told it is gone; nothing in froth remembers who opened what on a caller's
-// behalf.
+// the surface that opened it because that surface holds the dialog's handle
+// and has to be told it is gone: froth ties the dialog's lifetime to its opener
+// and tells nobody when it leaves.
 type dialog struct {
 	bd     *board
 	opener froth.Handle
