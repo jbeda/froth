@@ -109,3 +109,55 @@ reply had one destination and it is gone.
 - **Opener edges form chains.** A modal that opens a modal makes one, and a surface dying
   takes the whole chain. The cascade runs leaf-up alongside the parent cascade, and a
   pathological chain is the iteration cap's problem rather than a new invariant.
+
+## Amendment: the opener edge carries lifetime alone, and nothing reads it
+
+Settled in the M4 design session for #49 and #51. The amendment above says the edge carries
+*"reply routing and lifetime"*. [ADR 0016](./0016-a-message-rises-until-something-takes-it.md)
+retired `Reply` and `RepliesTo`: a surface that needs a reply address takes the handle as a
+constructor parameter, so froth has no reply routing to hang on the edge. **The edge now
+carries lifetime and nothing else.** Its reason survives the loss — the reply's one
+destination is gone when the opener dies, so the orphan still buys a user answering a
+question nobody hears.
+
+**`OpenModal` is `Self().OpenModal(s, opts...) Handle`, on the self Apply tier beside
+`Create`.** Structure changes only in Apply, so it cannot sit on `UpdateCtx` as the sketch
+had it; a surface opening from `Update` records what it wants and reconciles, as for any
+create. It parents to the root, records the caller as opener, sets `Modal`, and returns the
+handle — the scope change #49 argued, safe because the child tier that can destroy is minted
+only for an actual parent. Float and scope stay the caller's options exactly as on `Create`,
+so the two read the same way. Root's own `Create(s, Modal())` has no opener and dies with
+root as any child does.
+
+**The opener is a private field on the registry node**, beside `parent`, forward only. The
+sideways destroy finds a leaving subtree's modals by scanning root's children for any whose
+opener descends from the leaving set, recursively, and folds them into the same removal so
+an opened modal unmounts before its opener and the walk fires for every exit route,
+quarantine included. No reverse index: modals are few, and a second structure would have to
+be kept consistent across four routes out.
+
+### Parked: reading the opener
+
+`HandleReader` does not expose `Opener()`. A dialog that needs to know who opened it takes
+the handle as a constructor parameter, which is `CLAUDE.md`'s rule in as many words; an
+accessor would be froth remembering it on the caller's behalf, and is the door `RepliesTo`
+would come back through. Revive on a case a constructor parameter cannot serve — something
+froth knows about the opener that the opener cannot state about itself.
+
+### Parked: a caller-named opener
+
+`froth.OpenedBy(h)` as a create option would let root, opening a dialog on a raiser's behalf
+after a rising message, tie the dialog's life to the raiser. The nuance that keeps this from
+being the `RepliesTo` question: lifetime is froth's under ADR 0015, so declaring a lifetime
+edge is not the reply-address violation. It is still refused, because any surface could then
+name any handle it holds and the edge becomes the general owner relation this ADR declines.
+In the rising flow root *is* the opener: root decided to show the dialog, and root does not
+die. Revive on an application where that reading fails — a raiser that dies while root's
+dialog for it is open, and where the orphan is a real cost rather than a drop.
+
+### Parked: a non-modal surface with a lifetime edge
+
+A dropdown or a popover is a root-parented float that should die with the surface that
+opened it, and `OpenModal` is exactly that with `Modal` set. Not built: the name would lie,
+and no float exists yet. Revive when a float in the example wants to outlive its parent's
+layout but not its opener — bring the float.

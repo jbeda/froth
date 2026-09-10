@@ -546,6 +546,14 @@ The cost taken deliberately: two accidentally-opened modals produce a confusing 
 no diagnostic, because froth declining to have a modal policy means declining to call the
 second one an error.
 
+### A modal is a scope, and takes focus when it opens
+
+Recorded in [ADR 0011](./0011-a-focus-scope-is-closed-to-traversal.md)'s amendment, since
+both are traversal and restoration rules rather than input-scoping ones. The consequence
+for this ADR: because traversal survives modality, a modal that were not a scope would let
+tab walk out to a surface whose keys are dropped, which is why the scope is a rule of what
+modal means and not a convenience.
+
 ## Parked: `SurvivesModal` on the action rather than the binding
 
 `Action` is a bare string, so survival lives on each `Binding`. Two surfaces declaring one

@@ -314,6 +314,7 @@ func (f *Froth) apply(b *budget) {
 	f.applyDestroys()
 	f.applyFocus()
 	f.reconcileAndMount(b, token)
+	f.focusOpenedModals()
 }
 
 // reconcileAndMount runs the two callbacks that build the tree out: Reconcile

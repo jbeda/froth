@@ -67,6 +67,11 @@
 >   [ADR 0014](../adr/0014-capability-is-minted-from-a-phase-context.md)'s amendment.
 > - **The dialog examples under-describe what froth supports.** A reply is a channel, not
 >   a single answer: a surface may reply repeatedly and close when it is done.
+> - **`OpenModal` is `ac.Self().OpenModal(s, opts...)` and returns the handle.** It is
+>   Apply-tier, since structure changes only in Apply, and implies `Modal` alone. Every
+>   modal is a focus scope, takes focus when it opens and gives it back when it closes.
+>   See [ADR 0006](../adr/0006-one-parent-relation.md) and
+>   [ADR 0011](../adr/0011-a-focus-scope-is-closed-to-traversal.md).
 
 Client code for a sample app, written as if froth existed. **None of this compiles.**
 Its job is to make the API's ergonomics visible while changing them is still free.

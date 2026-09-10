@@ -25,6 +25,10 @@ type leaver struct {
 	onMsg     func(uc *froth.UpdateCtx, msg tea.Msg)
 	onMount   func(ac *froth.ApplyCtx)
 	onUnmount func(ac *froth.ApplyCtx)
+	// onReconcile runs when the surface asked to reconcile, which is how a
+	// test opens a modal: the ask is recorded in Update and the open happens
+	// here, in Apply.
+	onReconcile func(ac *froth.ApplyCtx)
 
 	updates, renders, unmounts int
 }
@@ -77,6 +81,12 @@ func (l *leaver) Mount(ac *froth.ApplyCtx) {
 	}
 	if l.onMount != nil {
 		l.onMount(ac)
+	}
+}
+
+func (l *leaver) Reconcile(ac *froth.ApplyCtx) {
+	if l.onReconcile != nil {
+		l.onReconcile(ac)
 	}
 }
 

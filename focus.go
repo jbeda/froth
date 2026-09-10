@@ -71,9 +71,13 @@ func (f *Froth) setFocus(h Handle) {
 		})
 		return
 	}
-	// A scope that admits focus by no route is entered rather than landed on;
-	// one that admits it by any route takes the move literally, wherever focus
-	// was. See ADR 0019.
+	f.landFocus(h)
+}
+
+// landFocus commits focus on a surface known to be in the tree. A scope that
+// admits focus by no route is entered rather than landed on; one that admits
+// it by any route takes the move literally, wherever focus was. See ADR 0019.
+func (f *Froth) landFocus(h Handle) {
 	if f.isFocusScope(h) && !f.admitsFocus(h) {
 		if to, ok := f.enterFocusScope(h); ok {
 			h = to
@@ -118,8 +122,8 @@ func (f *Froth) applyFocus() {
 // ends. Focus crosses only by being moved by name. See ADR 0011.
 
 // focusScopeOf reports the scope a surface traverses within: the nearest ancestor —
-// or the surface itself — marked FocusScope, and the root when nothing on the
-// way up is one. Answering "itself" for a scope surface is what keeps a scope
+// or the surface itself — that is a scope or a modal, and the root when nothing
+// on the way up is one. Answering "itself" for a scope surface is what keeps a scope
 // closed.
 func (f *Froth) focusScopeOf(h Handle) Handle {
 	for h != (Handle{}) {
@@ -127,7 +131,7 @@ func (f *Froth) focusScopeOf(h Handle) Handle {
 		if n == nil {
 			break
 		}
-		if h == f.root || n.meta.focusScope {
+		if h == f.root || n.scopes() {
 			return h
 		}
 		h = n.parent
@@ -137,7 +141,7 @@ func (f *Froth) focusScopeOf(h Handle) Handle {
 
 func (f *Froth) isFocusScope(h Handle) bool {
 	n := f.reg.get(h)
-	return n != nil && n.meta.focusScope
+	return n != nil && n.scopes()
 }
 
 // focusScopeOrder returns the surfaces the walk within s visits, depth-first and s
@@ -158,7 +162,7 @@ func (f *Froth) focusScopeOrder(s Handle) []Handle {
 
 func (f *Froth) collectFocusScoped(h Handle, out *[]Handle) {
 	n := f.reg.get(h)
-	if n == nil || n.meta.focusScope {
+	if n == nil || n.scopes() {
 		return
 	}
 	*out = append(*out, h)
@@ -293,4 +297,62 @@ func (f *Froth) rehomeFocus(p Handle) {
 	}
 	f.focus = to
 	f.rememberFocusChain()
+}
+
+// focusOpenedModals moves focus into each modal created during this Apply.
+// It runs after the mount drain because a modal has no children at Create,
+// so the redirect would have found nothing to land on; and it stands down for
+// a modal that already holds focus, so a Mount that focused its own child
+// wins, as the Apply ordering promises. A modal that left again before this
+// ran has nothing to take.
+func (f *Froth) focusOpenedModals() {
+	opened := f.openedModals
+	f.openedModals = nil
+	for _, h := range opened {
+		if f.reg.get(h) == nil || f.reg.descends(f.focus, h) {
+			continue
+		}
+		f.setFocus(h)
+	}
+}
+
+// restoreTarget reports where focus goes back to when the surfaces in leaving
+// go: the saved position of the innermost leaving modal holding focus,
+// resolved through any other leaving modal it sits in. It reports false when
+// focus is not inside a leaving modal, or nothing saved survives — the
+// ordinary rehome's case either way.
+//
+// It runs before the registry is cut, because a saved position inside a modal
+// that is also leaving is only recognisable while that modal's ancestry can
+// still be read.
+func (f *Froth) restoreTarget(leaving map[Handle]bool) (Handle, bool) {
+	target := f.focus
+	for {
+		m, ok := f.leavingModalAbove(target, leaving)
+		if !ok {
+			return Handle{}, false
+		}
+		target = f.reg.get(m).restoreFocus
+		if f.reg.get(target) == nil {
+			return Handle{}, false
+		}
+		if !leaving[target] {
+			return target, true
+		}
+	}
+}
+
+// leavingModalAbove reports the nearest modal at or above h that is leaving.
+func (f *Froth) leavingModalAbove(h Handle, leaving map[Handle]bool) (Handle, bool) {
+	for h != (Handle{}) {
+		n := f.reg.get(h)
+		if n == nil {
+			return Handle{}, false
+		}
+		if leaving[h] && n.meta.modal {
+			return h, true
+		}
+		h = n.parent
+	}
+	return Handle{}, false
 }

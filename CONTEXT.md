@@ -56,10 +56,12 @@ The deepest surface on the focus chain — the one that sees input first.
 _Avoid_: focused window, current surface
 
 **Modal**:
-A surface that takes input for its parent's whole subtree while it is open. A
-surface parented to the root is modal to the entire application. Its parent
-decides what it blocks; its opener decides how long it lives, because a modal is
-destroyed when the surface that opened it is.
+A surface that takes input for its parent's whole subtree while it is open —
+the keyboard's counterpart to Capture. A surface parented to the root is modal
+to the entire application. Its parent decides what it blocks; its opener decides
+how long it lives, because a modal is destroyed when the surface that opened it
+is. Every modal is a focus scope, takes focus when it opens, and gives it back
+to where it was when it closes.
 
 **Cmd**:
 Bubble Tea's unit of asynchronous work: a function run off the update loop whose

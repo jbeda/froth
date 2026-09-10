@@ -1706,3 +1706,64 @@ subtest.
 **`StockBindings`'s doc comment was wrong in the same way the lists could drift.** It said
 "the actions it services itself", and the list it returns includes `ActionCancel`, which
 froth does not service. It now says owns, and names the exception.
+
+### #49 and #51 — The opener edge, a modal that dies with it, and focus across open and close
+
+Settled in one design session and built together, because #51's restore runs through the
+same removal the opener cascade folds into. Seven decisions, four of them changes against
+the tickets as written.
+
+**`OpenModal` is Apply-tier and returns the handle.** `Self().OpenModal(s, opts...)` beside
+`Create`, since structure changes only in Apply; the sketch's `uc.OpenModal` cannot exist.
+It parents to the root, records the caller as opener, implies `Modal` and nothing else.
+Float and scope stay the caller's, exactly as on `Create`.
+
+**The edge carries lifetime alone.** #49's body still says *"`Reply` addresses the opener"*;
+ADR 0016 had retired `Reply` and `RepliesTo` before the ticket was sliced, so the edge has no
+reply routing to carry and the `RepliesTo` question filed on #49 dissolves: a dialog takes
+its reply address as a constructor parameter, and in the rising flow root is the opener.
+The opener is a private field on the node, forward only, and `HandleReader` does not expose
+it. Three ideas parked in ADR 0006 with the case that would revive each.
+
+**A modal is a scope, as a rule of the predicates.** `focusScopeOf`, `focusScopeOrder` and
+the redirect test `focusScope || modal`. This was `CONTEXT.md`'s sentence and not the code's:
+traversal survives modality, so an unscoped modal let tab walk out to a surface whose every
+key is dropped. Nothing in the tickets asked for it; it fell out of asking what modal means.
+
+**Opening moves focus, closing restores it, and both wait for the right moment.** The save
+is at `Create`, before anything moves. The move is at the end of the Apply, after the mount
+drain, because a modal has no children at `Create` for the redirect to land on — and only
+if focus is not already inside, so a `Mount` that focused its own child wins. Restore runs
+in `removeSubtree` beside `rehomeFocus`, which is what makes it fire for all four exit
+routes and orders it inside `applyDestroys` without a second mechanism.
+
+**The sideways cascade is one removal, not a chain of them.** `collectLeafUp` folds each
+surface's opened modals in ahead of it, so an opener edge is walked like a parent link and
+a modal unmounts before its opener. That is also what makes nested restore work: a saved
+position inside a modal that is leaving in the same removal resolves to that modal's own
+saved position, while ancestry can still be read. Without it, a cancel from two dialogs deep
+lands wherever the root's chain points.
+
+**Twelve mutations, twelve caught, after five survived the first round.** Four survived
+because the tests began with focus on the row, which is also where a broken chain falls back
+to, so a restore and a rehome landed in the same place. The tests now start on a later
+stop. The fifth was a missing test: capture held by a modal whose opener leaves. The
+mutation that dropped the "is focus already inside" guard also survived at first, because
+`Mount` had focused a tab stop and the redirect re-found it through `lastActive`; the test
+now focuses a child admitting no route, which only `Mount`'s own move can reach.
+
+**One order is deliberately unspecified.** Between a surface's children and the modals it
+opened, both unmount before it and nothing says which first. The test asserts the two
+invariants and not a total order.
+
+**Still no example.** #55 is where a dialog first opens and closes in a running program.
+
+**Review found one real bug and two accepted states.** `Create` dereferenced the node after
+`declareFlags`, so a surface whose `Declare` panicked was removed by quarantine and then
+read as nil — pre-existing, and `OpenModal` inherited it through the shared `entered`. Now
+tested. Accepted without a mechanism: a saved position can be behind a modal that outlives
+the one closing, which is the legal-but-inert state #48 chose over a focus invariant, and
+ADR 0008 already accepts two modals at once producing a confusing screen. Restore commits
+through `landFocus`, the same path `setFocus` uses after its check, so it can never report a
+move nobody asked for. **`ApplyCtx.Post` is still without the justification ADR 0006 asked
+for**; this change retires its last stated motivation and leaves it standing.

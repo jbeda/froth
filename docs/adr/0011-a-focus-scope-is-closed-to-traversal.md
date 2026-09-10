@@ -84,3 +84,40 @@ container is a move that can land.
 What a dialog sees is unchanged — a scope declaring no admissions still redirects onto what it
 remembers, or its first tab stop. What changes is `Focus(scope)` from inside, which no longer
 lands on a scope surface that admits nothing at all.
+
+## Amendment: a modal is a scope, and opening one moves focus into it
+
+Settled in the M4 design session for #49 and #51. *"A modal will be a scope"* above was a
+sentence in the vocabulary and not a rule in the code: `Modal()` set one flag, every
+traversal predicate tested `FocusScope` alone, and nothing moved focus when a modal was
+created. Three things follow from what a modal is — a claim on all input for its parent's
+subtree, the keyboard's counterpart to Capture — and each was missing.
+
+**`modal` is a scope boundary in the predicates.** `focusScopeOf`, `focusScopeOrder` and the
+redirect test `FocusScope || Modal`. An unscoped modal is a trap rather than a choice:
+traversal is froth-serviced and survives modality, so tab from the last control walks out to
+a surface whose every key is then dropped. If all input in the subtree belongs to the modal,
+a walk leaving it is handing focus to surfaces that cannot receive. `FocusScope()` remains
+for the non-modal case.
+
+**Opening a modal moves focus into it.** Through the redirect, so it lands where the modal
+remembers or on its first tab stop, and on the modal surface itself when it holds nothing
+focusable. The move runs at the end of the Apply that created it, after the mount drain,
+because at `Create` the modal has no children yet; and it runs only if focus is not already
+inside the modal, so a `Mount` that focuses its own child wins — the ordering Apply already
+promises. Leaving this to the caller means every opener writes the same line and a
+forgotten one strands focus behind the dialog with no diagnostic.
+
+**Closing a modal restores focus.** Where focus was when the modal opened is saved on the
+modal's node at `Create`, and put back when the modal leaves the tree, by any route, if focus
+is inside it then. Focus moved behind the modal by name while it was open is a choice the
+application made, and froth leaves it. Nested modals need no stack: each saves its own and
+restores its own.
+
+**A saved position that is dead or leaving resolves through the removal.** Two modals can
+leave together — an opener dying takes both its dialog and the dialog that one opened — and
+the inner's saved position is inside the outer. Before the registry is cut, while ancestry
+is still readable, a saved target that is leaving is replaced by the saved target of the
+leaving modal it sits in, repeatedly, and only then does the ordinary rehome fall back. This
+is what keeps a cancel from two dialogs deep landing on the row the first dialog was opened
+from rather than wherever the root's chain happens to point.

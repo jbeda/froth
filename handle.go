@@ -71,7 +71,22 @@ type node struct {
 	// re-enters this subtree — and is never consulted to answer where focus is:
 	// that is f.focus and the chain derived from it, and nothing else.
 	lastActive Handle
+
+	// opener is the surface that opened this modal, set by OpenModal and by
+	// nothing else. A modal leaves the tree when its opener does, which is the
+	// one thing froth uses it for: it is not readable, it decides no routing,
+	// and a modal the root created for itself has none.
+	opener Handle
+
+	// restoreFocus is where focus was when this modal opened, and where it
+	// goes back to when the modal leaves with focus inside it.
+	restoreFocus Handle
 }
+
+// scopes reports whether this surface bounds keyboard traversal. A modal is a
+// scope by definition: traversal survives modality, so a walk that could leave
+// a modal would land on surfaces whose every key is dropped.
+func (n *node) scopes() bool { return n.meta.focusScope || n.meta.modal }
 
 // registries counts froth instances, so each one's handles are distinguishable
 // from every other one's.

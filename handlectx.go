@@ -268,11 +268,44 @@ type AnyCtx struct{ router }
 func (sc SelfApplyCtx) Create(s Surface, opts ...CreateOption) Handle {
 	sc.check()
 	h := sc.f.reg.add(sc.h, s, opts...)
-	sc.f.declareFlags(h, s)
-	if sc.f.reg.get(h).meta.modal {
-		sc.f.modalOpened()
-	}
+	sc.f.entered(h, s)
 	return h
+}
+
+// OpenModal adds a modal parented to the root and opened by this surface, and
+// returns its handle. The root decides what it blocks — everything — and this
+// surface decides how long it lives: the modal leaves the tree when this
+// surface does, by any route. See ADR 0006.
+//
+// Modal is implied. Everything else, Float and FocusScope included, is the
+// caller's to say, exactly as on Create. The handle comes back with read and
+// post: only the root's child tier can destroy what the root parents.
+//
+// The modal takes focus once it has mounted, unless its Mount already put
+// focus inside it, and gives focus back to where it was when it closes.
+func (sc SelfApplyCtx) OpenModal(s Surface, opts ...CreateOption) Handle {
+	sc.check()
+	h := sc.f.reg.add(sc.f.root, s, slices.Concat(opts, []CreateOption{Modal()})...)
+	sc.f.reg.get(h).opener = sc.h
+	sc.f.entered(h, s)
+	return h
+}
+
+// entered is what every create does once the surface is in the registry:
+// asks it what it is, and — for a modal — saves where focus is, releases a
+// capture it now blocks, and queues the focus move into it for the end of
+// this Apply, when its children exist to land on. A surface that panicked
+// answering has already left by quarantine and is nothing to a modal's
+// bookkeeping.
+func (f *Froth) entered(h Handle, s Surface) {
+	f.declareFlags(h, s)
+	n := f.reg.get(h)
+	if n == nil || !n.meta.modal {
+		return
+	}
+	n.restoreFocus = f.focus
+	f.openedModals = append(f.openedModals, h)
+	f.modalOpened()
 }
 
 // declareFlags asks a Declarer what its surface is and stores the answer, here

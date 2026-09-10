@@ -57,12 +57,13 @@ func (f *Froth) applyDestroys() {
 	}
 }
 
-// removeSubtree unmounts h and everything below it, leaf-up, and then takes the
-// whole subtree out of the tree.
+// removeSubtree unmounts h, everything below it, and every modal opened from
+// within that subtree, leaf-up, and then takes the lot out of the tree.
 //
 // Nothing is deleted until every Unmount has run. That is what lets a child
 // reach its parent while tearing down, which is the entire reason the walk is
-// leaf-up rather than the mirror of the mount order.
+// leaf-up rather than the mirror of the mount order. A modal is unmounted
+// before its opener for the same reason.
 func (f *Froth) removeSubtree(h Handle) {
 	n := f.reg.get(h)
 	if n == nil || n.leaving {
@@ -70,7 +71,8 @@ func (f *Froth) removeSubtree(h Handle) {
 	}
 
 	var order []Handle
-	f.collectLeafUp(h, &order)
+	leaving := map[Handle]bool{}
+	f.collectLeafUp(h, &order, leaving)
 	for _, g := range order {
 		f.reg.get(g).leaving = true
 	}
@@ -80,35 +82,63 @@ func (f *Froth) removeSubtree(h Handle) {
 	}
 
 	// Where focus goes is decided before the tree is cut, because afterwards
-	// there is nothing left to ask whether focus was inside.
-	rehomeFocus := f.reg.descends(f.focus, h)
+	// there is nothing left to ask whether focus was inside, or where a modal
+	// that is going had saved it.
+	rehome := leaving[f.focus]
+	restore, restoring := f.restoreTarget(leaving)
 	parent := n.parent
 	// Capture goes with the holder, on every route out and without a message:
 	// a surface leaving the tree can complete nothing, so the abandon the
 	// message would ask for is already guaranteed.
-	if f.reg.descends(f.capture, h) {
+	if leaving[f.capture] {
 		f.clearCapture()
 	}
 
 	for _, g := range order {
 		f.reg.remove(g)
 	}
-	if rehomeFocus {
+	switch {
+	case restoring:
+		// Nobody asked for this move, so it reports nothing; the target was
+		// checked live and staying before the cut.
+		f.landFocus(restore)
+	case rehome:
 		f.rehomeFocus(parent)
 	}
 }
 
-// collectLeafUp appends h's subtree in leaf-up order: every descendant of a
-// surface comes before the surface itself.
-func (f *Froth) collectLeafUp(h Handle, out *[]Handle) {
+// collectLeafUp appends h's subtree in leaf-up order — every descendant of a
+// surface before the surface itself — and folds in the modals each surface
+// opened, ahead of it, so an opener edge is walked like a parent link. seen
+// records every handle appended: a modal is reached as the root's child and
+// again through its opener, and must not be walked twice when the root
+// itself is going.
+func (f *Froth) collectLeafUp(h Handle, out *[]Handle, seen map[Handle]bool) {
 	n := f.reg.get(h)
-	if n == nil {
+	if n == nil || seen[h] {
 		return
 	}
+	seen[h] = true
 	for _, c := range n.children {
-		f.collectLeafUp(c, out)
+		f.collectLeafUp(c, out, seen)
+	}
+	for _, m := range f.openedBy(h) {
+		f.collectLeafUp(m, out, seen)
 	}
 	*out = append(*out, h)
+}
+
+// openedBy reports the modals h opened. They are the root's children, so the
+// scan is over that list alone, and modals are few enough that no index is
+// kept in the other direction.
+func (f *Froth) openedBy(h Handle) []Handle {
+	var out []Handle
+	for _, c := range f.reg.get(f.root).children {
+		if n := f.reg.get(c); n != nil && n.opener == h {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // unmount runs one surface's teardown. A surface that never reached its mount

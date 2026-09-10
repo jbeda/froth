@@ -66,7 +66,11 @@ type Froth struct {
 	// removed at the next Apply. shutdown says the instance has been torn down,
 	// after which posting is a reported drop and nothing else happens at all.
 	pendingDestroy []Handle
-	shutdown       bool
+
+	// openedModals holds the modals created during this Apply, so focus can be
+	// moved into each once the mount drain has given it something to land on.
+	openedModals []Handle
+	shutdown     bool
 
 	phase phase
 	epoch uint64
