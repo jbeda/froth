@@ -103,9 +103,12 @@ reply had one destination and it is gone.
 
 - **The counted-drop-with-a-diagnostic for an orphaned modal's reply is retired.** The
   modal dies before it can answer, so there is nothing to drop.
-- **`ApplyCtx.Post` loses its stated motivation** — it was added so an opener being torn
-  down could ask its modal to close itself during `Unmount`. froth now does that. It needs
-  a new justification or it does not ship.
+- **`ApplyCtx.Post` loses the motivation it was added for** — an opener being torn down
+  asking its modal to close itself during `Unmount`, which froth now does. It stays: it is
+  general application use, a surface in Apply telling any surface anything, and
+  [ADR 0014](./0014-capability-is-minted-from-a-phase-context.md) already rests on Apply
+  minting contexts that post. Nothing is gained by withholding it until a case is written
+  down.
 - **Opener edges form chains.** A modal that opens a modal makes one, and a surface dying
   takes the whole chain. The cascade runs leaf-up alongside the parent cascade, and a
   pathological chain is the iteration cap's problem rather than a new invariant.

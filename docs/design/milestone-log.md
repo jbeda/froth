@@ -1765,5 +1765,6 @@ tested. Accepted without a mechanism: a saved position can be behind a modal tha
 the one closing, which is the legal-but-inert state #48 chose over a focus invariant, and
 ADR 0008 already accepts two modals at once producing a confusing screen. Restore commits
 through `landFocus`, the same path `setFocus` uses after its check, so it can never report a
-move nobody asked for. **`ApplyCtx.Post` is still without the justification ADR 0006 asked
-for**; this change retires its last stated motivation and leaves it standing.
+move nobody asked for. **`ApplyCtx.Post` stays as general application use**: ADR 0006's
+"needs a new justification or it does not ship" was overtaken by ADR 0014, which rests on
+Apply minting contexts that post, and the bullet now says so.
