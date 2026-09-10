@@ -25,7 +25,7 @@ type filter struct{ text string }
 // Consuming typing is what this surface is rather than how its creator placed
 // it, so the type says so and no create site has to remember.
 func (f *filter) Declare() froth.Flags {
-	return froth.Flags{TabStop: true, TextSink: true}
+	return froth.Flags{TabStop: true, ClickFocus: true, TextSink: true}
 }
 
 // match reports the first action whose help or identity contains what has been

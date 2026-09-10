@@ -251,7 +251,7 @@ func (c *control) Render(rc *froth.RenderCtx, s froth.Size) string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("  " + c.label)
 }
 
-func (c *control) Declare() froth.Flags { return froth.Flags{TabStop: true} }
+func (c *control) Declare() froth.Flags { return froth.Flags{TabStop: true, ClickFocus: true} }
 
 func (c *control) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	m, ok := msg.(froth.ActionMsg)
