@@ -99,9 +99,10 @@ func (q Query) Actions() []ChainBinding {
 	return out
 }
 
-// StockBindings returns the bindings froth declares for the actions it services
-// itself — the ones a help display shows without any surface having declared
-// anything.
+// StockBindings returns the bindings froth declares for the actions it owns —
+// the ones a help display shows without any surface having declared anything.
+// An entry with no keys is an identity froth publishes and implements nothing
+// for; ActionCancel is the one.
 //
 // They are already matched, after every surface on the focus chain, so an
 // application needs this only to change them: declare the ones it wants with its

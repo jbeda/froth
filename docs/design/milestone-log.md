@@ -1679,3 +1679,19 @@ seam doing what it says.
 **Not done here.** Hover, drag synthesis, anchoring, the palette that holds capture, and
 whether froth services `ActionCancel` by closing a modal. #57's test is a separate commit.
 
+### #57 — `frothServiced` and `service` pinned against each other
+
+One test, no restructuring, as the ticket recommended. It walks `StockBindings()` and for
+each action asserts both observable consequences of being serviced at once: invoking it
+rises to froth and is not reported untaken, which pins `service`'s switch; and a
+declaration of it behind an open modal still resolves, which pins `frothServiced`. Both
+must agree with `b.Action != ActionCancel`, so the two lists are pinned against the same
+published set rather than against each other.
+
+**Three mutations, three caught.** Dropping an action from `frothServiced`, adding
+`ActionCancel` to it, and dropping an action from `service`'s switch each fail exactly one
+subtest.
+
+**`StockBindings`'s doc comment was wrong in the same way the lists could drift.** It said
+"the actions it services itself", and the list it returns includes `ActionCancel`, which
+froth does not service. It now says owns, and names the exception.
