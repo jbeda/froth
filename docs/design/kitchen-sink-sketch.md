@@ -929,7 +929,7 @@ What a surface is rather than how it sits — `TabStop`, `ClickFocus`, `TextSink
 here: its own type declares it, as `Flags`. See
 [ADR 0019](../adr/0019-focus-is-admitted-on-two-axes-and-a-click-must-find-you-first.md).
 
-**Built so far:** `FocusScope`, `MouseTransparent` and `Modal`.
+**Built so far:** `FocusScope`, `MouseTransparent`, `Modal` and `Float`.
 The rest waits for the milestones that give it a consumer — a layout that weighs children, modality, a
 stacking order a surface can set — because a flag stored against semantics nobody has
 had to implement is a guess later code has to honour.

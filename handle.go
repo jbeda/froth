@@ -169,6 +169,22 @@ func (r *registry) remove(h Handle) {
 	delete(r.nodes, h)
 }
 
+// childrenOf returns h's children in sibling order, either the ones its layout
+// arranges or, with floats set, the ones placed against the screen.
+func (r *registry) childrenOf(h Handle, floats bool) []Handle {
+	n := r.nodes[h]
+	if n == nil {
+		return nil
+	}
+	var out []Handle
+	for _, c := range n.children {
+		if r.nodes[c].meta.float == floats {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // get returns the node h names, or nil if it names nothing.
 func (r *registry) get(h Handle) *node { return r.nodes[h] }
 

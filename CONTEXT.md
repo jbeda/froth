@@ -102,9 +102,10 @@ exists, and what a click resolves against. Read-only.
 _Avoid_: last frame, screen state
 
 **Surface rect**:
-The whole rect a layout gave a surface, chrome included. froth draws the
-surface's chrome on its perimeter, and nothing the surface contributes to a
-frame falls outside it. This is the rect a `Frame` reports, and the one
+The whole rect a layout gave a surface, chrome included — or, for a float, the
+rectangle its output makes, centred on the screen. froth draws the surface's
+chrome on its perimeter, and nothing the surface contributes to a frame falls
+outside it. This is the rect a `Frame` reports, and the one
 directional movement resolves against.
 _Avoid_: window rect, outer rect, bounds
 

@@ -30,10 +30,16 @@ type HandleReader interface {
 	// that has left the tree both answer the zero Handle.
 	Parent() Handle
 
-	// Children reports this surface's children in sibling order, which is
-	// creation order and therefore stacking order. A surface with none, and a
-	// handle that names no live surface, both answer nothing.
+	// Children reports the children this surface's layout arranges, in sibling
+	// order, which is creation order and therefore stacking order. Floats are
+	// not among them, so a surface reconciling against what it enumerates
+	// never finds a modal it did not create. A surface with none, and a handle
+	// that names no live surface, both answer nothing.
 	Children() []Handle
+
+	// FloatChildren reports the children created with Float, in sibling order:
+	// the half Children leaves out.
+	FloatChildren() []Handle
 
 	// Rect reports this surface's rect in the rendered frame — the last frame
 	// drawn, which is what a mouse message was resolved against — and false
@@ -71,11 +77,12 @@ func (r reader) Parent() Handle {
 
 func (r reader) Children() []Handle {
 	r.check()
-	n := r.f.reg.get(r.h)
-	if n == nil {
-		return nil
-	}
-	return slices.Clone(n.children)
+	return r.f.reg.childrenOf(r.h, false)
+}
+
+func (r reader) FloatChildren() []Handle {
+	r.check()
+	return r.f.reg.childrenOf(r.h, true)
 }
 
 func (r reader) Rect() (Rect, bool) {

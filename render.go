@@ -130,12 +130,15 @@ func (f *Froth) place(screen Rect) []placement {
 	defer f.leave()
 
 	var out []placement
-	f.placeSubtree(token, f.root, screen, &out)
+	f.placeSubtree(token, f.root, screen, screen, &out)
 	f.renderedFrame = out
 	return out
 }
 
-func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placement) {
+// placeSubtree draws h in r and then its children below it. A float is handed
+// the whole screen as r and takes the rectangle its output makes, centred: its
+// rect is not known until it has drawn.
+func (f *Froth) placeSubtree(token phaseToken, h Handle, r, screen Rect, out *[]placement) {
 	// A handle that names nothing draws nothing, and its children are not
 	// reachable through it either.
 	n := f.reg.get(h)
@@ -156,21 +159,32 @@ func (f *Froth) placeSubtree(token phaseToken, h Handle, r Rect, out *[]placemen
 		// with a hole where the surface was.
 		return
 	}
+	if n.meta.float {
+		r = Rect{X: screen.X + (screen.W-drawn.W)/2, Y: screen.Y + (screen.H-drawn.H)/2, W: drawn.W, H: drawn.H}
+	}
 	*out = append(*out, placement{h: h, rect: r, drawn: drawn, content: content, z: len(*out) + 1})
 
 	// A container with no layout stacks its children at its own whole rect,
 	// which is what a surface that never calls SetLayout gets, and which needs
-	// no rect slice to say.
-	if n.layout == nil {
-		for _, c := range n.children {
-			f.placeSubtree(token, c, r, out)
-		}
-		return
+	// no rect slice to say. Floats are placed in sibling order alongside the
+	// arranged children, because stacking is depth-first and a float stacks as
+	// any child does.
+	arranged := f.reg.childrenOf(h, false)
+	var rects []Rect
+	if n.layout != nil {
+		rects = f.arrange(n, r, arranged)
 	}
-
-	rects := f.arrange(n, r)
-	for i, c := range n.children {
-		f.placeSubtree(token, c, rects[i], out)
+	i := 0
+	for _, c := range n.children {
+		switch {
+		case f.reg.get(c).meta.float:
+			f.placeSubtree(token, c, screen, screen, out)
+		case n.layout == nil:
+			f.placeSubtree(token, c, r, screen, out)
+		default:
+			f.placeSubtree(token, c, rects[i], screen, out)
+			i++
+		}
 	}
 }
 
@@ -181,17 +195,18 @@ func (f *Froth) callRender(token phaseToken, n *node, h Handle, r Rect) (content
 	return content, drawn, true
 }
 
-// arrange asks a container's layout where its children go. It is only called
-// for a container that has one; placeSubtree handles the layout-less case,
-// where every child takes the container's whole rect.
+// arrange asks a container's layout where the children it arranges go — every
+// child but the floats. It is only called for a container that has a layout;
+// placeSubtree handles the layout-less case, where every child takes the
+// container's whole rect.
 //
 // A layout returning the wrong number of rects is a bug in the layout: a child
 // with no rect has nowhere to render, and a rect with no child is an answer
 // about a surface that does not exist. Neither has a sane interpretation, so
 // froth says so rather than guessing.
-func (f *Froth) arrange(n *node, r Rect) []Rect {
-	children := make([]Child, len(n.children))
-	for i, c := range n.children {
+func (f *Froth) arrange(n *node, r Rect, arranged []Handle) []Rect {
+	children := make([]Child, len(arranged))
+	for i, c := range arranged {
 		children[i] = Child{Handle: c}
 	}
 

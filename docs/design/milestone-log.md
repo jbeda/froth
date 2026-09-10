@@ -1768,3 +1768,37 @@ through `landFocus`, the same path `setFocus` uses after its check, so it can ne
 move nobody asked for. **`ApplyCtx.Post` stays as general application use**: ADR 0006's
 "needs a new justification or it does not ship" was overtaken by ADR 0014, which rests on
 Apply minting contexts that post, and the bullet now says so.
+
+### #52 — A float leaves its parent's layout and is placed against the screen
+
+Built as the ticket wrote it, with one placement detail worth recording.
+
+**`Float()` is a `CreateOption` and a bit on `meta`, as ADR 0010 sorts it.** `place` walks a
+container's children in sibling order and hands a float the screen instead of a rect from the
+layout; the float draws, and the rect it resolves to is the rectangle its output makes, centred
+on the screen. So a float is sized by what it draws, is offered the whole screen, and one that
+fills its offer is full-screen — the doc comment says so, since it will surprise someone.
+`arrange` sees only the children the layout arranges, so the one-rect-per-child contract is
+untouched. A layout-less container's floats go against the screen too, not to its rect.
+
+**Stacking is ordinary, and the walk order says so.** A float is placed where it sits among its
+siblings, not after them, so a float created before a sibling that covers it is drawn under that
+sibling. That follows from *"everything else about it is ordinary"* and is pinned by a test in
+both orders; the alternative — floats always last, which is what an overlay would do — is the
+plausible wrong implementation and the mutation that found the test earning its keep.
+
+**`Children()` omits floats and `FloatChildren()` reports them**, both on `HandleReader`, both
+in sibling order, through one registry helper that also feeds `arrange`. Nothing else that
+walks `node.children` changed: focus collection, modality ordering and the opener scan all see a
+float as the ordinary child it is.
+
+**Six mutations, six caught, after two scored zero for a bad reason.** The first draft
+decided the offer twice — the parent's loop handed a float the screen *and* `placeSubtree`
+overrode `r` with the screen for a float — so removing either was not a mutation. The redundancy
+is gone and the offer is decided once, at the call site. The mutations that count: offering the
+parent's rect, centring at the screen's origin, keeping the screen as the float's rect, letting
+the layout see floats, `Children` returning everything, and floats placed after their siblings.
+
+**A click reaches a float where it was centred**, tested, because #55's palette reads its own
+`Rect()` to tell inside from outside and a float is the first surface whose rect is not what a
+layout said. No example has a float yet; #55 adds two.

@@ -55,6 +55,10 @@ type meta struct {
 
 	// modal takes input for this surface's parent's whole subtree.
 	modal bool
+
+	// float places this surface against the screen instead of by its parent's
+	// layout, which never sees it.
+	float bool
 }
 
 func (m *meta) apply(opts []CreateOption) {
@@ -101,3 +105,18 @@ func MouseTransparent() CreateOption { return func(m *meta) { m.mouseTransparent
 // about traversal, so a modal that should also hold the tab walk declares
 // FocusScope as well.
 func Modal() CreateOption { return func(m *meta) { m.modal = true } }
+
+// Float places a surface against the screen rather than by its parent's layout,
+// which never sees it among the children it arranges. froth offers it the whole
+// screen and centres the rectangle its output makes, so a float is sized by what
+// it draws: one that fills what it is offered is full-screen, which is correct
+// and will surprise someone, and one that draws nothing has no cells.
+//
+// Everything else about a float is ordinary. Its parent governs its lifetime,
+// its modality scope, its routing and the stacking scope it sits in, so a float
+// created before a later sibling is drawn under that sibling. Children omits
+// floats and FloatChildren reports them.
+//
+// Float and Modal are orthogonal: a dialog is usually both, a dropdown is a
+// float that is not modal.
+func Float() CreateOption { return func(m *meta) { m.float = true } }
