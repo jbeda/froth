@@ -74,13 +74,22 @@
 // through the same hook the cycle uses — which is what a forgotten case looks
 // like from the outside.
 //
-// Pressing "x" closes the focused pane. The pane removes itself and nothing
-// else is involved: no parent is told, no list is edited, and the layout gives
-// the space to whatever is left. Focus was on the pane that just left, so froth
-// puts it on the nearest surface that survives rather than sending the keyboard
-// back to the root — close the left pane and the right one has focus. The pane's
-// Unmount runs on the way out and says so in the notes pane, and the same walk
-// runs for every surface still standing when the program quits.
+// Pressing "x" asks before closing the focused pane. The pane opens a confirm
+// dialog with OpenModal: froth parents it to the root, so it blocks the whole
+// application, and records the pane as its opener, so it goes down with the
+// pane. The pane marks it Float, so it takes the rectangle it draws, centred,
+// rather than a place in the row. The dialog is told who to answer and nothing
+// else — the reply address is a field of what the pane constructs — and it is
+// written as the reusable thing it is: a spec, two button surfaces, one result
+// posted back. Say no, or esc, and froth hands focus back to the pane that
+// asked. Say yes and the pane removes itself, with nothing else involved: no
+// parent is told, no list is edited, and the layout gives the space to whatever
+// is left. The pane that held focus is gone and so is the dialog that would have
+// returned it, so froth rehomes it on the nearest surface that survives rather
+// than sending the keyboard back to the root. The pane's Unmount runs on the
+// way out and says so in the notes pane, and the same walk runs for every
+// surface still standing when the program quits. Inside the dialog, "q" still
+// quits — the root marked that binding SurvivesModal — and "x" reaches nothing.
 //
 // The scope's list is where structure stops being fixed. Inside it, + adds an
 // item and - removes the one holding focus, and neither key edits the tree: the
@@ -116,11 +125,22 @@
 // alone, so it is out of the keyboard walk and still one click away. The scope
 // admits no click itself: a click on its own area reaches it as a message, and
 // it answers by focusing itself, which enters the scope the way g does. Its
-// sticker in the corner is a child its creator marked mouse transparent, so a
-// click on the sticker falls through to the pane beneath it rather than landing
-// on a label that would do nothing with it. Nothing here holds capture — the
-// palette that dismisses on a click outside itself is the case for that, and it
-// is not in this example yet.
+// items are a row wide and draw a short label, and a click is resolved against
+// what was drawn: click past the end of a label and it lands on the scope, not
+// the item. The sticker in the notes pane's corner is a child its creator
+// marked mouse transparent, so a click on the sticker falls through to the pane
+// beneath it rather than landing on a label that would do nothing with it.
+//
+// ":" or ctrl+p opens a palette, which is the case for capture. It is a float
+// the root creates — not a modal, so the panes behind it are as live as ever —
+// and it claims every mouse message the moment it mounts. A click outside it
+// therefore reaches the palette and not the pane under the cursor, and the
+// palette takes itself down; nothing is hit-tested, and the click is spent.
+// Type an action's name and enter runs it; esc backs out. Being no modal, it
+// gets no focus restore from froth, so it is told where focus was and puts it
+// back itself. And it lists what the focus chain offers from where it sits, so
+// a pane's own actions are not on offer — a palette that reads a named
+// surface's actions is #58.
 //
 // The bar along the bottom is the same story told forwards. It is built entirely
 // from a query — it asks froth what a key press would currently do and prints the
@@ -155,6 +175,10 @@ const (
 	actionAddItem    froth.Action = "add an item"
 	actionRemoveItem froth.Action = "remove the focused item"
 	actionTally      froth.Action = "note this, for the scope"
+	actionYes        froth.Action = "answer yes"
+	actionNo         froth.Action = "answer no"
+	actionPress      froth.Action = "press"
+	actionPalette    froth.Action = "open the palette"
 )
 
 // model is the application root. It owns froth by pointer and forwards Bubble

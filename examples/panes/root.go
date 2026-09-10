@@ -21,6 +21,10 @@ type root struct {
 	note   *report
 	torn   *report
 	scope  froth.Handle
+
+	// wantPalette says the key was pressed and the palette not yet created.
+	// Creating needs an Apply, so the key sets this and Reconcile creates.
+	wantPalette bool
 }
 
 func (rt *root) Mount(ac *froth.ApplyCtx) {
@@ -36,6 +40,10 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 		Action: actionEnterScope,
 		Keys:   []string{"g"},
 		Help:   "focus the scope",
+	}, {
+		Action: actionPalette,
+		Keys:   []string{":", "ctrl+p"},
+		Help:   "open the palette",
 	}})
 
 	left := &pane{
@@ -135,6 +143,9 @@ func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 			// Moving focus to a scope enters it: froth lands on the control the
 			// scope last had focus on, or its first one.
 			uc.At(rt.scope).Focus()
+		case actionPalette:
+			rt.wantPalette = true
+			uc.Self().Reconcile()
 		default:
 			// Anything else keeps rising, which is how tab reaches froth.
 			return
@@ -147,6 +158,23 @@ func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 		rt.note.text = "rose from " + m.from + " and the root took it"
 		uc.StopRising()
 	}
+}
+
+// Reconcile creates the palette the key asked for, as a float of the root's
+// own: it is placed against the screen, not in the row, and it lives as long
+// as the root does or until it takes itself down. The palette is the only
+// float the root creates, so one already there is the one to focus.
+func (rt *root) Reconcile(ac *froth.ApplyCtx) {
+	if !rt.wantPalette {
+		return
+	}
+	rt.wantPalette = false
+	if floats := ac.Self().FloatChildren(); len(floats) > 0 {
+		ac.Child(floats[0]).Focus()
+		return
+	}
+	h := ac.Self().Create(newPalette(ac.Query().Focus()), froth.Float())
+	ac.Child(h).Focus()
 }
 
 // onDiagnostic is froth's one hook, registered at construction. It is ordinary

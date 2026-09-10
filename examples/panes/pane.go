@@ -53,6 +53,13 @@ type pane struct {
 	// The child is created mouse transparent, so a click on it reaches the
 	// pane beneath.
 	sticker string
+
+	// closing says a confirm dialog has been asked for and not yet opened.
+	// Opening needs an Apply, so the key sets this and the reconcile opens.
+	closing bool
+	// asking is the dialog that is up, or the zero handle. A second x while it
+	// is up is answered by focusing it rather than opening another.
+	asking froth.Handle
 }
 
 func (p *pane) Declare() froth.Flags {
@@ -142,36 +149,71 @@ func (p *pane) Mount(ac *froth.ApplyCtx) {
 }
 
 func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
-	switch msg := msg.(type) {
+	switch m := msg.(type) {
 	case froth.ActionMsg:
-		switch msg.Action {
+		switch m.Action {
 		case actionCycle:
 			// Answering a message with the same message is the cycle the
 			// iteration cap is for.
 			uc.Self().Post(cycleMsg{})
 			uc.StopRising()
 		case actionClose:
-			// A surface removes itself. The removal commits at the next Apply,
-			// so this pane is still live for the rest of this update — and
-			// froth moves focus off it rather than leaving the keyboard
-			// pointing at nothing.
-			uc.Self().Destroy()
+			// Closing asks first. Opening a modal is an Apply-tier call, so
+			// the key records the wish and Reconcile opens the dialog.
+			p.closing = true
+			uc.Self().Reconcile()
 			uc.StopRising()
 		}
+	case confirmResult:
+		if m.dialog != p.asking {
+			return
+		}
+		p.asking = froth.Handle{}
+		if !m.ok {
+			p.status = "kept — the dialog said no, and focus came back here"
+			return
+		}
+		// A surface removes itself. The removal commits at the next Apply,
+		// so this pane is still live for the rest of this update — and froth
+		// moves focus off it rather than leaving the keyboard pointing at
+		// nothing. The dialog leaves in the same Apply, so the focus it would
+		// have handed back has nowhere to go and froth rehomes instead.
+		uc.Self().Destroy()
 	case tea.KeyMsg:
-		key := msg.String()
+		key := m.String()
 		p.status = "I had focus, so froth gave me " + strconv.Quote(key)
 		uc.At(p.sibling).Post(echoMsg{key: key})
 	case tea.MouseClickMsg:
 		// A click arrives at whatever was drawn under it, focused or not; it
 		// moved focus here only because this pane's type admits it.
-		p.status = "a click landed on me at " + froth.Pt(msg.X, msg.Y).String()
+		p.status = "a click landed on me at " + froth.Pt(m.X, m.Y).String()
 	case echoMsg:
-		p.status = "the focused pane passed on " + strconv.Quote(msg.key) +
+		p.status = "the focused pane passed on " + strconv.Quote(m.key) +
 			", same frame as the keystroke"
 	case cycleMsg:
-		uc.Self().Post(msg)
+		uc.Self().Post(m)
 	}
+}
+
+// Reconcile opens the dialog the key asked for. The dialog is parented to the
+// root and opened by this pane: the root decides what it blocks, and this pane
+// decides how long it lives — close the pane and the dialog goes with it.
+func (p *pane) Reconcile(ac *froth.ApplyCtx) {
+	if !p.closing {
+		return
+	}
+	p.closing = false
+	if p.asking != (froth.Handle{}) {
+		ac.At(p.asking).Focus()
+		return
+	}
+	p.asking = ac.Self().OpenModal(newConfirmDialog(&confirmSpec{
+		title:   "Close the " + p.title + " pane?",
+		body:    "Its Unmount runs on the way out, and focus goes to the nearest surface left standing.",
+		yes:     "Close",
+		no:      "Keep",
+		replyTo: ac.Self().Handle(),
+	}), froth.Float())
 }
 
 // label is a one-line surface with nothing to say about input.
