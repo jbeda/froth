@@ -1676,6 +1676,17 @@ the holder because an unaddressed message reaches the root, and one clicked wher
 survivor no longer sat after the layout re-flowed around a destroyed sibling. Both are the
 seam doing what it says.
 
+**The example shipped ADR 0019's own quiet failure, and driving it found it in a minute.**
+The filter field and the scope's controls declared `TabStop` alone, so they were reachable by
+tab and dead to the mouse — the exact cost ADR 0019 lists — in the same commit that said the
+cost note was met. Fixed in `eba0d99`. Then the scope: tab passes over it by ADR 0011, and a
+click on its own area did nothing because it declares no admission and there is no ancestor
+walk. Declaring `ClickFocus` would have focused the container literally; instead the scope
+handles the click and calls `Self().Focus()`, which redirects into it and lands on the
+last-active control. That is the container saying what a click on it means, which is the
+shape ADR 0019 asks for. `02e6c7b`. Lesson for #55: drive the example by hand before
+claiming the flags are visible, because reading it did not catch either.
+
 **Not done here.** Hover, drag synthesis, anchoring, the palette that holds capture, and
 whether froth services `ActionCancel` by closing a modal. #57's test is a separate commit.
 
