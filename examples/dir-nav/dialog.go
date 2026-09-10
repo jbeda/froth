@@ -20,17 +20,8 @@ const (
 // it is up — the size keys included, which is why the board cannot be resized
 // from inside it.
 //
-// It goes on g, on esc, and on a control being picked. It carries the handle of
-// the surface that opened it because that surface holds the dialog's handle
-// and has to be told it is gone: froth ties the dialog's lifetime to its opener
-// and tells nobody when it leaves.
-type dialog struct {
-	bd     *board
-	opener froth.Handle
-}
-
-// dialogGone is what the dialog tells its opener as it leaves.
-type dialogGone struct{}
+// It goes on g, on esc, and on a control being picked.
+type dialog struct{ bd *board }
 
 func (d *dialog) Mount(ac *froth.ApplyCtx) {
 	self := ac.Self()
@@ -54,7 +45,6 @@ func (d *dialog) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	}
 	switch m.Action {
 	case actionCloseDialog, actionPick, froth.ActionCancel:
-		uc.At(d.opener).Post(dialogGone{})
 		uc.Self().Destroy()
 		uc.StopRising()
 	}

@@ -73,8 +73,8 @@ separator for at least one press:
 The fifth needs the twins to cross the row focus is in. They sit on the screen's middle line,
 which at 100×30 is Drafts. Two screens where that press does not reach them, and what does:
 on one taller than about 37 lines they fall clear below the sidebar, and `shift+down` from
-Sent reaches them; at the 80×24 minimum the detail pane's centre sits too close to theirs, and
-four presses of `]` from the detail pane — which shortens it — puts a twin ahead of it.
+Sent reaches them; at the 80×24 minimum no press reaches them from any panel at any setting
+of the size keys that was tried, so grow the window first.
 
 ## Things worth having an opinion about
 

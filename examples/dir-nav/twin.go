@@ -13,9 +13,9 @@ import (
 const twinInset = 24
 
 // twin is one of a pair of one-line floats across the middle of the board. They
-// are what reaches better()'s last test: two candidates with the same rect,
-// which a tiling layout never produces, decided by which of them was drawn last
-// and is therefore the one on screen. Both draw one width from the screen they
+// are what reaches the directional rule's last tie-break: two candidates with
+// the same rect, which a tiling layout never produces, decided by which of them
+// was drawn last and is therefore the one on screen. Both draw one width from the screen they
 // are offered, so both centre on one rect.
 //
 // A float is offered the whole screen, so the size a twin reports to the banner

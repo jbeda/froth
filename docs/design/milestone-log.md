@@ -1829,3 +1829,75 @@ whenever the condition does not hold, layout or no, and a test pins it.
 **Five mutations, five caught** by test failures: reporting every frame, never re-arming
 after the condition drops, keeping the flag across a layout being attached, counting floats,
 and reporting for one child.
+
+### #55 — A confirm dialog over the panes, a palette that dismisses on a click outside, and dir-nav's dialog and twins
+
+The milestone demo, and the first time `OpenModal`, `Float`, capture, the sideways destroy
+and focus restore run in a real program. Design was settled in a grilling first; two things
+building found are recorded below because the design did not predict them.
+
+**The confirm dialog is written as the reusable thing it is, inside the example.** A spec
+naming the question, the two labels and the reply address; two `button` surfaces that
+report a press to a handle they were constructed with; one `confirmResult` posted back before
+the dialog destroys itself. The maintainer chose to demonstrate the pattern in the example
+and extract a library later rather than ship `froth/dialog` now. The dialog starts focus on
+its no button, so enter alone cannot confirm something destructive.
+
+**Opening is an Apply-tier call, so a key cannot open a modal directly.** Both examples
+route a key through `Reconcile`: the handler records what it wants and asks for a reconcile,
+and the reconcile opens the dialog or creates the palette with a real Apply context. This is
+the shape the reconciler was built for and it reads well, but it is the first thing every
+dialog-opening surface has to learn, and worth watching as the case for sugar.
+
+**A non-modal float that takes focus gets no restore.** The palette is a float, not a modal,
+so when it leaves froth rehomes focus by its own rule — root, then down, which landed on the
+filter field rather than the pane the palette was opened over. The palette is now handed the
+handle that held focus at open and puts it back itself before destroying, which is the
+explicit form of what a modal gets for free. The handle root passes is `Query().Focus()` at
+the moment of opening, the same handle #58 wants for reading a named surface's actions.
+
+**A palette lists what the chain offers from where it sits.** `Query.Actions` and `Invoke`
+are both focus-relative and the palette holds focus, so it offers root's actions and froth's
+own, never the pane's `close this pane`. Filed as #58 with the two calls it needs; the
+package comment says so rather than hiding it.
+
+**A text sink swallows the palette's key, and the palette's capture-lost path.** `:` is
+typing while the filter field holds focus, so the binding also names `ctrl+p`. And while
+the palette holds focus it is the text sink, so no key can open a modal over it: the
+`CaptureLostMsg` branch is in the code and cannot be reached from the keyboard in this
+example. The package comment says so. Both found in the scaffolding test, not by reading.
+
+**What "yes" does to focus is two steps, not one.** The dialog leaves first and hands focus
+back to the pane that asked, and the pane's own removal a moment later rehomes it — root,
+then down — onto the filter field. The first draft of the comment said the restore had
+nowhere to go; the reviewer read `applyDestroys` and found the order. Written correctly now.
+
+**A palette that leaves on every action is wrong.** The first draft took itself down on any
+`ActionMsg`, so tab both dismissed it and moved focus one stop past the surface it had just
+restored. It now leaves on cancel, on its own invocation, on a click outside and on losing
+capture, and takes every other action itself: a palette without focus would be capture with
+nothing typing into it.
+
+**Whether a float is still up is read back, not remembered.** Both roots and the pane first
+tracked the dialog or palette with a message or a flag; each was either dead code (the
+modal suppresses the key that would re-ask) or a second copy of what `FloatChildren`
+already says. Each now checks membership in `FloatChildren` and opens if absent.
+
+**dir-nav's scope became a modal dialog and the wall finding was replaced.** The scope's
+"a move into the scope does nothing and nothing says why" is now "a modal takes the keys
+away silently": inside the dialog the size keys do nothing, which is a modal doing its job
+and is indistinguishable from an unbound key. The right column reflowed to two panels with
+one divider, and README rows 1–3 re-drove unchanged; row 4's recipe changed to four `]`
+presses on Metadata.
+
+**The twins reach `better()`'s fifth test, screen-dependently.** Two non-modal floats
+drawing the same width centre on one rect, so a move that reaches them ties on every test
+but drawn-last, and twin B — created second, drawn over twin A — wins. At 100×30 that press
+is `shift+right` from Drafts; the README records a taller screen where `shift+down` from
+Sent is the press instead, and that at the 80×24 minimum nothing reaches them — the
+subagent's report claimed a size-key recipe there and the reviewer drove it and found none.
+A twin reports the screen as its size to the banner, because a float is offered the
+screen and takes the rect its output makes — recorded there as a finding, not a bug.
+
+**Verified by driving both examples through scaffolding tests, since deleted**, per the
+working agreement; nothing in CI catches a dropped declaration in an example.

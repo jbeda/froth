@@ -15,15 +15,17 @@ import (
 // It is not modal: the panes behind it still draw, tab would still walk them,
 // and only capture stands between a click and them. That is the point of it.
 //
-// It is not a modal, so froth does not hand focus back when it leaves; it is
-// told where focus was and puts it back itself.
-//
 // What it lists is what the focus chain offers, and while it is up the chain
 // runs from the palette itself, so the actions of the surface it was opened
 // over are not among them.
 type palette struct {
 	text string
+	// back is where focus was when the palette opened. A float that is not a
+	// modal gets no focus restore from froth, so the palette does it.
 	back froth.Handle
+	// invoked says enter has asked for an action, so the next action to
+	// arrive is the palette's own and it should leave once that has risen.
+	invoked bool
 }
 
 func newPalette(back froth.Handle) *palette { return &palette{back: back} }
@@ -50,17 +52,25 @@ func (p *palette) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 			p.leave(uc)
 		}
 	case froth.ActionMsg:
-		if m.Action == froth.ActionCancel {
+		switch {
+		case m.Action == froth.ActionCancel:
+			uc.StopRising()
+			p.leave(uc)
+		case p.invoked:
+			// The palette's own invocation starts here, since it holds
+			// focus. It rises on to whoever answers it, and the palette is
+			// gone by the time the next frame draws.
+			p.leave(uc)
+		default:
+			// tab and the rest stay here: a palette without focus would be
+			// capture with nothing typing into it.
 			uc.StopRising()
 		}
-		// Any action starts here while the palette holds focus, its own
-		// invocation included. It rises on to whoever answers it, and the
-		// palette is gone by the time the next frame draws.
-		p.leave(uc)
 	case tea.KeyPressMsg:
 		switch m.String() {
 		case "enter":
 			if a, ok := match(uc.Query().Actions(), p.text); ok {
+				p.invoked = true
 				uc.Invoke(a.Action)
 			}
 		case "backspace":
@@ -73,9 +83,7 @@ func (p *palette) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 	}
 }
 
-// leave puts focus back where it was and takes the palette down. Focus first:
-// a focus move onto a surface that has left is refused, and this one is still
-// live until the Apply that commits the destroy.
+// leave puts focus back where it was and takes the palette down.
 func (p *palette) leave(uc *froth.UpdateCtx) {
 	uc.At(p.back).Focus()
 	uc.Self().Destroy()

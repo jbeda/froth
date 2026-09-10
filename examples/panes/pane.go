@@ -57,8 +57,8 @@ type pane struct {
 	// closing says a confirm dialog has been asked for and not yet opened.
 	// Opening needs an Apply, so the key sets this and the reconcile opens.
 	closing bool
-	// asking is the dialog that is up, or the zero handle. A second x while it
-	// is up is answered by focusing it rather than opening another.
+	// asking is the dialog that is up, so its answer can be told from any
+	// other dialog's.
 	asking froth.Handle
 }
 
@@ -174,10 +174,10 @@ func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 			return
 		}
 		// A surface removes itself. The removal commits at the next Apply,
-		// so this pane is still live for the rest of this update — and froth
-		// moves focus off it rather than leaving the keyboard pointing at
-		// nothing. The dialog leaves in the same Apply, so the focus it would
-		// have handed back has nowhere to go and froth rehomes instead.
+		// so this pane is still live for the rest of this update. The dialog
+		// leaves in the same Apply and hands focus back here first; then this
+		// pane goes, and froth rehomes focus rather than leaving the keyboard
+		// pointing at nothing.
 		uc.Self().Destroy()
 	case tea.KeyMsg:
 		key := m.String()
@@ -203,10 +203,6 @@ func (p *pane) Reconcile(ac *froth.ApplyCtx) {
 		return
 	}
 	p.closing = false
-	if p.asking != (froth.Handle{}) {
-		ac.At(p.asking).Focus()
-		return
-	}
 	p.asking = ac.Self().OpenModal(newConfirmDialog(&confirmSpec{
 		title:   "Close the " + p.title + " pane?",
 		body:    "Its Unmount runs on the way out, and focus goes to the nearest surface left standing.",

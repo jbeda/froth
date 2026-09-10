@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -42,9 +43,7 @@ const legend = "tab        next stop\n" +
 //
 // The dialog and the twins are structure, so a key that wants either sets what
 // it wants here and asks for a reconcile; the tree is expressed from these
-// fields rather than from a list of operations. The dialog's handle is what
-// says one is already up — the flag alone would open a second on the next
-// reconcile, whatever asked for it.
+// fields rather than from a list of operations.
 type root struct {
 	bd         *board
 	wantDialog bool
@@ -110,10 +109,6 @@ func (rt *root) bindings() []froth.Binding {
 // below it took. Taking one means ending the walk: without that it carries on
 // past the root to froth, which reports that nobody took it.
 func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
-	if _, ok := msg.(dialogGone); ok {
-		rt.wantDialog, rt.dialog = false, froth.Handle{}
-		return
-	}
 	m, ok := msg.(froth.ActionMsg)
 	if !ok {
 		return
@@ -155,8 +150,13 @@ func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 // movement can reach them.
 func (rt *root) Reconcile(ac *froth.ApplyCtx) {
 	self := ac.Self()
-	if rt.wantDialog && rt.dialog == (froth.Handle{}) {
-		rt.dialog = self.OpenModal(&dialog{bd: rt.bd, opener: self.Handle()}, froth.Float())
+	if rt.wantDialog {
+		rt.wantDialog = false
+		// The dialog takes itself down and tells nobody, so whether the
+		// handle still names a child is read back rather than remembered.
+		if !slices.Contains(self.FloatChildren(), rt.dialog) {
+			rt.dialog = self.OpenModal(&dialog{bd: rt.bd}, froth.Float())
+		}
 	}
 	switch {
 	case rt.wantTwins && len(rt.twins) == 0:

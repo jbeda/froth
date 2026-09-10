@@ -84,9 +84,10 @@
 // posted back. Say no, or esc, and froth hands focus back to the pane that
 // asked. Say yes and the pane removes itself, with nothing else involved: no
 // parent is told, no list is edited, and the layout gives the space to whatever
-// is left. The pane that held focus is gone and so is the dialog that would have
-// returned it, so froth rehomes it on the nearest surface that survives rather
-// than sending the keyboard back to the root. The pane's Unmount runs on the
+// is left. The dialog hands focus back to the pane as it goes, and the pane
+// goes next, so froth rehomes focus by its own rule — nearest surviving
+// ancestor, then down — which lands on the filter field, the root's first stop.
+// The pane's Unmount runs on the
 // way out and says so in the notes pane, and the same walk runs for every
 // surface still standing when the program quits. Inside the dialog, "q" still
 // quits — the root marked that binding SurvivesModal — and "x" reaches nothing.
@@ -138,9 +139,12 @@
 // palette takes itself down; nothing is hit-tested, and the click is spent.
 // Type an action's name and enter runs it; esc backs out. Being no modal, it
 // gets no focus restore from froth, so it is told where focus was and puts it
-// back itself. And it lists what the focus chain offers from where it sits, so
-// a pane's own actions are not on offer — a palette that reads a named
-// surface's actions is #58.
+// back itself. It would also leave if froth took capture from it, which a modal
+// opening over it does — but while it holds focus it is a text sink, so no key
+// can open one, and that path is in the code rather than on the screen. And it
+// lists what the focus chain offers from where it sits, so a pane's own actions
+// are not on offer; a palette that reads a named surface's actions is a gap
+// froth has not closed.
 //
 // The bar along the bottom is the same story told forwards. It is built entirely
 // from a query — it asks froth what a key press would currently do and prints the
