@@ -162,6 +162,12 @@ func (g *scopePane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 		}
 		uc.StopRising()
 
+	case tea.MouseClickMsg:
+		// The scope admits focus by no route, so a click on its own area moves
+		// nothing on its own. What it should mean is the scope's to say: focus
+		// the scope, which enters it and lands on the control last active.
+		uc.Self().Focus()
+
 	case tallyMsg:
 		// Taken here rather than at the root, and that placement is the point.
 		// Everything a modal contains is parented to the root, so the root sees

@@ -113,7 +113,9 @@
 // A click goes to the surface under it, resolved against what was last drawn,
 // and moves focus there only if the surface's type admits it. The left and
 // right panes admit both tab and the click; the notes pane admits the click
-// alone, so it is out of the keyboard walk and still one click away. Its
+// alone, so it is out of the keyboard walk and still one click away. The scope
+// admits no click itself: a click on its own area reaches it as a message, and
+// it answers by focusing itself, which enters the scope the way g does. Its
 // sticker in the corner is a child its creator marked mouse transparent, so a
 // click on the sticker falls through to the pane beneath it rather than landing
 // on a label that would do nothing with it. Nothing here holds capture — the
