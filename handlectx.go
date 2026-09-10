@@ -343,7 +343,8 @@ func (sc SelfApplyCtx) Destroy() { sc.destroy() }
 func (sc SelfApplyCtx) Reconcile() { sc.requestReconcile() }
 
 // SetLayout attaches a layout to this surface, which places its children from
-// then on. A surface with no layout stacks its children at its own whole rect.
+// then on. A surface with no layout stacks its children at its own whole rect,
+// and is reported with DiagNoLayout once it has more than one to stack.
 func (sc SelfApplyCtx) SetLayout(l Layout) {
 	sc.check()
 	sc.f.reg.get(sc.h).layout = l

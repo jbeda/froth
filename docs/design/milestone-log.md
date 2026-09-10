@@ -1802,3 +1802,30 @@ the layout see floats, `Children` returning everything, and floats placed after 
 **A click reaches a float where it was centred**, tested, because #55's palette reads its own
 `Rect()` to tell inside from outside and a float is the first surface whose rect is not what a
 layout said. No example has a float yet; #55 adds two.
+
+### #46 — A layout can be a function, and a layout-less container with several children is named
+
+Two small additions, built as the ticket and its comment wrote them.
+
+**`LayoutFunc` is the name, and the call sites accepted it.** `Layout` stays the interface;
+`LayoutFunc` adapts a function to it, in the shape `http.HandlerFunc` set. It collides with
+nothing in `CONTEXT.md`'s `_Avoid_` lists or the existing identifiers. `dir-nav`'s
+`scopeInner`, a stateless struct, became a plain function passed through the adapter; the
+layouts that carry a `*splits` stay as types.
+
+**`DiagNoLayout` counts arranged children and reports once per occurrence.** The ticket's
+comment asked for two decisions. A float is placed against the screen and not by a layout,
+so `place` counts what `childrenOf(h, false)` reports — a root holding one pane and one
+floating dialog is not a mistake. And `place` runs every frame, so the report is deduplicated
+per container: it goes out on the first frame the condition holds, stays quiet while it goes
+on holding, and goes out again if the children drop to one and then grow back. A flag on the
+node carries that; the doc comment on the kind says so.
+
+**Review found the flag going stale.** The first draft only touched the flag on the
+layout-less branch, so a container reported, given a layout, and then stripped of it again
+was never reported a second time — the doc comment promised otherwise. The flag now clears
+whenever the condition does not hold, layout or no, and a test pins it.
+
+**Five mutations, five caught** by test failures: reporting every frame, never re-arming
+after the condition drops, keeping the flag across a layout being attached, counting floats,
+and reporting for one child.

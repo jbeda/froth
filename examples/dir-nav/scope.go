@@ -23,7 +23,7 @@ func (s *scope) Mount(ac *froth.ApplyCtx) {
 	for _, name := range []string{"Reply", "Forward", "Archive"} {
 		self.Create(&control{name: name, bd: s.bd})
 	}
-	self.SetLayout(scopeInner{})
+	self.SetLayout(froth.LayoutFunc(scopeInner))
 	// The scope is on the focus chain while one of its controls holds focus,
 	// and it is deeper than the root, so its g wins over the root's from
 	// inside.

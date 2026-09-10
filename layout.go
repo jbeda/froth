@@ -16,6 +16,13 @@ type Layout interface {
 	Arrange(space Rect, children []Child) []Rect
 }
 
+// A LayoutFunc is a Layout written as a function, for a container whose
+// arrangement has no state to carry between calls.
+type LayoutFunc func(space Rect, children []Child) []Rect
+
+// Arrange calls f.
+func (f LayoutFunc) Arrange(space Rect, children []Child) []Rect { return f(space, children) }
+
 // A Child is one of the children a layout is arranging. It is a struct rather
 // than a bare handle so that the metadata a layout weighs can hang off it.
 type Child struct {

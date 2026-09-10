@@ -49,6 +49,22 @@ func newWatched(t *testing.T, root froth.Surface, w, h int) (*froth.Froth, *[]fr
 	return f, &got
 }
 
+// countKind counts the diagnostics of one kind, and hasKind says whether there
+// were any.
+func countKind(got []froth.Diagnostic, k froth.DiagnosticKind) int {
+	n := 0
+	for _, d := range got {
+		if d.Kind == k {
+			n++
+		}
+	}
+	return n
+}
+
+func hasKind(got []froth.Diagnostic, k froth.DiagnosticKind) bool {
+	return countKind(got, k) > 0
+}
+
 type fixed struct{ content string }
 
 func (x *fixed) Render(*froth.RenderCtx, froth.Size) string { return x.content }

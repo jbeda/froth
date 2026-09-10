@@ -111,15 +111,6 @@ func kinds(got []froth.Diagnostic) []froth.DiagnosticKind {
 	return out
 }
 
-func hasKind(got []froth.Diagnostic, k froth.DiagnosticKind) bool {
-	for _, d := range got {
-		if d.Kind == k {
-			return true
-		}
-	}
-	return false
-}
-
 // Destroying a child takes its descendants with it. There is no deep destroy:
 // a surface names its own child and the cascade reaches the rest.
 func TestDestroyingAChildRemovesItsWholeSubtree(t *testing.T) {

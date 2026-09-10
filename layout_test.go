@@ -3,6 +3,7 @@ package froth_test
 import (
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/jbeda/froth"
 )
 
@@ -215,5 +216,145 @@ func TestCompositingASubtreeWithNoCellsReturnsTheZeroFrame(t *testing.T) {
 				t.Errorf("View().Content = %q, want %q", got, want)
 			}
 		})
+	}
+}
+
+// A layout can be a function: LayoutFunc adapts one for SetLayout.
+func TestALayoutFuncArrangesChildren(t *testing.T) {
+	a, b := &block{ch: "a", w: 1, h: 1}, &block{ch: "b", w: 1, h: 1}
+	root := &laidOut{
+		parent: parent{body: "....", kids: []froth.Surface{a, b}},
+		layout: froth.LayoutFunc(func(space froth.Rect, children []froth.Child) []froth.Rect {
+			out := make([]froth.Rect, len(children))
+			for i := range out {
+				out[i] = froth.Rect{X: space.X + space.W - 1 - i, Y: space.Y, W: 1, H: 1}
+			}
+			return out
+		}),
+	}
+	f := newSized(t, root, 4, 1)
+
+	if got, want := f.View().Content, "..ba"; got != want {
+		t.Errorf("View().Content = %q, want %q", got, want)
+	}
+}
+
+// countMsg tells a counted container how many children it should have.
+type countMsg int
+
+// counted is a container with no layout that keeps as many children as it was
+// last told to, through Reconcile.
+type counted struct {
+	live []froth.Handle
+	want int
+
+	pending   froth.Layout
+	setLayout bool
+}
+
+func (c *counted) Render(*froth.RenderCtx, froth.Size) string { return "...." }
+
+func (c *counted) Update(uc *froth.UpdateCtx, msg tea.Msg) {
+	if n, ok := msg.(countMsg); ok {
+		c.want = int(n)
+		uc.Self().Reconcile()
+	}
+	c.handleLayout(uc, msg)
+}
+
+func (c *counted) Mount(ac *froth.ApplyCtx) { c.Reconcile(ac) }
+
+func (c *counted) Reconcile(ac *froth.ApplyCtx) {
+	if c.setLayout {
+		ac.Self().SetLayout(c.pending)
+		c.setLayout = false
+	}
+	for len(c.live) > c.want {
+		last := len(c.live) - 1
+		ac.Child(c.live[last]).Destroy()
+		c.live = c.live[:last]
+	}
+	for len(c.live) < c.want {
+		c.live = append(c.live, ac.Self().Create(&block{ch: "x", w: 1, h: 1}))
+	}
+}
+
+// A container with no layout and more than one child is reported, once: the
+// frames that follow with the same children say nothing new. It is reported
+// again once the condition has gone away and come back.
+func TestSeveralChildrenWithNoLayoutAreReportedOncePerOccurrence(t *testing.T) {
+	root := &counted{want: 2}
+	f, diags := newWatched(t, root, 4, 1)
+
+	f.View()
+	f.View()
+	if got := countKind(*diags, froth.DiagNoLayout); got != 1 {
+		t.Fatalf("two frames reported %d no-layout diagnostics, want 1: %v", got, *diags)
+	}
+
+	f.Update(countMsg(1))
+	f.View()
+	if got := countKind(*diags, froth.DiagNoLayout); got != 1 {
+		t.Fatalf("dropping to one child reported %d no-layout diagnostics, want still 1: %v", got, *diags)
+	}
+
+	f.Update(countMsg(3))
+	f.View()
+	f.View()
+	if got := countKind(*diags, froth.DiagNoLayout); got != 2 {
+		t.Fatalf("returning to several children reported %d no-layout diagnostics in all, want 2: %v", got, *diags)
+	}
+}
+
+// One child and no layout is the ordinary case and is not reported.
+func TestOneChildWithNoLayoutIsNotReported(t *testing.T) {
+	root := &counted{want: 1}
+	f, diags := newWatched(t, root, 4, 1)
+
+	f.View()
+	if hasKind(*diags, froth.DiagNoLayout) {
+		t.Errorf("one child and no layout was reported: %v", *diags)
+	}
+}
+
+// A float is placed against the screen, not by a layout, so it does not count
+// towards the children a layout would have to arrange.
+func TestAFloatDoesNotCountTowardsTheNoLayoutReport(t *testing.T) {
+	root := &floatHost{body: "....", kids: []nestKid{
+		{surface: &block{ch: "a", w: 1, h: 1}},
+		floating(&block{ch: "f", w: 1, h: 1}),
+	}}
+	f, diags := newWatched(t, root, 4, 1)
+
+	f.View()
+	if hasKind(*diags, froth.DiagNoLayout) {
+		t.Errorf("one arranged child and one float was reported: %v", *diags)
+	}
+}
+
+// layoutMsg attaches or removes a layout on a counted container.
+type layoutMsg struct{ layout froth.Layout }
+
+func (c *counted) handleLayout(uc *froth.UpdateCtx, msg tea.Msg) {
+	if m, ok := msg.(layoutMsg); ok {
+		c.pending, c.setLayout = m.layout, true
+		uc.Self().Reconcile()
+	}
+}
+
+// Attaching a layout ends the condition as surely as losing a child does, so
+// removing the layout again with several children still there is a fresh
+// occurrence and is reported again.
+func TestAttachingALayoutResetsTheNoLayoutReport(t *testing.T) {
+	root := &counted{want: 2}
+	f, diags := newWatched(t, root, 4, 1)
+
+	f.View()
+	f.Update(layoutMsg{layout: &halves{}})
+	f.View()
+	f.Update(layoutMsg{layout: nil})
+	f.View()
+	if got := countKind(*diags, froth.DiagNoLayout); got != 2 {
+		t.Fatalf("removing a layout again reported %d no-layout diagnostics in all, want 2: %v", got, *diags)
 	}
 }

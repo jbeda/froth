@@ -8,6 +8,7 @@
 package froth
 
 import (
+	"fmt"
 	"slices"
 
 	tea "charm.land/bubbletea/v2"
@@ -174,6 +175,7 @@ func (f *Froth) placeSubtree(token phaseToken, h Handle, r, screen Rect, out *[]
 	if n.layout != nil {
 		rects = f.arrange(n, r, arranged)
 	}
+	f.reportNoLayout(n, h, len(arranged))
 	i := 0
 	for _, c := range n.children {
 		switch {
@@ -193,6 +195,22 @@ func (f *Froth) callRender(token phaseToken, n *node, h Handle, r Rect) (content
 	defer f.quarantine(h, "Render")
 	content, drawn = clip(n.surface.Render(&RenderCtx{phaseToken: token, self: h}, r.Size()), r.Size())
 	return content, drawn, true
+}
+
+// reportNoLayout reports DiagNoLayout for a container with no layout and more
+// than one arranged child, once per run of frames the condition holds: place
+// runs every frame, and a repeat says nothing new.
+func (f *Froth) reportNoLayout(n *node, h Handle, arranged int) {
+	if n.layout != nil || arranged < 2 {
+		n.noLayoutReported = false
+		return
+	}
+	if n.noLayoutReported {
+		return
+	}
+	n.noLayoutReported = true
+	f.report(Diagnostic{Kind: DiagNoLayout, Detail: fmt.Sprintf(
+		"%s has %d children and no layout; they stack at its whole rect", h, arranged)})
 }
 
 // arrange asks a container's layout where the children it arranges go — every

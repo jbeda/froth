@@ -66,6 +66,10 @@ type node struct {
 	panicked       bool
 	wantsReconcile bool
 
+	// noLayoutReported says DiagNoLayout has gone out for this surface and the
+	// condition has held every frame since, so drawing again reports nothing.
+	noLayoutReported bool
+
 	// lastActive is the child of this surface that most recently sat on the
 	// focus chain. It is restoration state — where focus lands when traversal
 	// re-enters this subtree — and is never consulted to answer where focus is:

@@ -122,6 +122,16 @@ const DiagSurfacePanic DiagnosticKind = "surface panic"
 // rather than a condition to handle.
 const DiagNoReconciler DiagnosticKind = "no reconciler"
 
+// DiagNoLayout is reported when a container with no layout has more than one
+// child for a layout to arrange. The children stack at the container's whole
+// rect as they would with one child, which is what a surface that never calls
+// SetLayout gets and is nearly always a mistake for several.
+//
+// It is reported once per container, at the first frame drawn with the
+// condition true, and again only if the condition stops holding and returns.
+// Floats are not counted: they are placed against the screen, not by a layout.
+const DiagNoLayout DiagnosticKind = "no layout"
+
 // DiagCaptureBlocked is reported when a surface asks for capture while an open
 // modal takes input away from it. Capture is unchanged. See ADR 0020.
 const DiagCaptureBlocked DiagnosticKind = "capture blocked"

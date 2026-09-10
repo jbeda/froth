@@ -161,8 +161,8 @@ unless it is asked for, and its size never changes with focus.
 _Avoid_: decoration, frame, border
 
 **Layout**:
-An object attached to a container that turns the container's rect and its
-children's measures into a rect per child. Layouts see handles and metadata,
+An object, or a bare function, attached to a container that turns the
+container's rect and its children's measures into a rect per child. Layouts see handles and metadata,
 never surface state.
 
 **Query**:

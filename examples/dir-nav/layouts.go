@@ -185,9 +185,7 @@ func (l stack) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
 // They are placed against the bottom of the scope rather than against the top,
 // so the text the scope draws for itself cannot collide with them however the
 // panels above are resized.
-type scopeInner struct{}
-
-func (scopeInner) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
+func scopeInner(space froth.Rect, children []froth.Child) []froth.Rect {
 	rects := make([]froth.Rect, len(children))
 	x, y := space.X+2, space.Y+space.H-4
 	at := []froth.Rect{
