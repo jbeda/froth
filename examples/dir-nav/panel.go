@@ -55,11 +55,20 @@ func (p *panel) Update(*froth.UpdateCtx, tea.Msg) {}
 // a stop, and nobody assembling one has to remember that.
 func (p *panel) Declare() froth.Flags { return froth.Flags{TabStop: true} }
 
-// control is a one-line surface inside the scope, where there is no room for a
-// border.
+// control is a one-line surface inside the dialog, where there is no room for a
+// border. enter picks one: it writes its name on the board for the banner, and
+// lets the action rise to the dialog, which is what can take the dialog down.
 type control struct {
 	name string
 	bd   *board
+}
+
+func (c *control) Mount(ac *froth.ApplyCtx) {
+	ac.Self().SetBindings([]froth.Binding{{
+		Action: actionPick,
+		Keys:   []string{"enter"},
+		Help:   "pick this control",
+	}})
 }
 
 func (c *control) Render(rc *froth.RenderCtx, s froth.Size) string {
@@ -67,15 +76,23 @@ func (c *control) Render(rc *froth.RenderCtx, s froth.Size) string {
 		return ""
 	}
 	if rc.Focused() {
-		c.bd.saw(spot{region: regScope, name: c.name, size: s})
+		c.bd.saw(spot{region: regDialog, name: c.name, size: s})
 		return lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")).
+			Background(lipgloss.Color("235")).
 			Bold(true).
 			Render("▸ " + c.name)
 	}
-	return lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("  " + c.name)
+	return lipgloss.NewStyle().
+		Foreground(lipgloss.Color("245")).
+		Background(lipgloss.Color("235")).
+		Render("  " + c.name)
 }
 
-func (c *control) Update(*froth.UpdateCtx, tea.Msg) {}
+func (c *control) Update(_ *froth.UpdateCtx, msg tea.Msg) {
+	if m, ok := msg.(froth.ActionMsg); ok && m.Action == actionPick {
+		c.bd.pick = "picked " + c.name
+	}
+}
 
 func (c *control) Declare() froth.Flags { return froth.Flags{TabStop: true} }

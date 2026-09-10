@@ -42,6 +42,9 @@ func (b *banner) Render(_ *froth.RenderCtx, s froth.Size) string {
 
 	line := fmt.Sprintf(" %s   ·   %s   ·   %s",
 		strings.Join(b.bd.trail, " ▸ "), mode, where)
+	if b.bd.pick != "" {
+		line += "   ·   " + b.bd.pick
+	}
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("214")).
 		Width(s.W).

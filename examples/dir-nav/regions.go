@@ -42,21 +42,15 @@ func (s *sidebar) Mount(ac *froth.ApplyCtx) {
 func (s *sidebar) Render(*froth.RenderCtx, froth.Size) string { return "" }
 func (s *sidebar) Update(*froth.UpdateCtx, tea.Msg)           {}
 
-// rightCol is two panels with the scope beneath them. Two, so a move rightwards
-// out of the detail pane has to choose between them rather than having one
-// obvious answer. The scope's wall is against the detail pane, which is the
-// neighbour a move is most likely to try to cross it from.
-type rightCol struct {
-	bd    *board
-	scope froth.Handle
-	out   froth.Handle
-}
+// rightCol is two panels at two heights. Two, so a move rightwards out of the
+// detail pane has to choose between them rather than having one obvious answer,
+// and at different heights so the choice is not a coin toss either.
+type rightCol struct{ bd *board }
 
 func (rc *rightCol) Mount(ac *froth.ApplyCtx) {
 	self := ac.Self()
 	self.Create(&panel{name: "Metadata", region: regRight, index: 0, bd: rc.bd})
 	self.Create(&panel{name: "Labels", region: regRight, index: 1, bd: rc.bd})
-	rc.scope = self.Create(&scope{bd: rc.bd, out: rc.out}, froth.FocusScope())
 	self.SetLayout(stack{s: &rc.bd.splits})
 }
 

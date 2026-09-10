@@ -13,7 +13,8 @@ const (
 	regRow
 	regDetail
 	regRight
-	regScope
+	regDialog
+	regTwin
 	regFilter
 )
 
@@ -55,6 +56,11 @@ type board struct {
 	// banner shows it: a board you press unfamiliar keys at should not drop
 	// what froth said about them.
 	diag string
+
+	// pick is the control the dialog last had taken, which the banner shows.
+	// The dialog is gone by the time anyone reads it, so the result has to
+	// outlive it.
+	pick string
 }
 
 // trailLen is how many steps of focus history the banner shows. Two would say

@@ -33,7 +33,6 @@ type splits struct {
 	sidebarW int
 	rightW   int
 	metaH    int
-	labelH   int
 	buttonW  []int
 	rowH     []int
 
@@ -50,7 +49,6 @@ func defaultSplits() splits {
 		sidebarW: 18,
 		rightW:   30,
 		metaH:    7,
-		labelH:   7,
 		buttonW:  []int{13, 17, 10},
 		rowH:     []int{4, 3, 4, 3},
 	}
@@ -141,51 +139,31 @@ func (l rows) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
 	return rects
 }
 
-// scopeMinH is the least the scope is given. Below it the controls inside have
-// nowhere to go, and focus can be moved into a scope holding nothing visible.
-const scopeMinH = 8
-
-// stack gives the right column's two panels a band each off the top and the rest
-// of the space to the scope beneath them. Two panels rather than one because a
-// move rightwards out of the detail pane should have to choose.
-//
-// The panels give way to the scope rather than the other way round: their
-// heights are what the keys move, so they are what should absorb a screen too
-// short for all three.
+// stack gives the right column's top panel a band off the top and the rest of
+// the column to the one below it. Two panels rather than one because a move
+// rightwards out of the detail pane should have to choose, and one band rather
+// than two so the divider between them is the only thing the keys move.
 type stack struct{ s *splits }
 
 func (l stack) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
 	rects := make([]froth.Rect, len(children))
-	if len(children) != 3 {
+	if len(children) != 2 {
 		return rects
 	}
 
-	top, mid := l.s.metaH, l.s.labelH
-	for top+mid+scopeMinH > space.H && top+mid > 0 {
-		if top >= mid {
-			top--
-		} else {
-			mid--
-		}
-	}
-
-	y := space.Y
-	for i, h := range []int{max(top, 0), max(mid, 0)} {
-		rects[i] = froth.Rect{X: space.X, Y: y, W: space.W, H: h}
-		y += h
-	}
-	rects[2] = froth.Rect{X: space.X, Y: y, W: space.W, H: max(space.Y+space.H-y, 0)}
+	top := clamp(l.s.metaH, 0, space.H)
+	rects[0] = froth.Rect{X: space.X, Y: space.Y, W: space.W, H: top}
+	rects[1] = froth.Rect{X: space.X, Y: space.Y + top, W: space.W, H: space.H - top}
 	return rects
 }
 
-// scopeInner places the scope's controls: two side by side and one below,
-// offset from both, so a move inside the scope has something to decide rather
+// dialogInner places the dialog's controls: two side by side and one below,
+// offset from both, so a move inside the dialog has something to decide rather
 // than one obvious neighbour each way.
 //
-// They are placed against the bottom of the scope rather than against the top,
-// so the text the scope draws for itself cannot collide with them however the
-// panels above are resized.
-func scopeInner(space froth.Rect, children []froth.Child) []froth.Rect {
+// They are placed against the bottom of the box rather than against the top, so
+// the text the dialog draws for itself cannot collide with them.
+func dialogInner(space froth.Rect, children []froth.Child) []froth.Rect {
 	rects := make([]froth.Rect, len(children))
 	x, y := space.X+2, space.Y+space.H-4
 	at := []froth.Rect{
