@@ -42,6 +42,10 @@ type Froth struct {
 	// surfaces destroyed since. See ADR 0013.
 	renderedFrame []placement
 
+	// capture is the surface every mouse message goes to while it is set,
+	// wherever the message landed. Zero when nothing holds it.
+	capture Handle
+
 	onDiagnostic func(Diagnostic)
 	// flushing says the hook is being called from the stack below, so a hook
 	// that drives froth queues its diagnostics for the pass already running

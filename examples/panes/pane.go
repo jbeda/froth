@@ -43,12 +43,21 @@ type pane struct {
 	note    *report // nil for a pane that does not draw what rose to the root
 	torn    *report // every pane writes here on the way out; the notes pane draws it
 
-	// tabStop is the one thing about a pane that differs between them: the
-	// notes pane is out of the walk and the other two are in it.
-	tabStop bool
+	// tabStop and clickFocus are what differs between the panes: the notes
+	// pane is out of the keyboard walk and the other two are in it, and all
+	// three take focus from a click.
+	tabStop    bool
+	clickFocus bool
+
+	// sticker, when set, is drawn as a child in the pane's top right corner.
+	// The child is created mouse transparent, so a click on it reaches the
+	// pane beneath.
+	sticker string
 }
 
-func (p *pane) Declare() froth.Flags { return froth.Flags{TabStop: p.tabStop} }
+func (p *pane) Declare() froth.Flags {
+	return froth.Flags{TabStop: p.tabStop, ClickFocus: p.clickFocus}
+}
 
 // Unmount is where a surface releases what froth does not own. This one owns
 // nothing, so it only says it ran — which is the point worth seeing: it runs
@@ -114,6 +123,13 @@ func (p *pane) Render(rc *froth.RenderCtx, s froth.Size) string {
 // something a surface does about itself. These are the pane's own, so they
 // resolve only while this pane is on the focus chain.
 func (p *pane) Mount(ac *froth.ApplyCtx) {
+	if p.sticker != "" {
+		// What the sticker is — a label — is its type's business. That it
+		// should not be found by a click is how this pane is using it, so the
+		// pane says so here, at the one place it describes the child.
+		ac.Self().Create(&label{text: p.sticker}, froth.MouseTransparent())
+		ac.Self().SetLayout(topRight{w: lipgloss.Width(p.sticker)})
+	}
 	ac.Self().SetBindings([]froth.Binding{{
 		Action: actionCycle,
 		Keys:   []string{"d"},
@@ -146,10 +162,36 @@ func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 		key := msg.String()
 		p.status = "I had focus, so froth gave me " + strconv.Quote(key)
 		uc.At(p.sibling).Post(echoMsg{key: key})
+	case tea.MouseClickMsg:
+		// A click arrives at whatever was drawn under it, focused or not; it
+		// moved focus here only because this pane's type admits it.
+		p.status = "a click landed on me at " + froth.Pt(msg.X, msg.Y).String()
 	case echoMsg:
 		p.status = "the focused pane passed on " + strconv.Quote(msg.key) +
 			", same frame as the keystroke"
 	case cycleMsg:
 		uc.Self().Post(msg)
 	}
+}
+
+// label is a one-line surface with nothing to say about input.
+type label struct{ text string }
+
+func (l *label) Render(*froth.RenderCtx, froth.Size) string {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(l.text)
+}
+
+func (l *label) Update(*froth.UpdateCtx, tea.Msg) {}
+
+// topRight puts each of a pane's children, w cells wide, inside its top right
+// corner, just in from the border.
+type topRight struct{ w int }
+
+func (l topRight) Arrange(space froth.Rect, children []froth.Child) []froth.Rect {
+	out := make([]froth.Rect, len(children))
+	for i := range out {
+		w := min(l.w, max(0, space.W-4))
+		out[i] = froth.Rect{X: space.X + space.W - 2 - w, Y: space.Y + 1, W: w, H: 1}
+	}
+	return out
 }

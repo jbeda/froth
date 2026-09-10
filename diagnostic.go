@@ -122,6 +122,10 @@ const DiagSurfacePanic DiagnosticKind = "surface panic"
 // rather than a condition to handle.
 const DiagNoReconciler DiagnosticKind = "no reconciler"
 
+// DiagCaptureBlocked is reported when a surface asks for capture while an open
+// modal takes input away from it. Capture is unchanged. See ADR 0020.
+const DiagCaptureBlocked DiagnosticKind = "capture blocked"
+
 // DiagPostAfterShutdown is reported when a surface posts a message during the
 // unmount walk Shutdown runs. Nothing will drain the queue, so the message is
 // dropped: it is pointless rather than illegal, and saying so is better than

@@ -30,6 +30,11 @@ func (r Rect) Size() Size { return Size{W: r.W, H: r.H} }
 // Empty reports whether r has no cells.
 func (r Rect) Empty() bool { return r.Size().Empty() }
 
+// Contains reports whether p is one of r's cells.
+func (r Rect) Contains(p Point) bool {
+	return p.X >= r.X && p.X < r.right() && p.Y >= r.Y && p.Y < r.bottom()
+}
+
 // Empty reports whether s has no cells.
 func (s Size) Empty() bool { return s.W <= 0 || s.H <= 0 }
 

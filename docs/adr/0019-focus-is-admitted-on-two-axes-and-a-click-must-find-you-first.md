@@ -213,6 +213,71 @@ above reaches it for free. This ADR named both, which reads as two changes.
 cannot be until a click can reach one: a declared flag nothing reads is invisible in a running
 program. It belongs with hit-testing.
 
+## Amendment: the click pipeline as built
+
+Built as #53, with [ADR 0020](./0020-capture-is-a-claim-on-every-mouse-message.md) for the
+override that sits in front of it. Four things the pipeline above left open, and one it
+asked for.
+
+**Every mouse message is routed the same way, and none of them rises.** Press, release,
+wheel and motion are each hit-tested — or sent to the capture holder — and delivered
+addressed, the way a raw key is delivered to the focused surface. A wheel going anywhere
+but the surface under the cursor is wrong for every scroller, and motion in cell-motion
+mode arrives only while a button is down, which is when the holder wants it. Rising a click
+so an ancestor could take what a child ignored is the ancestor walk this ADR rejects for
+focus, arriving through delivery instead; a surface that should pass a click onward is
+marked transparent by its creator. Hover stays out because nothing turns on all-motion
+mode: mouse reporting is the application's to ask for, next to `AltScreen`, and froth's
+`View` sets neither.
+
+**Only a press admits focus, and any button's press does.** A release or a wheel on a
+`ClickFocus` surface is delivered and moves nothing. froth knows no button semantics; Qt and
+the web focus on any button's press.
+
+**The target holds focus by the time the press reaches it.** Routing records the move and
+the Apply that leads every settle commits it, before the drain delivers the press. The design
+session settled the other order — delivered first, focused at the Apply after — by analogy
+with a surface's own `Focus` call during Deliver, and the review found the code did not do
+that. The built order is kept, for a reason the analogy missed: the caller of this move is
+froth, not the surface. A target that destroys itself while handling the press — a close
+button — would under the other order have froth's own move refused at Apply with an
+"invalid focus" diagnostic naming nothing the application did wrong; under this one focus is
+rehomed from it silently, as from any destroyed surface. It is also the web's order, where
+focus moves on `mousedown` before that event's handlers run. What it costs: a surface cannot
+tell from inside its press handler whether this press is what focused it.
+
+**A click that finds nobody is dropped, and so is one aimed behind a modal.** Nobody means
+every placement under the point is transparent, or the point is in cells nothing drew, or no
+frame has been drawn yet. The root is a hit candidate for its own drawn area like any other
+surface, so sending it what landed outside that area would make it a second, implicit
+fallback. A click into the subtree an open modal blocks is dropped for the reason
+[ADR 0008](./0008-shortcuts-resolve-to-actions.md) gives for keys: the user aimed at the
+surface behind the dialog and there is no principled destination inside it. Neither drop
+moves focus. ADR 0008's *"froth's only input drop"* is now modality's drop and the
+click-on-nobody drop, and its wording is amended.
+
+**The frame can name a surface destroyed since it was drawn, and that surface is still the
+answer.** What lies beneath it was not on screen when the user clicked. Delivery to it is
+the ordinary dead-handle drop.
+
+**A surface can read its rendered rect.** `Rect() (Rect, bool)` on `HandleReader`, on every
+tier for any live handle, reporting the surface rect from the rendered frame — the one a
+`Frame` reports — and false for a surface not in it. It is what lets a capture holder tell a
+click inside itself from one outside. The alternative, froth tagging a captured message with
+whether it landed on the holder, is froth remembering something on the caller's behalf. The
+drawn rect is what the click was resolved against and is not what `Rect` reports; the two
+differ only for a surface that underfills, and the doc comment says so.
+
+**The cost note is met.** `examples/panes` carries all three admission shapes: the left and
+right panes admit tab and the click, the notes pane admits the click alone, and the notes
+pane's corner sticker is created `MouseTransparent`, so a click on it lands on the pane
+beneath.
+
+**The judgement that modality covers Flutter's `AbsorbPointer` held.** Its third behaviour
+— swallow the click, hit nothing beneath, enter nothing — is what a modal does to every
+click aimed into the subtree it blocks. The palette's click-outside is the other shape, and
+it is capture's. No absorb flag.
+
 ## Parked: a surface that is the hit target for its whole subtree
 
 A composite control — a button assembled from an icon surface and a label surface — wants a

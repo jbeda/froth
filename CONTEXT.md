@@ -187,7 +187,11 @@ _Avoid_: default binding, built-in, global
 **Capture**:
 A claim on all mouse input regardless of what lies under the cursor. Held by at
 most one surface, and lost unilaterally — a surface that loses capture must
-abandon what it was doing, never finish it.
+abandon what it was doing, never finish it. It is lost to another surface taking
+it, to a modal opening over the holder, or to the holder leaving the tree; the
+first two say so with a message, and the third does not, since a surface that has
+left can finish nothing. A surface lets go of it itself, and a press that captures
+sees the release that follows.
 
 **Producer**:
 A long-lived goroutine froth runs on a surface's behalf, emitting messages to

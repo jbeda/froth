@@ -110,6 +110,16 @@
 // the program; behaviour that is not genuinely global belongs on a surface that
 // strangers' chains do not pass through.
 //
+// A click goes to the surface under it, resolved against what was last drawn,
+// and moves focus there only if the surface's type admits it. The left and
+// right panes admit both tab and the click; the notes pane admits the click
+// alone, so it is out of the keyboard walk and still one click away. Its
+// sticker in the corner is a child its creator marked mouse transparent, so a
+// click on the sticker falls through to the pane beneath it rather than landing
+// on a label that would do nothing with it. Nothing here holds capture — the
+// palette that dismisses on a click outside itself is the case for that, and it
+// is not in this example yet.
+//
 // The bar along the bottom is the same story told forwards. It is built entirely
 // from a query — it asks froth what a key press would currently do and prints the
 // answer — so it knows no keys and no actions of its own and cannot describe
@@ -156,6 +166,10 @@ func (m model) View() tea.View {
 	// the root model's View reaches the renderer.
 	v := m.f.View()
 	v.AltScreen = true
+	// Mouse reporting is the application's to ask for too. Cell motion is
+	// presses, releases, the wheel, and motion only while a button is held —
+	// which is everything froth routes.
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

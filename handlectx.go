@@ -35,6 +35,13 @@ type HandleReader interface {
 	// handle that names no live surface, both answer nothing.
 	Children() []Handle
 
+	// Rect reports this surface's rect in the rendered frame — the last frame
+	// drawn, which is what a mouse message was resolved against — and false
+	// for a surface that was not in it. It is the surface rect, the one a
+	// Frame reports; a click is hit-tested against the drawn rect, which is
+	// smaller only for a surface that underfills what it was offered.
+	Rect() (Rect, bool)
+
 	sealed()
 }
 
@@ -69,6 +76,11 @@ func (r reader) Children() []Handle {
 		return nil
 	}
 	return slices.Clone(n.children)
+}
+
+func (r reader) Rect() (Rect, bool) {
+	r.check()
+	return r.f.renderedRect(r.h)
 }
 
 // router is the reach set: naming a surface without restructuring it. Every
@@ -113,6 +125,16 @@ func (r router) Focus() {
 		return
 	}
 	r.f.pendingFocus, r.f.focusPending = r.h, true
+}
+
+func (r router) capture() {
+	r.check()
+	r.f.takeCapture(r.h)
+}
+
+func (r router) releaseCapture() {
+	r.check()
+	r.f.releaseCapture(r.h)
 }
 
 func (r router) setFlags(fl Flags) {
@@ -177,6 +199,21 @@ func (sc SelfUpdateCtx) GetFlags() Flags { return sc.getFlags() }
 // nothing.
 func (sc SelfUpdateCtx) Reconcile() { sc.requestReconcile() }
 
+// Capture claims every mouse message for this surface, wherever it lands, until
+// ReleaseCapture, until the surface leaves the tree, or until another surface
+// takes it. It takes effect at once, so a press that captures sees the release
+// that follows it.
+//
+// At most one surface holds capture. Taking it from another surface posts that
+// surface CaptureLostMsg; so does a modal opening over the holder. A surface an
+// open modal has taken input away from is refused with a diagnostic.
+func (sc SelfUpdateCtx) Capture() { sc.capture() }
+
+// ReleaseCapture lets go of capture. A surface that does not hold it releases
+// nothing and hears nothing, so releasing on every button-up is safe whether or
+// not something took it away in between.
+func (sc SelfUpdateCtx) ReleaseCapture() { sc.releaseCapture() }
+
 // A SelfApplyCtx is what a surface holds on itself during Apply, and the only
 // place structure a surface owns is assembled. Create and SetLayout name no
 // target, so creating a grandchild or arranging somebody else's children is not
@@ -232,6 +269,9 @@ func (sc SelfApplyCtx) Create(s Surface, opts ...CreateOption) Handle {
 	sc.check()
 	h := sc.f.reg.add(sc.h, s, opts...)
 	sc.f.declareFlags(h, s)
+	if sc.f.reg.get(h).meta.modal {
+		sc.f.modalOpened()
+	}
 	return h
 }
 
@@ -282,6 +322,13 @@ func (sc SelfApplyCtx) SetBindings(bs []Binding) { sc.setBindings(bs) }
 // SetFlags replaces what this surface declared about itself. See
 // SelfUpdateCtx.SetFlags.
 func (sc SelfApplyCtx) SetFlags(fl Flags) { sc.setFlags(fl) }
+
+// Capture claims every mouse message for this surface. See
+// SelfUpdateCtx.Capture.
+func (sc SelfApplyCtx) Capture() { sc.capture() }
+
+// ReleaseCapture lets go of capture. See SelfUpdateCtx.ReleaseCapture.
+func (sc SelfApplyCtx) ReleaseCapture() { sc.releaseCapture() }
 
 // GetFlags reports what this surface last declared about itself. See
 // SelfUpdateCtx.GetFlags.

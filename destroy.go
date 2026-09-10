@@ -83,6 +83,12 @@ func (f *Froth) removeSubtree(h Handle) {
 	// there is nothing left to ask whether focus was inside.
 	rehomeFocus := f.reg.descends(f.focus, h)
 	parent := n.parent
+	// Capture goes with the holder, on every route out and without a message:
+	// a surface leaving the tree can complete nothing, so the abandon the
+	// message would ask for is already guaranteed.
+	if f.reg.descends(f.capture, h) {
+		f.clearCapture()
+	}
 
 	for _, g := range order {
 		f.reg.remove(g)

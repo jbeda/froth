@@ -485,7 +485,11 @@ text field would go on receiving every keystroke while the shortcuts around it d
 amendment's predecessor already committed to *"bindings as well as raw keys"* and said
 nothing about where the key goes instead.
 
-It goes nowhere. **This is froth's only input drop** — everything else either resolves,
+It goes nowhere. **This is modality's input drop**, and it applies to a mouse message aimed
+into the blocked subtree exactly as to a key; the only other drop froth has is a mouse
+message with nothing drawn under it, which
+[ADR 0019](./0019-focus-is-admitted-on-two-axes-and-a-click-must-find-you-first.md)'s
+amendment covers. Everything else either resolves,
 delivers, or reports. Two alternatives were rejected. Delivering it to the modal is the
 literal reading of *"takes input for"* and is Win32's and GTK's shape, but the keystroke was
 aimed by a user looking at the surface behind the dialog, so a dialog with a text field

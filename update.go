@@ -33,10 +33,13 @@ type envelope struct {
 // Only a press resolves. A release is the same key arriving a second time, so
 // matching it would fire every action twice.
 //
-// It reports false for a key that goes nowhere, which is froth's one input drop:
-// an open modal takes input for the subtree it blocks, so a raw key aimed inside
-// that subtree reaches nothing. Resolution above has already offered the press
-// the only two ways past a modal, and a key arriving here matched neither.
+// A mouse message goes to the surface holding capture, or else to the surface
+// under the cursor; see routeMouse.
+//
+// It reports false for input that goes nowhere: a raw key or a mouse message
+// aimed inside the subtree an open modal blocks, or a mouse message with nothing
+// under it. Resolution above has already offered a press the only two ways past
+// a modal, and a key arriving here matched neither.
 func (f *Froth) route(msg tea.Msg) (envelope, bool) {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
 		if a, ok := f.resolve(k); ok {
@@ -49,6 +52,9 @@ func (f *Froth) route(msg tea.Msg) (envelope, bool) {
 			return envelope{}, false
 		}
 		return envelope{to: focused, msg: msg}, true
+	}
+	if m, ok := msg.(tea.MouseMsg); ok {
+		return f.routeMouse(m)
 	}
 	return envelope{to: f.root, msg: msg}, true
 }

@@ -796,7 +796,7 @@ it. Capture is claimed when the palette is created:
 
 ```go
 func (p *palette) Mount(ac *froth.ApplyCtx) {
-    ac.Capture()                         // all mouse input, wherever it lands
+    ac.Self().Capture()                  // all mouse input, wherever it lands
 }
 
 func (p *palette) Update(uc *froth.UpdateCtx, msg tea.Msg) {
@@ -805,7 +805,7 @@ func (p *palette) Update(uc *froth.UpdateCtx, msg tea.Msg) {
         uc.Close()                       // abandon, never complete
         return
     case tea.MouseClickMsg:
-        if !uc.Rect().Contains(m.X, m.Y) {
+        if r, ok := uc.Self().Rect(); ok && !r.Contains(froth.Pt(m.X, m.Y)) {
             uc.Close()
             return
         }
@@ -818,11 +818,13 @@ The routing rule this depends on: **while any surface holds capture, every mouse
 goes to it regardless of position; otherwise mouse messages are hit-tested.** That is
 still one destination per message — capture changes which one, it doesn't broadcast.
 
-`uc.Rect()` reads this surface's rect from the *rendered frame* — the last frame that
+`Rect()` reads this surface's rect from the *rendered frame* — the last frame that
 actually drew, which is what the click was resolved against.
 
-Capture releases on destroy, when a modal opens, or explicitly, and each of those
-delivers `CaptureLostMsg` first.
+Capture releases on destroy, when a modal opens over the holder, or explicitly; a modal
+opening and another surface taking it deliver `CaptureLostMsg` first. See
+[ADR 0020](../adr/0020-capture-is-a-claim-on-every-mouse-message.md) for why destroy does
+not.
 
 ## A nested text input claiming the cursor
 
@@ -858,8 +860,8 @@ runtime one. Every context can read the Environment and report the caller's own 
 |---|---|---|
 | `*RenderCtx` | Render | `Cursor(Point)` — claim the terminal cursor · `Focused()` — whether this surface holds focus · `FocusWithin()` — whether focus is at or below it |
 | `*MeasureCtx` | Measure | nothing beyond the common set; deliberately the narrowest |
-| `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Focus(Handle)` / `FocusSelf()` · `FocusNext()` / `FocusPrev()` — relative moves froth resolves, which `tab` and `shift+tab` reach without a surface calling them · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Capture()` / `ReleaseCapture()` · `Self().Reconcile()` · `Rect()` |
-| `*ApplyCtx` | Apply | `Create(Surface, ...Option) Handle` — a child of self · `Destroy(Handle)` · `SetLayout(Layout)` · `Focus(Handle)` / `FocusSelf()` · `Post(Handle, tea.Msg)` · `Capture()` · `Produce(next, ...ProducerOpt)` · `Root()` · `Sender()` — the handle that raised the intent being applied |
+| `*UpdateCtx` | Deliver | `Ctx()` this surface's context · `Run(tea.Cmd)` · `Post(Handle, tea.Msg)` · `Focus(Handle)` / `FocusSelf()` · `FocusNext()` / `FocusPrev()` — relative moves froth resolves, which `tab` and `shift+tab` reach without a surface calling them · `Raise(Intent)` · `Reply(tea.Msg)` · `Close()` · `OpenModal(Surface, ...Option)` · `Self().Capture()` / `Self().ReleaseCapture()` · `Self().Reconcile()` · `Self().Rect()` |
+| `*ApplyCtx` | Apply | `Create(Surface, ...Option) Handle` — a child of self · `Destroy(Handle)` · `SetLayout(Layout)` · `Focus(Handle)` / `FocusSelf()` · `Post(Handle, tea.Msg)` · `Self().Capture()` · `Produce(next, ...ProducerOpt)` · `Root()` · `Sender()` — the handle that raised the intent being applied |
 
 Every context knows the surface it belongs to and exposes it as `Self()`, so the
 self-relative operations take no handle. Structural calls made on an `*UpdateCtx` are
@@ -922,7 +924,7 @@ What a surface is rather than how it sits — `TabStop`, `ClickFocus`, `TextSink
 here: its own type declares it, as `Flags`. See
 [ADR 0019](../adr/0019-focus-is-admitted-on-two-axes-and-a-click-must-find-you-first.md).
 
-**Built so far:** `FocusScope` and `MouseTransparent`.
+**Built so far:** `FocusScope`, `MouseTransparent` and `Modal`.
 The rest waits for the milestones that give it a consumer — a layout that weighs children, modality, a
 stacking order a surface can set — because a flag stored against semantics nobody has
 had to implement is a guess later code has to honour.

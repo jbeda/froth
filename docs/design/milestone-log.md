@@ -1586,3 +1586,96 @@ and keeps the correction visible.
 `OpenModal` and no destroy-to-close, so anything it added would be a modal that exists from
 mount and never goes away, which is the permanently-visible stand-in #22 already criticises
 in `dir-nav`. That waits for #49 and #55.
+
+### #53 — A click resolves to the surface under it, and capture overrides that
+
+Settled in a design session, then built, with
+[ADR 0020](../adr/0020-capture-is-a-claim-on-every-mouse-message.md) for capture and an
+amendment to [ADR 0019](../adr/0019-focus-is-admitted-on-two-axes-and-a-click-must-find-you-first.md)
+for the click pipeline as built. Three of the spec's sentences on capture changed in the
+building, and each is argued in the ADR rather than here.
+
+**The hit walk is nine lines, because everything it reads already existed.** The rendered
+frame is in paint order, so the walk runs it backwards and takes the first drawn rect
+containing the point; `MouseTransparent` is read from `meta` up the chain; modality is
+`blockedByModal`, the predicate #48 wrote for keys, unchanged. Nothing keyboard-specific was
+in it, as the handoff said, and no second predicate was written.
+
+**Every mouse message is addressed, none rises, and the drop is the same as a key's.** The
+design session's first question was whether a click should rise so an ancestor could take
+what a child ignored; it does not, because that is the ancestor walk ADR 0019 rejected for
+focus arriving through delivery. A click on nobody is dropped rather than sent to the root,
+since the root is already a hit candidate for what it drew. Both are pinned by tests whose
+mutation is the plausible wrong version — "nobody goes to the root" and "any mouse message
+focuses" — rather than the disabled one.
+
+**Capture is immediate in both phases, which is the one place this milestone declined the
+`Focus` pattern.** Its only reader is routing, which runs once per `Update` before any
+delivery, so a pending slot would have no observable effect; and immediacy is what orders a
+transfer correctly, with `CaptureLostMsg` queued after the new holder already holds it. The
+press-captures, release-releases shape the maintainer named as the common case works because
+every settle ends on an Apply, so either timing would have served it — the argument is
+about what the pending slot would buy, and the answer was nothing.
+
+**Destroy releases capture with no message.** The spec says all three releases deliver one.
+An Apply-route destroy commits at once, so a message posted to the holder there addresses a
+dead handle and the dead-handle rule drops it, while the Deliver-route destroy would deliver
+it — exactly the route-dependent inconsistency the ticket warned about for release-on-destroy.
+Delivering synchronously would be the only `Update` froth ever runs outside a drain. The
+holder's `Unmount` runs as it leaves, and a surface that has left can complete nothing, which
+is what the message would have asked for.
+
+**Modal open releases only when the modal blocks the holder.** The spec's *"on modal open"*
+predates subtree scoping. The predicate is `blockedByModal` again, and the same predicate
+refuses `Capture()` from a surface already blocked, with `DiagCaptureBlocked` — the one new
+diagnostic kind — because a blocked holder is the one state in which capture's rule and
+modality's cannot both hold.
+
+**`Rect() (Rect, bool)` landed on `HandleReader`**, on every tier, reporting the surface rect
+from the rendered frame. The alternative was froth tagging a captured message with whether
+it landed on the holder, which is froth remembering something on the caller's behalf. `Rect`
+is the sketch's name and `CONTEXT.md` avoids nothing near it. `Rect.Contains(Point)` is
+the containment #44 deferred to here.
+
+**The examples carry the flags now.** `panes` turns on cell-motion mouse reporting next to
+`AltScreen`, the left and right panes declare `ClickFocus` alongside `TabStop`, the notes
+pane declares `ClickFocus` alone, and it creates a corner sticker `MouseTransparent`, so a
+click on the sticker lands on the pane beneath. A scaffolding test drove a click on the
+sticker and read the focus ring off the frame, then was deleted per the agreement; its one
+lesson is that a column in a composited line has to be measured with `ansi.StringWidth`
+after `ansi.Strip`, because both escapes and multibyte glyphs put the byte offset a long way
+from the cell. ADR 0019's cost note is met, and `AbsorbPointer`'s third behaviour was
+tested against modality rather than assumed: a modal swallows every click aimed behind it,
+which is that behaviour, and click-outside is capture's.
+
+**Fifteen mutations, fifteen caught by test failures.** Each rule the ticket adds was mutated
+towards the version a careless implementation would write — surface rect for drawn rect,
+bottom-up walk, transparency on the surface alone rather than the chain, `TabStop` admitting a
+click, a captured press focusing the holder, transfer without the message, recapture with it,
+unconditional release on modal open, destroy keeping capture, a stranger's release releasing.
+The only mutation to trip more than two tests was the walk direction; the rest tripped
+exactly one, which says each rule has its own test rather than a cluster that any breakage
+trips.
+
+**The review found the click's focus order was the reverse of the one settled, and the code
+was kept.** The session said the press is delivered first and focus commits at the Apply
+after, by analogy with `Focus` during Deliver; the Spec reviewer ran a scratch test and
+showed the target already holds focus when the press arrives, because routing records the
+move and the settle's leading Apply commits it before the drain. Making the code match would
+have made a close button — a `ClickFocus` surface that destroys itself on the press — report
+froth's own focus move as invalid at the next Apply. ADR 0019's amendment records the built
+order and the reason. The lesson is the working agreements' recurring one: an analogy stated
+in a design session is a claim about code, and this one was not checked against `settle`'s
+order before it went into two documents.
+
+**Standards review caught "teardown" in two files**, an `_Avoid_` term under Unmount, and a
+rationale restated in a comment where a pointer to the ADR belongs. Both fixed.
+
+**Two test bugs, no library bugs, on the first run.** One test captured on the root instead of
+the holder because an unaddressed message reaches the root, and one clicked where the
+survivor no longer sat after the layout re-flowed around a destroyed sibling. Both are the
+seam doing what it says.
+
+**Not done here.** Hover, drag synthesis, anchoring, the palette that holds capture, and
+whether froth services `ActionCancel` by closing a modal. #57's test is a separate commit.
+

@@ -9,6 +9,9 @@ import (
 	"github.com/jbeda/froth/layout"
 )
 
+// stickerText is what the notes pane's corner child says.
+const stickerText = "click me"
+
 // root is the surface the application hands froth. It creates the panes it is
 // made of, says how they sit, and says which of them starts focused — all in
 // Mount, because a surface owns its children and all three are its business and
@@ -36,9 +39,10 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 	}})
 
 	left := &pane{
-		title:   "left",
-		tabStop: true,
-		torn:    rt.torn,
+		title:      "left",
+		tabStop:    true,
+		clickFocus: true,
+		torn:       rt.torn,
 		body: "Every key you press arrives here while this pane has focus, " +
 			"and at no other surface.\n\n" +
 			"Neither pane knows where focus is except by asking about itself, " +
@@ -49,9 +53,10 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 			"The notes pane is skipped.",
 	}
 	right := &pane{
-		title:   "right",
-		tabStop: true,
-		torn:    rt.torn,
+		title:      "right",
+		tabStop:    true,
+		clickFocus: true,
+		torn:       rt.torn,
 		body: "froth: focus is one handle, raw keys go to it, and froth " +
 			"walks it.\n\n" +
 			"tab and shift-tab are froth's own bindings. The action rises " +
@@ -70,15 +75,19 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 			"right.",
 	}
 	notes := &pane{
-		title:  "notes",
-		report: rt.report,
-		note:   rt.note,
-		torn:   rt.torn,
+		title:      "notes",
+		clickFocus: true,
+		sticker:    stickerText,
+		report:     rt.report,
+		note:       rt.note,
+		torn:       rt.torn,
 		body: "This pane declares no tab stop, so tab never " +
 			"lands here — but it still sits third in the row, still gets its " +
 			"share of the space, and could still be given focus by name. " +
 			"Being outside the keyboard walk is not being moved and not " +
-			"being hidden.\n\n" +
+			"being hidden. It does admit a click: click here and focus " +
+			"arrives, and the sticker in the corner is mouse transparent, so " +
+			"a click on it lands on this pane rather than on the sticker.\n\n" +
 			"Whatever froth reports through the diagnostic hook shows up " +
 			"under the title above, and so does whatever rose all the way to " +
 			"the root.",
