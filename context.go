@@ -163,6 +163,14 @@ func (uc *UpdateCtx) Ctx() context.Context {
 	return uc.f.surfaceCtx(uc.self)
 }
 
+// PostFunc mints the post capability for this surface: what it hands to a
+// goroutine, a service or a timer so that they can reach it. The PostFunc type
+// says what the function guarantees.
+func (uc *UpdateCtx) PostFunc() PostFunc {
+	uc.check()
+	return uc.f.postFunc(uc.self)
+}
+
 // Run schedules a Bubble Tea command. It is returned to the program from the
 // update froth is currently servicing.
 func (uc *UpdateCtx) Run(cmd tea.Cmd) {
@@ -206,6 +214,12 @@ func (ac *ApplyCtx) At(h Handle) AnyCtx {
 func (ac *ApplyCtx) Ctx() context.Context {
 	ac.check()
 	return ac.f.surfaceCtx(ac.self)
+}
+
+// PostFunc mints the post capability for this surface. See UpdateCtx.PostFunc.
+func (ac *ApplyCtx) PostFunc() PostFunc {
+	ac.check()
+	return ac.f.postFunc(ac.self)
 }
 
 // surfaceCtx returns h's context, making it the first time h asks: most

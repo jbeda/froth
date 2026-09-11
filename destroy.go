@@ -95,6 +95,10 @@ func (f *Froth) removeSubtree(h Handle) {
 		f.clearCapture()
 	}
 
+	// A surface in its Unmount is still in the tree and may mint its post
+	// capability there, so the handles are retired only once every Unmount
+	// has run.
+	f.inbox.retire(order)
 	for _, g := range order {
 		f.reg.remove(g)
 	}
@@ -182,6 +186,7 @@ func (f *Froth) Shutdown() {
 		return
 	}
 	f.shutdown = true
+	f.inbox.close()
 
 	if f.reg.get(f.root) != nil {
 		f.enter(phaseApply)
@@ -221,6 +226,7 @@ func (f *Froth) quarantine(h Handle, what string) {
 	if n := f.reg.get(h); n != nil {
 		n.panicked = true
 	}
+	f.inbox.retire([]Handle{h})
 	f.report(Diagnostic{
 		Kind: DiagSurfacePanic,
 		Detail: fmt.Sprintf("%s panicked in %s: %v; it has been taken out of "+

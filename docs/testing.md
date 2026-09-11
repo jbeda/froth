@@ -85,8 +85,10 @@ froth happens to be built.
 **The post capability is tested with a fake program.** `Attach` takes an interface with
 `Send` only, so a test hands froth a fake that records what was sent and then calls
 `Update` itself with the wake. That covers ordering across posters, the dead-handle bool,
-a post before attach, and the drain — none of it needs a goroutine, because the wake is
-the only thing that crosses one and the test delivers it by hand.
+a post before attach, and the drain. The wake is the one thing that crosses a goroutine —
+froth sends it from one of its own — so those tests run under `testing/synctest`, where
+`synctest.Wait` makes "how many wakes have been sent" a deterministic question rather than
+a sleep.
 
 **Command envelopes are tested through the real wrapper.** Run the wrapped command in the
 test, hand its result to `Update`, and assert where it landed. Quit, interrupt, batch and

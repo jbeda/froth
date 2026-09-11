@@ -68,9 +68,9 @@ test fakes. Holding the whole program would also let froth `Kill` from inside a 
 someday, which under [ADR 0012](./0012-dangerous-capability-is-named-and-imported.md) is
 a deliberate widening, not a drift.
 
-A post before attach queues in the inbox; the wake goroutine blocks until the program is
-running. Forgetting to attach therefore fails silently, so the first drain reports a
-diagnostic if any message predates attach.
+A post before attach queues in the inbox and the wake is owed rather than sent; `Attach`
+sends it, and it blocks until the program is running. Forgetting to attach therefore fails
+silently, so the drain that delivers those posts reports a diagnostic.
 
 ## Command envelopes
 

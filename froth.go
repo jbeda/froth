@@ -4,9 +4,9 @@
 // the surfaces that should see them.
 //
 // A froth instance is not safe for concurrent use. Bubble Tea drives a program
-// from one goroutine and everything froth does happens on it, so there is no
-// lock anywhere. Work a surface starts elsewhere must come back through a
-// message rather than by touching froth from the goroutine that did it.
+// from one goroutine and everything froth does happens on it. The one exception
+// is the post capability a surface mints for work it starts elsewhere: that is
+// safe from any goroutine, and it is the only way such work reaches froth.
 package froth
 
 import (
@@ -45,6 +45,10 @@ type Froth struct {
 	// capture is the surface every mouse message goes to while it is set,
 	// wherever the message landed. Zero when nothing holds it.
 	capture Handle
+
+	// inbox is where a post from outside the loop lands. It has its own lock
+	// and is the only part of froth touched from another goroutine.
+	inbox inbox
 
 	onDiagnostic func(Diagnostic)
 	// flushing says the hook is being called from the stack below, so a hook
@@ -130,6 +134,14 @@ func (f *Froth) Init() tea.Cmd { return nil }
 func (f *Froth) Update(msg tea.Msg) tea.Cmd {
 	if f.shutdown {
 		return nil
+	}
+	// What was posted from outside goes onto the queue ahead of this message:
+	// it was posted earlier, and the wake that announced it carries nothing
+	// of its own.
+	_, wake := msg.(wakeMsg)
+	f.drainInbox(wake)
+	if wake {
+		return f.settle()
 	}
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		f.size = Size{W: ws.Width, H: ws.Height}

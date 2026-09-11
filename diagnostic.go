@@ -141,3 +141,10 @@ const DiagCaptureBlocked DiagnosticKind = "capture blocked"
 // dropped: it is pointless rather than illegal, and saying so is better than
 // refusing a call that reads as reasonable.
 const DiagPostAfterShutdown DiagnosticKind = "post after shutdown"
+
+// DiagPostBeforeAttach is reported by a drain that finds messages posted from
+// outside before Attach was called. The messages are delivered; what is wrong
+// is that nothing could have woken the loop for them, so an application that
+// forgets Attach would otherwise see its posts arrive only when something else
+// did.
+const DiagPostBeforeAttach DiagnosticKind = "post before attach"
