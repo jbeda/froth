@@ -103,11 +103,23 @@ func (rt *root) Mount(ac *froth.ApplyCtx) {
 			"the root.",
 	}
 
+	logs := &pane{
+		title:      "log",
+		tabStop:    true,
+		clickFocus: true,
+		torn:       rt.torn,
+		// The root's own post capability, so the producer's goroutine can
+		// reach the root after the pane it fed is gone. Handed over here, at
+		// the one place the root describes the pane.
+		tell: ac.PostFunc(),
+	}
+
 	self := ac.Self()
 	self.Create(&filter{})
 	self.Create(helpBar{})
 	leftH, rightH := self.Create(left), self.Create(right)
 	self.Create(notes)
+	self.Create(logs)
 
 	// The scope declares no tab stop, so tab neither lands on it nor walks
 	// into it. It is reached by name, which is what the root's g binding does —
@@ -159,6 +171,10 @@ func (rt *root) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 		// nobody took it.
 		rt.note.text = "rose from " + m.from + " and the root took it"
 		uc.StopRising()
+	case producerStoppedMsg:
+		// Posted from the log producer's goroutine as it ended, after the
+		// pane that started it had left the tree.
+		rt.note.text = "the log producer stopped: " + m.err.Error()
 	}
 }
 

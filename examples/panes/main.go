@@ -1,5 +1,5 @@
 // Command panes is froth's running example: a root surface that assembles a
-// filter field and three panes, places the field along the top and the panes
+// filter field and four panes, places the field along the top and the panes
 // side by side under it, and hands keys to whichever of them holds focus.
 //
 // The root draws a field of dots behind them, visible in the one-cell gap the
@@ -146,6 +146,20 @@
 // are not on offer; a palette that reads a named surface's actions is a gap
 // froth has not closed.
 //
+// Pressing "l" runs a command that takes three seconds, the ordinary Bubble
+// Tea kind, and its result comes back to the pane that ran it rather than to
+// the root: press x while it loads and the status changes under the open
+// dialog, because a modal blocks keys and clicks, not results.
+//
+// The log pane shows the other way work reaches a surface. In Mount it starts
+// a producer over its own context and post capability — a goroutine froth does
+// not run — which folds every line it produces into one batch and wakes the
+// pane once however many arrived. Lines come in bursts, so the status shows a
+// wake carrying several. Close the log pane and its context is cancelled, so
+// the goroutine stops; the pane that started it is gone by then, so it tells
+// the root through a post capability the root handed it, and the notes pane
+// shows it stopped.
+//
 // The bar along the bottom is the same story told forwards. It is built entirely
 // from a query — it asks froth what a key press would currently do and prints the
 // answer — so it knows no keys and no actions of its own and cannot describe
@@ -176,6 +190,7 @@ const (
 	actionClear      froth.Action = "clear filter"
 	actionNote       froth.Action = "note this"
 	actionClose      froth.Action = "close this pane"
+	actionLoad       froth.Action = "load something slowly"
 	actionAddItem    froth.Action = "add an item"
 	actionRemoveItem froth.Action = "remove the focused item"
 	actionTally      froth.Action = "note this, for the scope"
@@ -210,7 +225,14 @@ func main() {
 	rt := &root{report: &report{}, note: &report{}, torn: &report{}}
 	m := model{f: froth.New(context.Background(), rt, froth.OnDiagnostic(rt.onDiagnostic))}
 
-	_, err := tea.NewProgram(m).Run()
+	// froth is built before the program that runs it, so the program is
+	// handed over after it exists and before it runs: this is what lets a
+	// goroutine or a command result reach a surface from outside the loop.
+	// Forget it and the first such post reports a diagnostic rather than
+	// arriving.
+	p := tea.NewProgram(m)
+	m.f.Attach(p)
+	_, err := p.Run()
 
 	// Shutting froth down runs the same leaf-up unmount walk a destroy runs,
 	// once from the root, so a surface holding something froth does not own

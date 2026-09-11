@@ -41,7 +41,9 @@ func main() {
 		bd.diag = d.String()
 	}))}
 
-	if _, err := tea.NewProgram(m).Run(); err != nil {
+	p := tea.NewProgram(m)
+	m.f.Attach(p)
+	if _, err := p.Run(); err != nil {
 		log.Fatal(fmt.Errorf("running dir-nav: %w", err))
 	}
 }

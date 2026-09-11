@@ -1359,7 +1359,7 @@ set on `actionArrowMode` and declares in that case arm. The other four are stati
 declare once in `Mount`, including two leaves that grew a `Mount` for nothing else — which
 is the cost of killing `Binder`, paid where a reader can see it.
 
-## M4 — Modals and mouse (in progress)
+## M4 — Modals and mouse
 
 ### #44 — `Render` is offered a size, and a drawn rect follows from what it returns
 
@@ -1901,3 +1901,97 @@ screen and takes the rect its output makes — recorded there as a finding, not 
 
 **Verified by driving both examples through scaffolding tests, since deleted**, per the
 working agreement; nothing in CI catches a dropped declaration in an example.
+
+## M5 — Async: contexts, the inbox, envelopes, producers
+
+Designed in one session ahead of the slicing (ADR 0021 and the ADR 0015 amendment), built
+as five tickets on `main` in order, each reviewed before pushing. Three surveys ran first
+and reversed the sketch twice: producers left the core, and the injectable runner was not
+built.
+
+### #60 — Each surface gets a context
+
+Made on the first ask, off the instance context rather than the parent surface's, and
+cancelled by the leaf-up unmount walk after the surface's own `Unmount` has run — so a
+surface tears down under a live context while its parent sees every child already
+cancelled. Quarantine cancels too, since a panicked surface may have started work.
+`Shutdown` runs the same walk from the root.
+
+**One of the ticket's four cases is not pinned.** "A surface that never asks allocates
+none" is not observable through the seam; it rests on `surfaceCtx` being the only writer.
+
+**`UpdateCtx.Ctx`'s comment had documented the opposite of ADR 0015.** It said every
+surface got the instance context. The code was the design's; the comment was not.
+
+### #61 — A post from anywhere never blocks
+
+The inbox and one wake, as ADR 0021 describes. Decisions taken while building, all now in
+the ADR's text: the wake owed before `Attach` is sent by `Attach`, not by a goroutine that
+blocks until the program runs (the ADR had said the latter); a surface in its `Unmount` is
+still live to its post capability, and the walk retires handles after every `Unmount` has
+run; quarantine retires the handle at once; `Shutdown` closes the inbox before its walk so
+a post from a teardown hook reports false rather than queueing for nobody.
+
+**Reviewer finding judged not actionable:** re-entrant destroy of an ancestor during
+`Unmount`. Unreachable — `Destroy` is on `Self` and `Child` only, both already leaving.
+
+### #62 — A command's result comes back to whoever ran it
+
+`Run` wraps the command; the wrapper runs on the command's goroutine and addresses the
+result. Quit and interrupt pass through; a batch and a sequence are rewrapped inner by
+inner, the sequence through a reflect specimen and `Convert`, which v2.0.9 permits and
+nothing promises. Every rewrap copies into a fresh slice, because a converted sequence
+aliases the original.
+
+**A nil result is addressed like everything else and reaches the issuer as nil.** The
+first draft passed nil through to the root, and the test for the addressed form found a
+`reflect.Value.Type` panic on the zero value — which would have hit production on any
+command returning nil.
+
+**A result embedding `Rising` rises from the issuer.** The standing post rule, not a
+special case; the reviewer asked whether it was intended, and it is.
+
+**Six mutations of the wrapper and `route` each failed real tests**, including the
+plausible wrong ones: a sequence returned as a batch, and a result routed to the root.
+
+### #63 — The producer subpackage
+
+Settled in a grilling session and recorded as ADR 0021's second amendment; the ticket as
+written was superseded in four places. **The surface pulls** after a caller-named wake,
+because a `case` on the caller's own message type reads like every other Bubble Tea
+`Update`, and the producer-as-message form did not. **One fold primitive**, with `Collect`,
+`First(n)`, `Last(n)` and `Latest` as merges over it; the bounded forms were asked for to
+discourage unbounded growth. **The unbuffered mode is not built**: a goroutine calling the
+post capability is that. **`Take` is reader-shaped**: `io.EOF`, the step's error, or
+`ctx.Err()`, with the partial accumulator in the same call and the error sticky — which
+answers the Rx `buffer` hazard the stream survey raised without a special case. **The
+field is the key** for cancel-previous; a keyed holder and merge-in-the-inbox are parked.
+
+**The loop checks the context after every step**, found by the spec reviewer: a step
+that ignored its context would have run on past `Stop`. An item produced after the cancel
+is not folded.
+
+**The synctest bubble is the goroutine-leak check.** A producer still blocked at the end
+of a test fails it, so no test asserts on goroutine counts.
+
+### #64 — The demo
+
+A pane's `l` runs a three-second command whose result lands under the open confirm dialog;
+the log pane's producer emits lines in bursts of five a second apart, so one wake visibly
+carries a batch, and stops when the pane is closed. A steady tick was tried first and
+showed one line per wake every time, because the loop drains faster than the producer
+fills: batching is only visible when the producer outruns a wake, which bursts make it do. **The stop is shown by the goroutine posting to the root** through a post
+capability the root handed the pane at construction — the pane that started the producer
+is gone by then, and the root's `note` is where it can be seen. That is the first use of
+one surface holding another's post capability, and it read as the explicit form CLAUDE.md
+asks for. Both examples call `Attach` between `tea.NewProgram` and `Run`.
+
+**Names judged at the call sites and kept:** `PostFunc` and `ac.PostFunc()` (ordinary Go
+named-func shape; the review flag was style), `Program` (its comment now says it is the
+interface `*tea.Program` satisfies), `Attach`, and `producer.Producer[M]`, which stutters
+and stays because `Folded`, `Handle` and `Source` each say less. `addressedMsg` and
+`addressCmd` are unexported and free.
+
+**Verified by driving the example through a scaffolding test, since deleted.** One wake
+carried four lines; the load result changed the pane's status under the dialog; closing
+the log pane produced "the log producer stopped: context canceled" in the notes pane.

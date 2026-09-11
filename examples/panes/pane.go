@@ -1,11 +1,18 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
 	"strconv"
+	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/jbeda/froth"
+	"github.com/jbeda/froth/producer"
 )
 
 // echoMsg is what the focused pane forwards to its sibling. It is not a Bubble
@@ -24,6 +31,35 @@ type noteMsg struct {
 	froth.Rising
 	from string
 }
+
+// loadedMsg is what the slow load command produces. It is an ordinary Bubble
+// Tea command result; froth brings it back to the pane that ran the command.
+type loadedMsg struct{ took time.Duration }
+
+// linesReadyMsg is the wake the log pane names for its producer: it says
+// lines are waiting to be pulled, and nothing about which ones.
+type linesReadyMsg struct{}
+
+// producerStoppedMsg is what the log producer's goroutine posts to the root
+// when its context is cancelled, through a post capability the root handed the
+// pane at construction. The pane it fed is gone by then, so the root is who can
+// show it. A producer that ends on its own posts nothing: the pane is still
+// there to pull the end.
+type producerStoppedMsg struct{ err error }
+
+// loadTime is how long the slow command takes: long enough to open the dialog
+// over it.
+const loadTime = 3 * time.Second
+
+// logKeep is how many lines the log pane keeps to draw, and logEnd is how many
+// the producer says before it ends on its own. Lines come in bursts of
+// logBurst, a second apart, because a burst is what batching is for: one wake
+// for the burst, not one per line.
+const (
+	logKeep  = 200
+	logEnd   = 200
+	logBurst = 5
+)
 
 // report is where the diagnostic hook leaves what froth said. The hook is
 // called with no phase in progress and so has no context to post through; a
@@ -60,6 +96,13 @@ type pane struct {
 	// asking is the dialog that is up, so its answer can be told from any
 	// other dialog's.
 	asking froth.Handle
+
+	// tell, when set, makes this the log pane: it starts a producer in Mount
+	// and its goroutine reports through tell when it stops. The producer is
+	// held here so the pane can pull from it, and lines is what it has pulled.
+	tell  froth.PostFunc
+	lines *producer.Producer[[]string]
+	log   []string
 }
 
 func (p *pane) Declare() froth.Flags {
@@ -109,11 +152,19 @@ func (p *pane) Render(rc *froth.RenderCtx, s froth.Size) string {
 		status += "\n\n" + p.torn.text
 	}
 
+	body := p.body
+	if p.tell != nil {
+		// The newest lines are what fit under the title and status, which
+		// take the top six rows with the border: the clip takes the bottom.
+		from := max(0, len(p.log)-max(0, s.H-6))
+		body = strings.Join(p.log[from:], "\n")
+	}
+
 	// The status sits under the title rather than under the body, so it stays
 	// on screen in a short terminal: the body is what the clip takes first.
 	content := lipgloss.NewStyle().Bold(focused).Render(title) + "\n" +
 		lipgloss.NewStyle().Foreground(accent).Render(status) + "\n\n" +
-		p.body
+		body
 
 	// Lip Gloss counts the border and padding inside Width and Height, so a box
 	// styled to the rect fills it exactly.
@@ -142,10 +193,47 @@ func (p *pane) Mount(ac *froth.ApplyCtx) {
 		Keys:   []string{"d"},
 		Help:   "post a message that comes back",
 	}, {
+		Action: actionLoad,
+		Keys:   []string{"l"},
+		Help:   "load something slowly",
+	}, {
 		Action: actionClose,
 		Keys:   []string{"x"},
 		Help:   "close this pane",
 	}})
+	if p.tell != nil {
+		// The producer takes this pane's context, so it is cancelled as the
+		// pane leaves the tree, and this pane's post capability, so the wake
+		// comes here. The step function is a closure over nothing the pane
+		// draws: the goroutine never touches surface state.
+		p.lines = producer.Collect(ac.Ctx(), ac.PostFunc(), linesReadyMsg{}, tail(p.tell))
+	}
+}
+
+// tail is the log pane's step function: a burst of lines every second until
+// it has said enough, then io.EOF. It blocks in the producer's goroutine and
+// returns when the context is cancelled, telling the root so on the way out.
+// The post's answer is ignored: it is false only when the program is shutting
+// down, and there is nobody left to tell.
+func tail(tell froth.PostFunc) func(context.Context) (string, error) {
+	n := 0
+	return func(ctx context.Context) (string, error) {
+		wait := time.Duration(0)
+		if n%logBurst == 0 {
+			wait = time.Second
+		}
+		select {
+		case <-ctx.Done():
+			tell(producerStoppedMsg{err: ctx.Err()})
+			return "", ctx.Err()
+		case t := <-time.After(wait):
+			n++
+			if n > logEnd {
+				return "", io.EOF
+			}
+			return fmt.Sprintf("%3d  %s", n, t.Format("15:04:05.000")), nil
+		}
+	}
 }
 
 func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
@@ -157,12 +245,43 @@ func (p *pane) Update(uc *froth.UpdateCtx, msg tea.Msg) {
 			// iteration cap is for.
 			uc.Self().Post(cycleMsg{})
 			uc.StopRising()
+		case actionLoad:
+			// The command runs on its own goroutine and its result comes
+			// back to this pane, not to the root, however the tree looks by
+			// then: open the dialog over it and watch the status change.
+			p.status = "loading — press x now and watch this pane under the dialog"
+			started := time.Now()
+			uc.Run(func() tea.Msg {
+				time.Sleep(loadTime)
+				return loadedMsg{took: time.Since(started).Round(time.Millisecond)}
+			})
+			uc.StopRising()
 		case actionClose:
 			// Closing asks first. Opening a modal is an Apply-tier call, so
 			// the key records the wish and Reconcile opens the dialog.
 			p.closing = true
 			uc.Self().Reconcile()
 			uc.StopRising()
+		}
+	case loadedMsg:
+		p.status = "loaded after " + m.took.String()
+		if p.asking != (froth.Handle{}) {
+			p.status += " — while the dialog was up; it blocks keys, not results"
+		}
+	case linesReadyMsg:
+		// One wake for however many lines arrived since the last pull.
+		lines, err := p.lines.Take()
+		p.log = append(p.log, lines...)
+		if len(p.log) > logKeep {
+			p.log = p.log[len(p.log)-logKeep:]
+		}
+		switch {
+		case err == nil:
+			p.status = fmt.Sprintf("%d lines so far; the last wake brought %d", len(p.log), len(lines))
+		case errors.Is(err, io.EOF):
+			p.status = fmt.Sprintf("the producer ended after %d lines; close this pane and the root hears nothing", len(p.log))
+		default:
+			p.status = "the producer stopped: " + err.Error()
 		}
 	case confirmResult:
 		if m.dialog != p.asking {
