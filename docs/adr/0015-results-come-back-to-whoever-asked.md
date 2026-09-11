@@ -136,7 +136,8 @@ rewriting the sections above:
   by an id the caller names; the framework guesses nothing and supplies only the mechanism.
   Nobody tracks currency, which is what this ADR rejected, but six of thirteen systems ship
   that middle option. froth ships it too, in the producer subpackage over `Ctx` and the post
-  capability, not in the core — see [ADR 0021](./0021-a-post-never-blocks-from-anywhere.md).
+  capability, not in the core — see [ADR 0021](./0021-a-post-never-blocks-from-anywhere.md),
+  whose own amendment records that the key is the field the surface holds the producer in.
 - **Delivery to a dead handle drops silently.** Cancellation is cooperative, so a late
   result is the expected outcome of destroying a surface with work in flight. The diagnostic
   the spec asked for is not reported; ADR 0021 says why.

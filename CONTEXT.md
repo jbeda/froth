@@ -199,8 +199,9 @@ sees the release that follows.
 **Producer**:
 A goroutine that posts messages to one surface through that surface's post
 capability and stops when the surface's context is cancelled. froth runs none
-itself; the producer subpackage runs one over a step function and collapses what
-piles up between updates. Producers may not touch surface state.
+itself; the producer subpackage runs one over a step function, folds what piles up
+between updates into one value, and wakes the surface to pull it. Producers may
+not touch surface state.
 _Avoid_: subscription, worker, stream
 
 **Anchor**:

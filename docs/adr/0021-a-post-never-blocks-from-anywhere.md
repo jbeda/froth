@@ -140,3 +140,39 @@ having one implementation driven step by step.
 An unbounded inbox. One goroutine per wake, short-lived. A mutex in a codebase that has
 needed none, and the discipline that liveness is read under it. Every application gains
 a third bootstrap line, with a diagnostic rather than a compile error if it is forgotten.
+
+## Amended when the producer subpackage was built
+
+Building `producer` settled the shape the section above left open, recorded here rather
+than by rewriting it:
+
+- **The surface pulls.** A producer cannot see when `Update` runs, so it cannot know how
+  much to deliver; it folds items into an accumulator under its own lock and posts one
+  wake the caller named, the same split as the inbox. The surface receives the wake and
+  calls `Take`, which returns the accumulator and resets it. The wake is caller-named
+  rather than a package type carrying the producer, because a `case` on the caller's own
+  message type reads like every other Bubble Tea `Update` and tells two producers of one
+  accumulator type apart.
+- **One primitive, a fold.** Collect-all, keep-first-n, keep-last-n and latest-wins are
+  each a merge function over the same loop; the sketch's `BatchedFunc` was the same idea
+  done late over a list. The unbuffered "one `Update` per item" mode is not built: a
+  goroutine calling the post capability already is that, and `Collect` with a range in
+  the surface delivers the same items in the same order in fewer `Update` calls.
+- **`Take` reports the end like a reader.** `io.EOF` is the clean end, the step's error
+  otherwise, `ctx.Err()` after cancellation. A partial accumulator arrives in the same
+  call as the error, which answers the Rx `buffer` hazard in the stream survey without a
+  special case, and once non-nil the error stays.
+- **The field is the key.** Cancel-previous is `Stop` on the producer the surface holds
+  and a new one assigned to the field. `Stop` suppresses any wake not yet posted and
+  leaves the accumulator for a `Take`. No keyed registry: the frameworks that key by an id
+  do so because they hold the registry, and here the surface does.
+
+**Parked: a keyed holder** (`Start(key, …)` that stops what ran under `key`). Sugar over
+`Stop`; revive it for a call site whose producers are not fields on the surface, and bring
+that call site.
+
+**Parked: merge in the inbox.** A posted message that says how to merge with the pending
+post before it, Textual's `can_replace` and Qt's `compressEvent`, one branch in
+`inbox.post`. It contradicts "payloads are never collapsed" above and would need an
+amendment; revive it for a poster that is not a producer and needs collapse.
+

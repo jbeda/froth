@@ -14,7 +14,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// A Program is what Attach takes: the one method of *tea.Program froth calls.
+// A Program is what Attach takes: the interface *tea.Program satisfies, with
+// the one method froth calls.
 type Program interface {
 	Send(tea.Msg)
 }

@@ -709,7 +709,9 @@ constructor, which has no `ApplyCtx` and no handle yet.
 > core: a producer is a goroutine over the surface's `Ctx` and post capability, and the
 > loop, batching and coalescing live in a producer subpackage. See
 > [ADR 0021](../adr/0021-a-post-never-blocks-from-anywhere.md). The finding on
-> coalescing versus batching still stands and now binds that subpackage.
+> coalescing versus batching still stands and now binds that subpackage. The
+> type-change diagnostic below no longer applies: the surface names its own wake
+> message and pulls a value it typed, so there is no delivered type to mismatch.
 
 A producer is a **step function** froth calls in a loop it owns, not a loop the surface
 writes:
