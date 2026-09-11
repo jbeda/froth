@@ -79,6 +79,7 @@ func (f *Froth) removeSubtree(h Handle) {
 
 	for _, g := range order {
 		f.unmount(g)
+		f.cancelCtx(g)
 	}
 
 	// Where focus goes is decided before the tree is cut, because afterwards
@@ -155,6 +156,15 @@ func (f *Froth) unmount(h Handle) {
 	}
 	defer f.quarantine(h, "Unmount")
 	u.Unmount(&ApplyCtx{phaseToken: f.current(), self: h})
+}
+
+// cancelCtx runs after the surface's own Unmount, so a surface tears down
+// under a live context, and for every surface in the walk: a quarantined
+// surface is not asked to unmount but may have started work.
+func (f *Froth) cancelCtx(h Handle) {
+	if n := f.reg.get(h); n != nil && n.cancel != nil {
+		n.cancel()
+	}
 }
 
 // Shutdown tears the instance down: the same leaf-up unmount walk every destroy

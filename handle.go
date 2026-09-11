@@ -1,6 +1,7 @@
 package froth
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"sync/atomic"
@@ -48,6 +49,11 @@ type node struct {
 	// so resolution and the two binding queries are reads of froth's own state
 	// rather than three questions asked of the surface.
 	bindings []Binding
+
+	// ctx and cancel are nil until the surface asks for its context; the
+	// unmount walk cancels whatever is there.
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	// mounted says the mount step has reached this surface, and so that there
 	// is something for Unmount to undo. A surface created and destroyed within

@@ -266,7 +266,6 @@ func untakenKind(msg tea.Msg) string {
 func (f *Froth) deliver(n *node, h Handle, msg tea.Msg, rising bool) (tea.Cmd, bool) {
 	uc := &UpdateCtx{
 		phaseToken: f.enter(phaseDeliver),
-		ctx:        f.ctx,
 		self:       h,
 		msg:        msg,
 		rising:     rising,

@@ -20,9 +20,9 @@ import (
 // application model by value — which Bubble Tea does on every update — copies a
 // pointer rather than the tree.
 type Froth struct {
-	// ctx is the context every surface's asynchronous work runs under. It
-	// outlives every call froth makes, which is why it is held here rather
-	// than passed as a request scope.
+	// ctx is the parent every surface's context is derived from, so cancelling
+	// it cancels all of them. It outlives every call froth makes, which is why
+	// it is held here rather than passed as a request scope.
 	ctx  context.Context
 	reg  registry
 	root Handle
@@ -76,8 +76,8 @@ type Froth struct {
 	epoch uint64
 }
 
-// New builds a froth instance around a root surface. ctx is the context every
-// surface's asynchronous work runs under; cancelling it cancels all of it.
+// New builds a froth instance around a root surface. ctx is the parent every
+// surface's context is derived from; cancelling it cancels all of them.
 // Options configure the instance for its lifetime.
 //
 // New panics if root is nil: an instance with nothing to render and nowhere to

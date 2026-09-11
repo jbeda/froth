@@ -53,7 +53,6 @@ func (rc *RenderCtx) FocusWithin() bool {
 // one message addressed to it.
 type UpdateCtx struct {
 	phaseToken
-	ctx  context.Context
 	self Handle
 	cmds []tea.Cmd
 
@@ -155,12 +154,13 @@ func (uc *UpdateCtx) Invoke(a Action) {
 	uc.f.queue = append(uc.f.queue, uc.f.action(a))
 }
 
-// Ctx reports the context this surface's asynchronous work should use. Every
-// surface gets froth's root context, so work started here outlives the surface
-// that started it and is cancelled only when the instance's context is.
+// Ctx reports the context this surface's asynchronous work should use. It is
+// cancelled as the surface leaves the tree, by whichever route, so work started
+// here stops with the surface that wanted it; asking again returns the same
+// context. Cancelling the instance's context cancels every surface's.
 func (uc *UpdateCtx) Ctx() context.Context {
 	uc.check()
-	return uc.ctx
+	return uc.f.surfaceCtx(uc.self)
 }
 
 // Run schedules a Bubble Tea command. It is returned to the program from the
@@ -198,4 +198,26 @@ func (ac *ApplyCtx) Child(h Handle) ChildCtx {
 // that names nothing does.
 func (ac *ApplyCtx) At(h Handle) AnyCtx {
 	return AnyCtx{router{ac.mintAt("At", h)}}
+}
+
+// Ctx reports the context this surface's asynchronous work should use, which is
+// where a goroutine started in Mount takes its cancellation from. See
+// UpdateCtx.Ctx.
+func (ac *ApplyCtx) Ctx() context.Context {
+	ac.check()
+	return ac.f.surfaceCtx(ac.self)
+}
+
+// surfaceCtx returns h's context, making it the first time h asks: most
+// surfaces never do. It hangs off the instance context rather than the parent
+// surface's; ADR 0015 says why.
+func (f *Froth) surfaceCtx(h Handle) context.Context {
+	n := f.reg.get(h)
+	if n == nil {
+		bug("froth: %s asked for its context and names no live surface", h)
+	}
+	if n.ctx == nil {
+		n.ctx, n.cancel = context.WithCancel(f.ctx)
+	}
+	return n.ctx
 }
