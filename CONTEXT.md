@@ -67,7 +67,7 @@ to where it was when it closes.
 Bubble Tea's unit of asynchronous work: a function run off the update loop whose
 returned message is posted back into the program. Bubble Tea delivers every such
 message to one global entry point with no record of who issued it, so froth
-tags them itself.
+addresses each result to the surface that ran the command.
 
 **Environment**:
 Ambient values a surface reads from its ancestors rather than being handed at

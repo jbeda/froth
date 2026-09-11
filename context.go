@@ -172,13 +172,19 @@ func (uc *UpdateCtx) PostFunc() PostFunc {
 }
 
 // Run schedules a Bubble Tea command. It is returned to the program from the
-// update froth is currently servicing.
+// update froth is currently servicing, and its result is delivered to this
+// surface — not to the root — in a later Update, a nil result included. A
+// result that embeds Rising rises from here, as a posted one would. A result
+// for a surface that has since left the tree is dropped without a diagnostic.
+//
+// tea.Quit and tea.Interrupt still stop the program, and a batch or a sequence
+// still runs each of its commands, with every result addressed here.
 func (uc *UpdateCtx) Run(cmd tea.Cmd) {
 	uc.check()
 	if cmd == nil {
 		return
 	}
-	uc.cmds = append(uc.cmds, cmd)
+	uc.cmds = append(uc.cmds, addressCmd(uc.self, cmd))
 }
 
 // ApplyCtx is a surface's handle on froth during Apply, the phase in which

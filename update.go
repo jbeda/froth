@@ -26,9 +26,10 @@ type envelope struct {
 // A press that matches a binding on the focus chain becomes an ActionMsg, which
 // rises: resolution says which action the key means and delivery says who acts
 // on it. A press that matches nothing, and every other key event, goes to the
-// focused surface as it stands. Everything else goes to the root, which is the
-// surface the application handed froth and so the one its own messages belong
-// at.
+// focused surface as it stands. A command's result arrives addressed to the
+// surface that ran it and goes there. Everything else goes to the root, which
+// is the surface the application handed froth and so the one its own messages
+// belong at.
 //
 // Only a press resolves. A release is the same key arriving a second time, so
 // matching it would fire every action twice.
@@ -41,6 +42,9 @@ type envelope struct {
 // under it. Resolution above has already offered a press the only two ways past
 // a modal, and a key arriving here matched neither.
 func (f *Froth) route(msg tea.Msg) (envelope, bool) {
+	if a, ok := msg.(addressedMsg); ok {
+		return envelope(a), true
+	}
 	if k, ok := msg.(tea.KeyPressMsg); ok {
 		if a, ok := f.resolve(k); ok {
 			return f.action(a), true

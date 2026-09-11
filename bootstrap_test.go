@@ -83,29 +83,6 @@ func TestModelCopiedByValueSharesOneInstance(t *testing.T) {
 	}
 }
 
-// A surface returns work by handing commands to its context.
-type runner struct{ cmd tea.Cmd }
-
-func (r *runner) Render(*froth.RenderCtx, froth.Size) string { return "" }
-func (r *runner) Update(uc *froth.UpdateCtx, msg tea.Msg) {
-	if _, ok := msg.(bumpMsg); ok {
-		uc.Run(r.cmd)
-	}
-}
-
-func TestCommandsRunByASurfaceComeBackFromUpdate(t *testing.T) {
-	want := bumpMsg{}
-	f := newSized(t, &runner{cmd: func() tea.Msg { return want }}, 10, 2)
-
-	cmd := f.Update(bumpMsg{})
-	if cmd == nil {
-		t.Fatal("Update returned no command")
-	}
-	if got := cmd(); got != tea.Msg(want) {
-		t.Errorf("command produced %#v, want %#v", got, want)
-	}
-}
-
 func TestUpdateReturnsNoCommandWhenNoneWasRun(t *testing.T) {
 	f := newSized(t, &pane{title: "n"}, 10, 2)
 

@@ -31,7 +31,7 @@ reached rather than was given.
 
 Almost everything is observable through the seam: shortcut precedence, focus movement and
 restoration, rising delivery and untaken-message reporting, modality, capture and capture
-loss, command tagging and dead-handle drops, runtime phase violations, chrome, and Z
+loss, addressed command results and dead-handle drops, runtime phase violations, chrome, and Z
 ordering.
 
 ## Self-contained algorithms, tested directly
