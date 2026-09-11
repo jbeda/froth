@@ -126,6 +126,25 @@ which is bigger than what it claims.
 the root surface, which then has to pass it along — the hand-rolled router froth was built to
 get rid of, surviving in one spot. Addressed results and service objects remove the need.
 
+## Amended after the M5 design session
+
+Three things the surveys run before building this moved, recorded here rather than by
+rewriting the sections above:
+
+- **"Any framework answer would be a guess" is too strong.** Textual's exclusive worker
+  groups, SwiftUI's `task(id:)` and Kotlin's `collectLatest` all offer cancel-previous keyed
+  by an id the caller names; the framework guesses nothing and supplies only the mechanism.
+  Nobody tracks currency, which is what this ADR rejected, but six of thirteen systems ship
+  that middle option. froth ships it too, in the producer subpackage over `Ctx` and the post
+  capability, not in the core — see [ADR 0021](./0021-a-post-never-blocks-from-anywhere.md).
+- **Delivery to a dead handle drops silently.** Cancellation is cooperative, so a late
+  result is the expected outcome of destroying a surface with work in flight. The diagnostic
+  the spec asked for is not reported; ADR 0021 says why.
+- **The "twenty generation counters" anecdote is uncited and stays that way.** A checkable
+  version exists: the bubbles `timer` component declares a generation `tag` and never
+  increments it, so its stale check is dead code in both current major versions
+  ([survey](../research/async-results-addressing.md)).
+
 **Parked: `Topic`** — a named channel that surfaces subscribe to and outside systems post
 to. It sat in the vocabulary with no design, no code and no scope behind it, and it is not
 needed: the outside object *is* the topic, and it is application code. Revive it only if

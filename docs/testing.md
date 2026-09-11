@@ -80,28 +80,24 @@ however pure the function looks. The registry, the message queue, phase bookkeep
 the focus chain are all reachable as functions and none of them is a rule — they are how
 froth happens to be built.
 
-## Producers: two levels and a fidelity check
+## Posting from outside, and the producer subpackage
 
-Never with real goroutines or sleeps, except where stated.
+**The post capability is tested with a fake program.** `Attach` takes an interface with
+`Send` only, so a test hands froth a fake that records what was sent and then calls
+`Update` itself with the wake. That covers ordering across posters, the dead-handle bool,
+a post before attach, and the drain — none of it needs a goroutine, because the wake is
+the only thing that crosses one and the test delivers it by hand.
 
-**The step function is an ordinary function.** A producer is `func(ctx) (T, error)`, so
-it is tested by calling it with a pre-filled channel — no goroutine, no froth, no timing.
-That covers the body a surface author actually writes.
+**Command envelopes are tested through the real wrapper.** Run the wrapped command in the
+test, hand its result to `Update`, and assert where it landed. Quit, interrupt, batch and
+sequence each get a case, since a wrong pass-through set fails silently in production.
 
-**Delivery is tested through the injectable runner.** The production runner spawns a
-goroutine per producer and drives its step function; the test runner calls the step
-function only when the test says so and delivers synchronously into froth's queue.
-Because froth owns the only loop, the test runner has almost nothing left to fake.
-
-That makes the edge cases deterministic: an emission arriving after its surface is
-destroyed, several pending within one frame under each delivery mode, cancellation
-mid-stream, end-of-stream termination, and a producer returning an error.
-
-**A small set of tests uses `testing/synctest` against the real runner**, checking that
-it cancels on destroy, terminates on end-of-stream, and leaks no goroutines. This is the
-standing risk of any injected double — every test passing against a fake that behaves
-differently from the real thing — and it is the only place real concurrency appears in
-the suite. `testing/synctest` is generally available from Go 1.25; froth requires 1.27.
+**Producers live in the producer subpackage and are tested there, as one implementation.**
+A step function is an ordinary function, tested by calling it with a pre-filled channel.
+The loop that drives it is tested under `testing/synctest`, which makes cancellation
+mid-stream, end-of-stream, a partial batch at error, and goroutine leaks deterministic
+without an injected runner to keep faithful. It is the only place real goroutines appear
+in the suite. `testing/synctest` is generally available from Go 1.25; froth requires 1.27.
 
 ## Panic quarantine needs a fixture
 

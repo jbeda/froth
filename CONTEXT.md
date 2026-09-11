@@ -197,9 +197,10 @@ left can finish nothing. A surface lets go of it itself, and a press that captur
 sees the release that follows.
 
 **Producer**:
-A long-lived goroutine froth runs on a surface's behalf, emitting messages to
-that surface's handle until the surface dies. Producers may not touch surface
-state.
+A goroutine that posts messages to one surface through that surface's post
+capability and stops when the surface's context is cancelled. froth runs none
+itself; the producer subpackage runs one over a step function and collapses what
+piles up between updates. Producers may not touch surface state.
 _Avoid_: subscription, worker, stream
 
 **Anchor**:
@@ -270,6 +271,9 @@ To enqueue a message for later delivery to a surface. All message delivery in
 froth is posted; nothing is delivered re-entrantly. It is the only verb: a message
 whose type is Rising is posted the same way and continues past its destination,
 which is why the queue drains completely before structure changes again.
+A surface can mint a function that posts to it from outside any phase — from a
+goroutine, a service, a timer. It never blocks, from anywhere, and reports false
+once the surface is gone, so whoever holds it needs no way to be told.
 _Avoid_: send, dispatch, emit
 
 **Destroy**:

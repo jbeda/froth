@@ -705,6 +705,12 @@ constructor, which has no `ApplyCtx` and no handle yet.
 
 ## A goroutine-driven pane
 
+> Superseded. `Produce`, the runner and the delivery-mode options below did not enter the
+> core: a producer is a goroutine over the surface's `Ctx` and post capability, and the
+> loop, batching and coalescing live in a producer subpackage. See
+> [ADR 0021](../adr/0021-a-post-never-blocks-from-anywhere.md). The finding on
+> coalescing versus batching still stands and now binds that subpackage.
+
 A producer is a **step function** froth calls in a loop it owns, not a loop the surface
 writes:
 
