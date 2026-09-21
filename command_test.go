@@ -1,6 +1,7 @@
 package froth_test
 
 import (
+	"context"
 	"reflect"
 	"slices"
 	"testing"
@@ -52,6 +53,34 @@ func TestAResultGoesToTheSurfaceThatRanTheCommand(t *testing.T) {
 
 	if !slices.Equal(log, []string{"kid:done"}) {
 		t.Errorf("delivered %v, want the result at kid and nowhere else", log)
+	}
+}
+
+func TestCompositeDefersCommandsUntilTheNextUpdate(t *testing.T) {
+	var log []string
+	root := &poster{name: "root", log: &log}
+	root.onMount = func(ac *froth.ApplyCtx) {
+		ac.Self().Post(bumpMsg{})
+	}
+	runOnBump(root, func() tea.Msg { return posted{"done"} })
+	f := froth.New(context.Background(), root)
+
+	f.Composite(f.Root())
+	if got := len(root.seen); got != 1 {
+		t.Fatalf("Composite delivered %d messages, want the one Mount posted", got)
+	}
+	if len(log) != 0 {
+		t.Fatalf("Composite ran the command, delivered %v", log)
+	}
+
+	cmd := f.Update(tea.WindowSizeMsg{Width: 4, Height: 1})
+	if cmd == nil {
+		t.Fatal("the next Update returned no deferred command")
+	}
+	runAll(t, f, cmd())
+
+	if !slices.Equal(log, []string{"root:done"}) {
+		t.Errorf("delivered %v, want the deferred result at root", log)
 	}
 }
 

@@ -59,7 +59,10 @@ type Froth struct {
 	// may add to it, which is the whole point: a surface can post during Deliver
 	// and have it handled before anything is drawn.
 	queue []envelope
-	diags []Diagnostic
+	// deferredCmds were scheduled while Composite settled. View cannot return a
+	// command, so Update returns them the next time Bubble Tea calls it.
+	deferredCmds []tea.Cmd
+	diags        []Diagnostic
 
 	// pendingReconcile holds the surfaces waiting for Reconcile, in the order
 	// they asked. Each one carries a bit saying it is here, which is what makes
@@ -122,8 +125,8 @@ func (f *Froth) Init() tea.Cmd { return nil }
 
 // Update takes one message and settles: it delivers, applies, and repeats until
 // nothing is left to deliver, then returns the work the surfaces that saw the
-// message asked for. Forward it from the application model's Update. After
-// Shutdown it does nothing.
+// message asked for, including work Composite deferred. Forward it from the
+// application model's Update. After Shutdown it does nothing.
 //
 // Nothing is rendered here. A cascade of posted messages therefore resolves
 // entirely before the frame is drawn, so no half-settled state ever reaches the
@@ -141,11 +144,11 @@ func (f *Froth) Update(msg tea.Msg) tea.Cmd {
 	_, wake := msg.(wakeMsg)
 	f.drainInbox(wake)
 	if wake {
-		return f.settle()
+		return f.releaseDeferredCmds(f.settle())
 	}
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		f.size = Size{W: ws.Width, H: ws.Height}
-		return f.settle()
+		return f.releaseDeferredCmds(f.settle())
 	}
 	// A message is addressed against the tree, so the tree has to exist first.
 	// Routing resolves a key press against the declarations on the focus chain
@@ -162,5 +165,17 @@ func (f *Froth) Update(msg tea.Msg) tea.Cmd {
 	if e, ok := f.route(msg); ok {
 		f.queue = append(f.queue, e)
 	}
-	return f.settleWith(&b)
+	return f.releaseDeferredCmds(f.settleWith(&b))
+}
+
+func (f *Froth) releaseDeferredCmds(cmd tea.Cmd) tea.Cmd {
+	if len(f.deferredCmds) == 0 {
+		return cmd
+	}
+	cmds := append([]tea.Cmd(nil), f.deferredCmds...)
+	f.deferredCmds = nil
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return tea.Batch(cmds...)
 }

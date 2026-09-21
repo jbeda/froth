@@ -56,6 +56,7 @@ type posted struct{ tag string }
 // reaches it, in a log shared with every other poster in the test.
 type poster struct {
 	name  string
+	body  string
 	self  froth.Handle
 	post  froth.PostFunc
 	log   *[]string
@@ -83,7 +84,12 @@ func (p *poster) Reconcile(ac *froth.ApplyCtx) {
 	}
 }
 
-func (p *poster) Render(*froth.RenderCtx, froth.Size) string { return "." }
+func (p *poster) Render(*froth.RenderCtx, froth.Size) string {
+	if p.body != "" {
+		return p.body
+	}
+	return "."
+}
 
 func (p *poster) Mount(ac *froth.ApplyCtx) {
 	p.self = ac.Self().Handle()
@@ -113,6 +119,25 @@ func attached(t *testing.T, root froth.Surface) (*froth.Froth, *fakeProgram) {
 	p := &fakeProgram{}
 	f.Attach(p)
 	return f, p
+}
+
+func TestCompositeDrainsPosts(t *testing.T) {
+	var log []string
+	root := &poster{name: "root", log: &log}
+	root.onMsg = func(*froth.UpdateCtx, tea.Msg) { root.body = "1" }
+	f := newSized(t, root, 4, 1)
+
+	if !root.post(posted{"outside"}) {
+		t.Fatal("post to a mounted root failed")
+	}
+	frame := f.Composite(f.Root())
+
+	if got, want := frame.Content, "1"; got != want {
+		t.Errorf("Composite content = %q, want %q", got, want)
+	}
+	if !slices.Equal(log, []string{"root:outside"}) {
+		t.Errorf("delivered %v, want the queued post", log)
+	}
 }
 
 func TestPostsArriveInOrderAcrossPosters(t *testing.T) {

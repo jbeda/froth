@@ -172,10 +172,11 @@ func (uc *UpdateCtx) PostFunc() PostFunc {
 }
 
 // Run schedules a Bubble Tea command. It is returned to the program from the
-// update froth is currently servicing, and its result is delivered to this
-// surface — not to the root — in a later Update, a nil result included. A
-// result that embeds Rising rises from here, as a posted one would. A result
-// for a surface that has since left the tree is dropped without a diagnostic.
+// Update froth is servicing, and its result is delivered to this surface — not
+// to the root — in a later Update, a nil result included. If Composite settles
+// the delivery, it returns the command from the next Update instead. A result
+// that embeds Rising rises from here, as a posted one would. A result for a
+// surface that has since left the tree is dropped without a diagnostic.
 //
 // tea.Quit and tea.Interrupt still stop the program, and a batch or a sequence
 // still runs each of its commands, with every result addressed here.

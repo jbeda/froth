@@ -22,8 +22,8 @@ type Program interface {
 
 // A PostFunc posts a message to one surface from outside any phase — from a
 // goroutine, a service, a timer. It never blocks, from anywhere, including from
-// inside a surface's own Update; the message arrives at a later Update. It
-// reports false once the surface has left the tree, and the message is then
+// inside a surface's own Update; the message arrives at a later Update or
+// Composite. It reports false once the surface has left the tree, and the message is then
 // dropped without a diagnostic: a late result is the expected outcome of
 // destroying a surface with work in flight.
 //

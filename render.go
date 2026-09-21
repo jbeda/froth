@@ -19,7 +19,7 @@ import (
 // application model's View.
 //
 // It is Composite of the root and shares its behaviour, including that pending
-// structure is applied before anything is drawn.
+// messages and structure settle before anything is drawn.
 func (f *Froth) View() tea.View {
 	return tea.NewView(f.Composite(f.root).Content)
 }
@@ -42,16 +42,21 @@ type Frame struct {
 // ordinals are global, so a subtree cannot be drawn without placing everything
 // around it.
 //
-// Compositing is not read-only, and a caller has to know it: structure still
-// waiting to be applied is applied first, so Composite can run Mount — which is
-// application code assembling a subtree of its own — and hand the diagnostics
-// that produces to the hook before it returns. An instance composited before it
-// is ever updated mounts its whole tree here.
+// Compositing is not read-only, and a caller has to know it: pending messages
+// and structure settle first, so Composite can run Mount — which is application
+// code assembling a subtree of its own — and hand the diagnostics that produces
+// to the hook before it returns. An instance composited before it is ever updated
+// mounts its whole tree and delivers any messages Mount posted. A command such a
+// message schedules is returned from the next Update, because Composite cannot
+// return one.
 func (f *Froth) Composite(h Handle) Frame {
-	f.applyPending()
+	f.drainInbox(false)
+	if cmd := f.settle(); cmd != nil {
+		f.deferredCmds = append(f.deferredCmds, cmd)
+	}
 	// Drawing reports too — a dead handle minted from a RenderCtx, a query
 	// asked from inside one, a surface that panicked — and those are found
-	// after applyPending has already flushed. Without this they would wait for
+	// after settle has already flushed. Without this they would wait for
 	// whatever drove froth next.
 	defer f.flush()
 

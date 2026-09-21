@@ -379,11 +379,3 @@ func (f *Froth) callMount(token phaseToken, m Mounter, h Handle) {
 	defer f.quarantine(h, "Mount")
 	m.Mount(&ApplyCtx{phaseToken: token, self: h})
 }
-
-// applyPending settles the structure before a frame that does not follow an
-// Update: the first one, and any Composite taken on its own.
-func (f *Froth) applyPending() {
-	b := budget{left: iterationCap}
-	f.apply(&b)
-	f.flush()
-}
