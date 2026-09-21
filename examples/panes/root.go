@@ -30,6 +30,12 @@ type root struct {
 }
 
 func (rt *root) Mount(ac *froth.ApplyCtx) {
+	ac.Self().SetEnv(paneThemeKey, paneTheme{
+		muted:       lipgloss.Color("240"),
+		focusBorder: lipgloss.Color("212"),
+		focusAccent: lipgloss.Color("214"),
+	})
+
 	// Quit belongs to the whole application, so the root declares it and the
 	// panes know nothing about it. These never change, so declaring them once
 	// on the way in is the whole of it.

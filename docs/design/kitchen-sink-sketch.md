@@ -5,16 +5,9 @@
 > Where this and the code disagree, **the code wins**; fix this document in the same
 > change. Delete it once the example application and godoc cover the same ground.
 >
-> Most of what is below is unbuilt. M1 shipped `Create`, `Mount`, `SetLayout`, `Focus`,
-> `Post`, `Run`, `Ctx` and three of the four context types (`MeasureCtx` waits for M7);
-> M2 gave `Create` its option list, as `Create(Surface, ...CreateOption)` — the name
-> `Option` was already taken by the instance options `New` takes — and shipped `Binder`,
-> `Action`, `Binding` and `ActionMsg`, with `Binding` carrying froth's own key and help
-> fields rather than bubbles' `key.Binding`, the text sink that keeps typing out of
-> them, keyboard traversal bounded by focus scopes, and froth's own `ActionFocusNext`
-> and `ActionFocusPrev` with `tab` and `shift+tab` bound to them. Everything concerning
-> intents, modals, the Environment, producers, reconcile and the bubbles
-> adapter is still design.
+> M1–M5 and the Environment slice of M6 have shipped. Chrome remains M6 design;
+> M7 holds layout and scrolling, and the bubbles adapter remains design. The detailed API
+> sketches below predate those milestones and may use superseded names.
 > [`milestone-log.md`](./milestone-log.md) records what shipped and where it diverged.
 >
 > **Superseded in specific ways, and not yet rewritten.** Decisions taken after this was

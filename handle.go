@@ -50,6 +50,12 @@ type node struct {
 	// rather than three questions asked of the surface.
 	bindings []Binding
 
+	// envOwn holds bindings this surface set for its subtree; envGiven holds
+	// bindings its immediate parent set for it. Both are lazy because most
+	// surfaces bind neither.
+	envOwn   map[any]any
+	envGiven map[any]any
+
 	// ctx and cancel are nil until the surface asks for its context; the
 	// unmount walk cancels whatever is there.
 	ctx    context.Context

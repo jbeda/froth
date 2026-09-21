@@ -2,12 +2,11 @@
 
 Surface management for [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
-**Status: under construction.** Milestone 1 has landed. froth builds a tree of
-surfaces addressed by handle, places them with a layout, composites them through Lip
-Gloss with its own Z ordinals, drains Deliver and Apply before drawing a frame, and
-delivers raw keys to the surface that holds focus. Everything after that — bindings,
-reconcile and destroy, modals and mouse, async, environment and chrome, tiling and
-scrolling, bubbles adapters — is still design.
+**Status: under construction.** Milestones 1–5 and the Environment slice of M6
+have landed. froth builds a tree of handle-addressed surfaces, places and composites them,
+routes bindings, focus and mouse input, reconciles and destroys structure, delivers asynchronous
+commands and posts back to the surface that issued them, and resolves typed Environment values
+through the tree. Chrome, tiling and scrolling, and bubbles adapters remain design.
 
 [`examples/panes`](./examples/panes) is the fastest way to understand the API: it is
 real, current code, and it grows with each milestone.

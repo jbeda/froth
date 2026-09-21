@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image/color"
 	"io"
 	"strconv"
 	"strings"
@@ -66,6 +67,14 @@ const (
 // value shared with the surface that draws it is the way onto the screen.
 type report struct{ text string }
 
+type paneTheme struct {
+	muted       color.Color
+	focusBorder color.Color
+	focusAccent color.Color
+}
+
+var paneThemeKey = froth.NewKey[paneTheme]("panes theme")
+
 // pane is a child surface: two methods, and its state on a pointer receiver. It
 // fills whatever rect it is given, which is the layout's answer rather than a
 // size of its own, and it draws itself differently depending on whether it holds
@@ -122,11 +131,12 @@ func (p *pane) Unmount(*froth.ApplyCtx) {
 func (p *pane) Render(rc *froth.RenderCtx, s froth.Size) string {
 	focused := rc.Focused()
 
+	theme := rc.Env(paneThemeKey)
 	title := p.title
-	border, accent := lipgloss.Color("240"), lipgloss.Color("240")
+	border, accent := theme.muted, theme.muted
 	if focused {
 		title = "▸ " + p.title + " — focused"
-		border, accent = lipgloss.Color("212"), lipgloss.Color("214")
+		border, accent = theme.focusBorder, theme.focusAccent
 	}
 
 	status := p.status

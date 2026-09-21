@@ -128,6 +128,21 @@ implements the interface, so an unexported method on it is not a hole.
 Two slots means two maps per surface rather than one, created lazily. Most surfaces write
 neither.
 
+## Amendment: keys are opaque identities, and absence is an error
+
+A key is identified by the value `NewKey` or `NewKeyDefault` returned, not by its name. Two
+calls with the same name create distinct keys. The name is for diagnostics only: it makes a
+missing binding actionable without introducing a global namespace or coupling packages that
+happen to use the same word. Passing a nil key to a read or write is also a contract
+panic, with an explicit diagnostic rather than a nil-pointer failure.
+
+Reading an unbound key without a default panics. Returning the value type's zero value would
+make an absent binding indistinguishable from an explicit zero, and leave a missing
+application-owned value silently in use. A key made with `NewKeyDefault` instead resolves to
+its declared default when no binding exists. A read through a Ctx naming a dead handle also
+returns that default when one exists; otherwise it panics as a missing binding. The Ctx still
+reports the dead handle when it is minted, as every reader does.
+
 ## Considered options
 
 **One slot, last write wins.** Simplest, and unprecedented — no surveyed system resolves
@@ -151,6 +166,14 @@ permits explicitly created grouping surfaces. Rejected as the *primary* mechanis
 charges a node on the render, layout and focus walks, and one more hop on every rising
 message ([ADR 0016](./0016-a-message-rises-until-something-takes-it.md)), for what two slots
 give free. It remains available to an application that wants one.
+
+## Parked: removing a binding
+
+M6 has no `UnsetEnv`. A surface can restore a value it replaced by writing the value it held
+before, and no case needs an override to expose an inherited value or a key's default again.
+
+Revive this when a real surface needs a temporary binding to disappear rather than be replaced
+with its prior value — bring that lifetime and the value it must reveal, not a removal method.
 
 ## Parked: a value that skips the parent's slot
 

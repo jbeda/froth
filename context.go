@@ -26,6 +26,9 @@ func (rc *RenderCtx) Child(h Handle) ReadCtx { return ReadCtx{rc.mintChild(rc.se
 // At mints a context on any live surface.
 func (rc *RenderCtx) At(h Handle) ReadCtx { return ReadCtx{rc.mintAt("At", h)} }
 
+// Env resolves k for this surface.
+func (rc *RenderCtx) Env[T any](k *Key[T]) T { return envAt(rc.phaseToken, rc.self, k) }
+
 // Focused reports whether this surface is the focused one — the deep end of the
 // focus chain, and where a raw key would be delivered.
 //
@@ -115,6 +118,9 @@ func (uc *UpdateCtx) Child(h Handle) ChildCtx {
 func (uc *UpdateCtx) At(h Handle) AnyCtx {
 	return AnyCtx{router{uc.mintAt("At", h)}}
 }
+
+// Env resolves k for this surface.
+func (uc *UpdateCtx) Env[T any](k *Key[T]) T { return envAt(uc.phaseToken, uc.self, k) }
 
 // FocusNext moves focus to the next surface that declared TabStop, in
 // depth-first child order, wrapping at the end. No surface implements the walk.
@@ -214,6 +220,9 @@ func (ac *ApplyCtx) Child(h Handle) ChildCtx {
 func (ac *ApplyCtx) At(h Handle) AnyCtx {
 	return AnyCtx{router{ac.mintAt("At", h)}}
 }
+
+// Env resolves k for this surface.
+func (ac *ApplyCtx) Env[T any](k *Key[T]) T { return envAt(ac.phaseToken, ac.self, k) }
 
 // Ctx reports the context this surface's asynchronous work should use, which is
 // where a goroutine started in Mount takes its cancellation from. See

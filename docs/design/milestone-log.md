@@ -1995,3 +1995,26 @@ and stays because `Folded`, `Handle` and `Source` each say less. `addressedMsg` 
 **Verified by driving the example through a scaffolding test, since deleted.** One wake
 carried four lines; the load result changed the pane's status under the dialog; closing
 the log pane produced "the log producer stopped: context canceled" in the notes pane.
+
+## M6 — Environment
+
+Shipped as #65: typed application-owned values resolved at read time through the surface
+hierarchy. A surface's own slot wins over the slot its parent gave it, then lookup repeats at
+the parent; both maps are lazy and no resolved value is cached. Reads are available on every
+current phase and handle-scoped Ctx, while self and immediate-child writes take effect at once
+in Deliver and Apply. froth seeds no values.
+
+**Keys are pointer identities, not names.** The name exists only for diagnostics, so equal
+names from independent packages never couple. A nil key or an unbound non-defaulted key is a
+contract panic; a defaulted key supplies its declared value, including from a dead reader.
+`UnsetEnv` is not built: restoring a saved value covers the case in hand, and ADR 0017 parks
+the evidence that would justify removal.
+
+**The panes demo owns its theme at the root.** Pane rendering reads it through `RenderCtx`,
+so the example shows ambient styling without threading theme through constructors. Chrome
+remains separate: its authority, metadata and geometry decisions are not implied by
+Environment.
+
+**Verified through the Froth seam.** Defaults, missing and nil keys, identity, two-slot
+precedence, inheritance, immediate writes, scoped reads, dead readers and child authority each
+have a behavioural case; the demo builds with the library.

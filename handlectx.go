@@ -48,6 +48,7 @@ type HandleReader interface {
 	// smaller only for a surface that underfills what it was offered.
 	Rect() (Rect, bool)
 
+	lookupEnv(key any) (any, bool)
 	sealed()
 }
 
@@ -89,6 +90,15 @@ func (r reader) Rect() (Rect, bool) {
 	r.check()
 	return r.f.renderedRect(r.h)
 }
+
+func (r reader) lookupEnv(key any) (any, bool) {
+	r.check()
+	return r.f.lookupEnv(r.h, key)
+}
+
+// Env resolves k from this surface's own binding, then the binding its parent
+// gave it, then repeats at each ancestor.
+func (r reader) Env[T any](k *Key[T]) T { return Env[T](r, k) }
 
 // router is the reach set: naming a surface without restructuring it. Every
 // tier above the render one carries it, because a surface that may name a
@@ -172,6 +182,12 @@ type ReadCtx struct{ reader }
 // itself without restructuring anything.
 type SelfUpdateCtx struct{ router }
 
+// SetEnv binds k on this surface's own Environment slot. The write is
+// immediate and applies to this surface and its subtree.
+func (sc SelfUpdateCtx) SetEnv[T any](k *Key[T], value T) {
+	setEnv(sc.phaseToken, sc.h, true, k, value)
+}
+
 // Destroy takes this surface out of the tree, along with everything below it.
 // It is recorded and commits at the next Apply, so the surface stays live for
 // the rest of this update: messages already queued to it are still delivered,
@@ -230,6 +246,12 @@ type SelfApplyCtx struct{ router }
 // A ChildCtx names an immediate child of the surface that minted it. The
 // parentage was checked at the mint, so nothing here rechecks it.
 type ChildCtx struct{ router }
+
+// SetEnv binds k on the Environment slot this surface's parent gives it. The
+// write is immediate and applies to this surface and its subtree.
+func (cc ChildCtx) SetEnv[T any](k *Key[T], value T) {
+	setEnv(cc.phaseToken, cc.h, false, k, value)
+}
 
 // Destroy takes this child out of the tree, along with everything below it. A
 // deep branch goes by destroying your own child and letting the cascade reach
@@ -328,6 +350,12 @@ func (f *Froth) declareFlags(h Handle, s Surface) {
 	f.reg.get(h).meta.flags = d.Declare()
 }
 
+// SetEnv binds k on this surface's own Environment slot. The write is
+// immediate and applies to this surface and its subtree.
+func (sc SelfApplyCtx) SetEnv[T any](k *Key[T], value T) {
+	setEnv(sc.phaseToken, sc.h, true, k, value)
+}
+
 // Destroy takes this surface out of the tree, along with everything below it,
 // at once: Apply is where structural change commits, so there is nothing to
 // record.
@@ -412,7 +440,7 @@ func (t phaseToken) mintChild(self, h Handle) reader {
 
 // reportDead says minter was asked for a handle that names no live surface. The
 // context is handed back anyway — a second return value would put a branch in
-// front of every mint site — and nothing asked of it reaches a surface.
+// front of every mint site — but nothing it asks reaches a live surface.
 func (t phaseToken) reportDead(minter string, h Handle) {
 	t.f.report(Diagnostic{
 		Kind: DiagDeadHandle,
